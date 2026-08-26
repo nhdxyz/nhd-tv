@@ -4,6 +4,8 @@ const MINIMUM_DURATION_SECONDS = 60;
 const MINIMUM_ENGAGEMENT_SECONDS = 5;
 const MINIMUM_VISIBLE_VIDEO_AREA = 160 * 90;
 const MAX_METADATA_LENGTH = 180;
+const PLAYBACK_ACTIVATION_KEY = "__nhdTvPlaybackActivationV1";
+const PLAYBACK_ACTIVATION_MAX_AGE_MS = 10 * 60 * 1_000;
 
 export interface QualifiedPlaybackSnapshot {
   artworkUrl: string | null;
@@ -149,7 +151,15 @@ export function buildPlaybackSnapshotScript(
       return "";
     };
 
+    const activation = globalThis[${JSON.stringify(PLAYBACK_ACTIVATION_KEY)}];
+    const recentActivation = activation &&
+      typeof activation === "object" &&
+      Number.isFinite(activation.updatedAt) &&
+      Date.now() - activation.updatedAt <= ${PLAYBACK_ACTIVATION_MAX_AGE_MS}
+      ? activation
+      : null;
     const artworkCandidates = [
+      recentActivation?.artworkUrl,
       document.querySelector('meta[property="og:image"]')?.getAttribute("content"),
       video.poster
     ];
@@ -167,9 +177,107 @@ export function buildPlaybackSnapshotScript(
       playedSeconds,
       readyState: video.readyState,
       subtitle: readText(${subtitleSelectors}),
-      title: readText(${titleSelectors}),
+      title: readText(${titleSelectors}) || (typeof recentActivation?.title === "string" ? recentActivation.title : ""),
       url: location.href,
       visibleArea: candidate.area
     };
+  })()`;
+}
+
+export function buildPlaybackActivationTrackerScript(): string {
+  return `(() => {
+    const key = ${JSON.stringify(PLAYBACK_ACTIVATION_KEY)};
+    const current = globalThis[key];
+    if (current && typeof current === "object" && current.installed === true) return true;
+
+    const state = {
+      artworkUrl: null,
+      installed: true,
+      title: null,
+      updatedAt: 0
+    };
+    globalThis[key] = state;
+
+    const httpsUrl = (value) => {
+      if (typeof value !== "string" || value.trim().length === 0) return null;
+      const first = value.split(",").at(-1)?.trim().split(/\\s+/)[0] ?? "";
+      try {
+        const url = new URL(first, location.href);
+        return url.protocol === "https:" ? url.toString() : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const backgroundUrl = (element) => {
+      try {
+        const value = getComputedStyle(element).backgroundImage;
+        const match = /url\\(["']?(.+?)["']?\\)/.exec(value);
+        return httpsUrl(match?.[1]);
+      } catch {
+        return null;
+      }
+    };
+
+    const visibleArea = (element) => {
+      const rect = element.getBoundingClientRect();
+      const width = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
+      const height = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+      return width * height;
+    };
+
+    const imageUrl = (image) => httpsUrl(
+      image.currentSrc ||
+      image.getAttribute("src") ||
+      image.getAttribute("data-src") ||
+      image.getAttribute("srcset")
+    );
+
+    const candidateFrom = (start) => {
+      let element = start;
+      for (let depth = 0; element instanceof Element && depth < 7; depth += 1) {
+        const candidates = [];
+        if (element instanceof HTMLImageElement) {
+          candidates.push({ area: visibleArea(element), url: imageUrl(element) });
+        }
+        for (const image of element.querySelectorAll("img")) {
+          candidates.push({ area: visibleArea(image), url: imageUrl(image) });
+        }
+        candidates.push({ area: visibleArea(element), url: backgroundUrl(element) });
+        for (const child of element.querySelectorAll('[style*="background"], [class*="image"], [class*="artwork"], [class*="boxart"]')) {
+          candidates.push({ area: visibleArea(child), url: backgroundUrl(child) });
+        }
+
+        const best = candidates
+          .filter((candidate) => candidate.url !== null && candidate.area >= 80 * 45)
+          .sort((left, right) => right.area - left.area)[0];
+        if (best !== undefined) {
+          const labelled = element.closest('[aria-label], [title]');
+          const title = labelled?.getAttribute("aria-label") ||
+            labelled?.getAttribute("title") ||
+            (element instanceof HTMLImageElement ? element.alt : "") ||
+            null;
+          return { artworkUrl: best.url, title };
+        }
+        element = element.parentElement;
+      }
+      return null;
+    };
+
+    const remember = (target) => {
+      const candidate = target instanceof Element ? candidateFrom(target) : null;
+      if (candidate === null) return;
+      state.artworkUrl = candidate.artworkUrl;
+      state.title = typeof candidate.title === "string"
+        ? candidate.title.replace(/\\s+/g, " ").trim().slice(0, ${MAX_METADATA_LENGTH}) || null
+        : null;
+      state.updatedAt = Date.now();
+    };
+
+    document.addEventListener("click", (event) => remember(event.target), true);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") remember(document.activeElement);
+    }, true);
+    return true;
   })()`;
 }

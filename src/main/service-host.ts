@@ -6,6 +6,7 @@ import {
 } from "electron";
 import {
   isAllowedServiceUrl,
+  isAllowedArtworkUrl,
   isExpectedAllowedNavigationAbort,
   isServiceRootUrl,
   originForDiagnostics,
@@ -13,6 +14,7 @@ import {
   type ServiceDefinition
 } from "./security/navigation-policy";
 import {
+  buildPlaybackActivationTrackerScript,
   buildPlaybackSnapshotScript,
   qualifyPlaybackSnapshot
 } from "./playback-observer";
@@ -510,6 +512,12 @@ export class ServiceHost {
       }
 
       if (this.#view === view) {
+        if (definition.playback !== null) {
+          void view.webContents.executeJavaScript(
+            buildPlaybackActivationTrackerScript(),
+            true
+          ).catch(() => undefined);
+        }
         void this.#checkpointPlayback();
       }
     });
@@ -869,9 +877,14 @@ export class ServiceHost {
               ? null
               : sanitizePlaybackUrl(observation.url, definition);
 
-            if (observation !== null && watchUrl !== null) {
+            if (
+              observation !== null &&
+              watchUrl !== null &&
+              observation.artworkUrl !== null &&
+              isAllowedArtworkUrl(observation.artworkUrl, definition.artworkHosts)
+            ) {
               return {
-                detail: "Netflix test video decoded and qualified for passive Continue Watching observation.",
+                detail: "Netflix test video qualified for passive Continue Watching with allowlisted artwork.",
                 status: "passed"
               };
             }

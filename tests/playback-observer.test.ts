@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPlaybackActivationTrackerScript,
   buildPlaybackSnapshotScript,
   qualifyPlaybackSnapshot
 } from "../src/main/playback-observer";
@@ -57,6 +58,17 @@ describe("passive playback observer", () => {
     });
     expect(script).toContain("video.played.end(index)");
     expect(script).toContain('readText(["h1"])');
+    expect(script).toContain("recentActivation?.artworkUrl");
     expect(script).not.toContain("Example Show");
+  });
+
+  it("tracks the most recently activated visible tile without sending page data", () => {
+    const script = buildPlaybackActivationTrackerScript();
+
+    expect(script).toContain('document.addEventListener("click"');
+    expect(script).toContain('document.addEventListener("keydown"');
+    expect(script).toContain("candidate.area >= 80 * 45");
+    expect(script).not.toContain("ipcRenderer");
+    expect(script).not.toContain("fetch(");
   });
 });

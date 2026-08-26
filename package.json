@@ -19,13 +19,22 @@
     "verify:build": "node scripts/verify-build.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "start": "electron .",
-    "dev": "pnpm build && electron . --devtools"
+    "dev": "pnpm build && electron . --devtools",
+    "evs:setup": "node scripts/evs-vmp.mjs setup",
+    "evs:signup": "node scripts/evs-vmp.mjs signup",
+    "evs:sign:dev": "node scripts/evs-vmp.mjs sign",
+    "evs:verify:dev": "node scripts/evs-vmp.mjs verify"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "@types/qrcode": "^1.5.6",
     "electron": "github:castlabs/electron-releases#v43.2.0+wvcus",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "simple-icons": "16.28.0"
   }
 }

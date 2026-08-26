@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. It includes a Shaka Player Widevine test service, a narrow IPC bridge, strict navigation rules, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, local profiles with separate lineups and viewing history, Settings, passive Continue Watching with cached artwork, federated service search, branded service rails, row-aware spatial focus, configurable navigation sounds, Xbox-style Gamepad API input, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 
@@ -39,14 +39,43 @@ pnpm check
 pnpm start
 ```
 
-In the feasibility shell, select **Open Shaka DRM demo**, choose a Widevine asset, and press Escape to return to NHD-TV. Escape is a temporary spike behavior; the nested Back and quit flow is tracked separately.
+In the feasibility shell, select a service from Home or the Store. The Shaka entry is the public Widevine test; commercial-service credentials must be entered directly into their isolated service pages. Back/Escape first lets an editable field, open dialog, or expanded in-service menu consume the action, then traverses service history. At a declared service root, NHD-TV shows its own confirmation before returning Home. Authentication popups on exact adapter origins open as sandboxed, app-owned windows using the same isolated service session; unexpected origins remain blocked.
+
+To use a phone as a session-only remote, choose **Pair a phone** in the top bar or Settings, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The full-height controller keeps icon-only Back and Home controls in its upper corners, defaults to directional arrow buttons, and can switch to an optional Apple-style relative precision pad. The pad is a clean gesture surface while the TV shows the persistent cursor: swipe from anywhere to move it, lift and recenter the finger to continue, or tap anywhere on the pad to select its current safe target. Movement uses a jitter dead zone and bounded acceleration. Dragging outward at the top or bottom scrolls the page proportionally; dragging left or right while the cursor is over an overflowing rail scrolls only that rail. Nearby visible controls use target hysteresis before snapping into one high-contrast focus frame on the TV, with the free cursor hidden while locked. The TV cursor and focus treatment fade after 3.5 seconds of inactivity without resetting their stored position. Hover does not take DOM focus. The remote also sends one bounded search phrase. While Netflix or YouTube is open, phone search stays in that service and opens its prefilled search results; selecting either service's explicitly declared search field or launcher opens the phone keyboard, then NHD-TV binds the provider field after any lazy UI transition. Disney+ opens its search page. From Home, search uses the enabled-service chooser. Pointer routing cannot target credential, payment, permission, popup, hidden, custom-app, or undeclared editable surfaces. Use the microphone on the phone's native keyboard for voice dictation. Supported phones provide light haptic confirmation after the TV accepts an action or locks onto a new target. Restarting NHD-TV revokes all paired phones.
+
+Continue Watching qualifies recognized, visible long-form playback from actual played media ranges, then checkpoints after initial engagement, every ten seconds, and on key lifecycle events. It stores progress and sanitized resume links only in local application data; the shell never receives the private link. Home cards can be resumed through the provider or removed locally without clearing the provider session. Search updates as the user types, offers matching items from the active profile's Continue Watching history, and then opens the selected enabled service. Netflix and YouTube accept a prefilled query; Disney+ opens its own search page.
+
+An Xbox-style controller uses the D-pad or left stick for navigation, A for Select, B for Back, and Guide for Home. If a browser does not expose Guide, pressing View and Menu together provides the Home fallback. Directional holds have a bounded repeat delay and use the same host action router as the phone remote.
+
+Store choices belong to the active local profile. Services can be favorited and reordered for Home. Removing a service from Home keeps its login; **Clear data** is a separate confirmed action that clears only that service's isolated local session.
+
+The Store also accepts declarative custom services with a name and HTTPS start page. NHD-TV derives an exact same-origin navigation boundary and a dedicated local session; custom entries cannot execute plugin code, observe playback, or inject search behavior. Removing a custom integration clears its partition and removes it from all local profiles.
+
+Device-wide television settings persist the selected display, launch-fullscreen behavior, safe-area margin, and reduced-motion preference. The display card cycles NHD-TV across connected screens; audio routing and startup-at-login remain platform milestones.
+
+### Production Widevine signing
+
+The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but commercial production license services require a production signature. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password. The current macOS development runtime has been EVS-signed and passes both Castlabs' production VMP endpoint and Netflix Test Patterns playback.
+
+```sh
+pnpm evs:setup
+pnpm evs:signup
+pnpm evs:sign:dev
+pnpm evs:verify:dev
+```
+
+Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. The optional `pnpm start -- --netflix-smoke-test` command uses the saved Netflix service session to play Netflix's official Test Patterns title and emits only a sanitized pass/fail result. `pnpm start -- --youtube-auth-smoke-test` verifies the visible YouTube account state or Sign in route without reading account details. Packaged releases will run production VMP signing before application code-signing on macOS and after application code-signing on Windows.
 
 ## Project documents
 
 - [Product specification](docs/product-spec.md)
 - [Architecture](docs/architecture.md)
+- [Continue Watching adapter notes](docs/continue-watching.md)
 - [Roadmap](docs/roadmap.md)
 - [DRM host feasibility result](docs/feasibility/drm-host.md)
+- [Commercial-service compatibility matrix](docs/feasibility/service-matrix.md)
+- [Search design and research](docs/search-design.md)
+- [YouTube authentication decision](docs/youtube-auth.md)
 
 Streaming-service credentials and cookies stay in per-service persistent Electron session partitions and must never be committed.
 

@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+.pnpm-store/
+.tools/
 
 # Build output
 dist/
@@ -29,4 +31,3 @@ pnpm-debug.log*
 .cache/
 test-results/
 playwright-report/
-

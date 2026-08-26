@@ -7,38 +7,482 @@
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NHD-TV Feasibility Host</title>
+    <title>NHD-TV</title>
   </head>
-  <body>
-    <main class="shell">
-      <p class="eyebrow">Milestone 0 · Feasibility</p>
-      <h1>NHD-TV</h1>
-      <p class="lede">
-        Secure service-host spike for DRM, session, navigation, and performance testing.
-      </p>
+  <body data-view="home">
+    <div class="shell-backdrop" aria-hidden="true">
+      <span class="backdrop-glow backdrop-glow-one"></span>
+      <span class="backdrop-glow backdrop-glow-two"></span>
+    </div>
 
-      <section class="status-card" aria-labelledby="runtime-title">
-        <div>
-          <p class="status-label" id="runtime-title">Runtime</p>
-          <p id="runtime-status">Loading runtime information…</p>
-        </div>
-        <div>
-          <p class="status-label">Widevine</p>
-          <p id="widevine-status">Checking component status…</p>
-        </div>
-        <div>
-          <p class="status-label">Active service</p>
-          <p id="service-status">None</p>
-        </div>
-      </section>
-
-      <div class="actions">
-        <button id="open-service" type="button">Open Shaka DRM demo</button>
-        <button class="secondary" id="close-service" type="button">Close service</button>
+    <header class="topbar">
+      <div class="brand" aria-label="NHD-TV">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span class="brand-name">NHD</span>
       </div>
 
-      <p class="feedback" id="feedback" role="status"></p>
+      <nav class="primary-nav" aria-label="Primary navigation" data-nav-group="topbar">
+        <button class="nav-button nav-current" data-view-target="home" type="button" aria-current="page">
+          Home
+        </button>
+        <button class="nav-button" data-view-target="apps" type="button">Apps</button>
+        <button class="nav-button" data-view-target="store" type="button">Store</button>
+      </nav>
+
+      <div class="topbar-actions" data-nav-group="topbar">
+        <button class="search-chip" id="top-search-button" type="button" aria-label="Search your services">
+          <span aria-hidden="true">⌕</span>
+          <span>Search</span>
+        </button>
+        <button class="remote-chip" id="top-remote-button" type="button">
+          <span class="remote-chip-dot" aria-hidden="true"></span>
+          <span id="top-remote-label">Pair a phone</span>
+        </button>
+        <button class="settings-chip" data-view-target="settings" type="button" aria-label="Open settings">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19.4 13a7.8 7.8 0 0 0 .05-1 7.8 7.8 0 0 0-.05-1l2.08-1.62-2-3.46-2.47 1a7.4 7.4 0 0 0-1.72-1L14.92 3h-4l-.38 2.92a7.4 7.4 0 0 0-1.72 1l-2.47-1-2 3.46L6.43 11a7.8 7.8 0 0 0-.05 1 7.8 7.8 0 0 0 .05 1l-2.08 1.62 2 3.46 2.47-1a7.4 7.4 0 0 0 1.72 1l.38 2.92h4l.38-2.92a7.4 7.4 0 0 0 1.72-1l2.47 1 2-3.46L19.4 13Zm-6.48 2.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" />
+          </svg>
+        </button>
+        <button class="profile-chip" id="profile-button" type="button">
+          <span class="profile-copy">
+            <span class="profile-label">Watching as</span>
+            <span id="profile-name">Local profile</span>
+          </span>
+          <span class="avatar" id="profile-avatar" aria-hidden="true">L</span>
+        </button>
+      </div>
+    </header>
+
+    <aside class="remote-invite" id="remote-invite" aria-live="polite" hidden>
+      <img id="remote-invite-qr" alt="Pair an NHD-TV phone remote" />
+      <span>
+        <strong>Use your phone</strong>
+        <small>Scan to connect a remote</small>
+      </span>
+    </aside>
+
+    <main class="tv-shell">
+      <section class="app-view home-view" id="home-view" data-view="home">
+        <section class="featured" aria-labelledby="featured-title">
+          <div class="featured-wash" aria-hidden="true"></div>
+          <div class="featured-content">
+            <p class="eyebrow">Featured from your lineup</p>
+            <div class="featured-brand" id="featured-brand" aria-hidden="true"></div>
+            <h1 id="featured-title">Your services. One television.</h1>
+            <p class="featured-copy" id="featured-copy">
+              Pick up the remote and open a service without leaving NHD-TV.
+            </p>
+            <div class="featured-actions" data-nav-group="featured-actions">
+              <button class="primary-action" id="hero-open" type="button" disabled>
+                Loading services…
+              </button>
+              <button class="secondary-action" data-view-target="apps" type="button">
+                Edit lineup
+              </button>
+            </div>
+          </div>
+          <div class="featured-art" id="featured-art" aria-hidden="true">
+            <span class="featured-orbit featured-orbit-one"></span>
+            <span class="featured-orbit featured-orbit-two"></span>
+            <div class="featured-icon" id="featured-icon"></div>
+          </div>
+        </section>
+
+        <section class="rail continue-rail" aria-labelledby="continue-title">
+          <div class="section-heading">
+            <h2 id="continue-title">Continue Watching</h2>
+            <span class="section-hint" id="continue-hint">Saved only on this computer</span>
+          </div>
+          <div class="horizontal-row" id="continue-actions" data-nav-group="continue-row">
+            <button class="continue-card" id="continue-placeholder" type="button">
+              <span class="continue-art" aria-hidden="true">
+                <span class="continue-play">▶</span>
+              </span>
+              <span class="continue-meta">
+                <strong>Start watching in one of your apps</strong>
+                <small>Long-form playback will appear here automatically</small>
+                <span class="placeholder-progress" aria-hidden="true"><span></span></span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <section class="rail services-rail" aria-labelledby="services-title">
+          <div class="section-heading">
+            <h2 id="services-title">Your Apps</h2>
+            <button class="text-action" data-view-target="apps" type="button">Manage</button>
+          </div>
+          <div class="service-row horizontal-row" id="service-actions" data-nav-group="home-services"></div>
+        </section>
+      </section>
+
+      <section class="app-view catalog-view" id="apps-view" data-view="apps" hidden>
+        <header class="view-heading">
+          <p class="eyebrow">Your Apps</p>
+          <h1>Everything you added.</h1>
+          <p>Open an app or use its Manage button to change favorites, order, or local sign-in data.</p>
+        </header>
+
+        <section class="rail" aria-labelledby="apps-title">
+          <div class="section-heading">
+            <h2 id="apps-title">Installed apps</h2>
+            <span class="section-hint" id="lineup-count">Loading apps…</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="apps-actions" data-nav-group="installed-apps"></div>
+        </section>
+      </section>
+
+      <section class="app-view catalog-view" id="store-view" data-view="store" hidden>
+        <header class="view-heading">
+          <p class="eyebrow">App Store</p>
+          <h1>Find your services.</h1>
+          <p>Search apps you have not added yet, then add only the ones you use.</p>
+          <label class="store-search" for="store-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="store-search" type="search" maxlength="60" autocomplete="off" placeholder="Search available apps" />
+          </label>
+        </header>
+
+        <section class="rail" id="store-core-section" aria-labelledby="catalog-title">
+          <div class="section-heading">
+            <h2 id="catalog-title">Available apps</h2>
+            <span class="section-hint">Ready to add</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="store-actions" data-nav-group="store-services"></div>
+        </section>
+
+        <section class="rail catalog-tier" id="store-experimental-section" aria-labelledby="experimental-catalog-title">
+          <div class="section-heading">
+            <h2 id="experimental-catalog-title">More apps to try</h2>
+            <span class="section-hint">Preview integrations · add only what you use</span>
+          </div>
+          <div class="catalog-grid" id="experimental-store-actions" data-nav-group="experimental-store-services"></div>
+        </section>
+
+        <section class="rail catalog-tier" id="store-utility-section" aria-labelledby="utility-catalog-title">
+          <div class="section-heading">
+            <h2 id="utility-catalog-title">Custom & diagnostics</h2>
+            <span class="section-hint">Advanced tools</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="utility-store-actions" data-nav-group="utility-store-services"></div>
+        </section>
+
+        <div class="store-empty" id="store-empty" hidden>
+          <strong>No available apps match that search.</strong>
+          <span>Try another name, or add a trusted custom app below.</span>
+        </div>
+
+        <section class="store-note" aria-label="Custom services">
+          <div class="store-note-icon" aria-hidden="true">＋</div>
+          <div>
+            <p class="eyebrow">Custom app</p>
+            <h2>Add a trusted web service</h2>
+            <p>NHD-TV will allow only the HTTPS origin you enter. Custom services cannot run plugin code or observe playback.</p>
+            <form class="custom-service-form" id="custom-service-form">
+              <input id="custom-service-name" maxlength="32" autocomplete="off" placeholder="Service name" required />
+              <input id="custom-service-url" type="url" inputmode="url" autocomplete="url" placeholder="https://watch.example.com" required />
+              <button class="primary-action" type="submit">Add service</button>
+            </form>
+          </div>
+        </section>
+      </section>
+
+      <section class="app-view settings-view" id="settings-view" data-view="settings" hidden>
+        <header class="view-heading">
+          <p class="eyebrow">NHD-TV Settings</p>
+          <h1>Make the room yours.</h1>
+          <p>Input, privacy, and host controls stay on this computer.</p>
+        </header>
+
+        <section class="settings-row horizontal-row" aria-label="Primary settings" data-nav-group="settings-primary">
+          <button class="settings-card settings-card-accent" id="settings-remote-button" type="button">
+            <span class="settings-icon" aria-hidden="true">⌁</span>
+            <span>
+              <strong>Phone remote</strong>
+              <small id="settings-remote-copy">Pair on your trusted local network</small>
+            </span>
+          </button>
+          <button class="settings-card" id="remote-auto-connect-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">AUTO</span>
+            <span>
+              <strong>Auto-connect first remote</strong>
+              <small id="remote-auto-connect-copy">On · first scan connects when no remote is active</small>
+            </span>
+          </button>
+          <button class="settings-card" id="sound-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon" aria-hidden="true">♪</span>
+            <span>
+              <strong>Navigation sound</strong>
+              <small id="sound-toggle-copy">On</small>
+            </span>
+          </button>
+          <button class="settings-card" id="gamepad-card" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">PAD</span>
+            <span>
+              <strong>Game controller</strong>
+              <small id="gamepad-copy">Connect an Xbox-style controller</small>
+            </span>
+          </button>
+          <button class="settings-card" id="profile-card" type="button">
+            <span class="settings-icon" aria-hidden="true">◎</span>
+            <span>
+              <strong>Local profile</strong>
+              <small id="profile-card-copy">Separate lineup and viewing history</small>
+            </span>
+          </button>
+        </section>
+
+        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Television settings" data-nav-group="settings-television">
+          <button class="settings-card" id="display-card" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">TV</span>
+            <span>
+              <strong>Television display</strong>
+              <small id="display-copy">Checking connected displays</small>
+            </span>
+          </button>
+          <button class="settings-card" id="fullscreen-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">FULL</span>
+            <span>
+              <strong>Open fullscreen</strong>
+              <small id="fullscreen-copy">On</small>
+            </span>
+          </button>
+          <button class="settings-card" id="safe-area-toggle" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">SAFE</span>
+            <span>
+              <strong>Screen margins</strong>
+              <small id="safe-area-copy">Standard</small>
+            </span>
+          </button>
+          <button class="settings-card" id="motion-toggle" type="button" aria-pressed="false">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">FX</span>
+            <span>
+              <strong>Reduce motion</strong>
+              <small id="motion-copy">Off</small>
+            </span>
+          </button>
+        </section>
+
+        <section class="settings-details">
+          <article class="privacy-card">
+            <p class="eyebrow">Privacy</p>
+            <h2>Local by default</h2>
+            <p>Service cookies remain in separate local partitions. NHD-TV has no analytics or cloud sync. The phone remote can send navigation and text only to explicitly supported search boxes, never credential fields.</p>
+          </article>
+
+          <details class="developer-panel">
+            <summary data-nav-group="settings-diagnostics">
+              <span>
+                <span class="eyebrow">Advanced</span>
+                <strong>Host diagnostics</strong>
+              </span>
+              <span class="health-pill" id="health-pill">Checking host…</span>
+            </summary>
+
+            <section class="status-card" aria-label="Runtime diagnostics">
+              <div>
+                <p class="status-label">Runtime</p>
+                <p id="runtime-status">Loading runtime information…</p>
+              </div>
+              <div>
+                <p class="status-label">Widevine</p>
+                <p id="widevine-status">Checking component status…</p>
+              </div>
+              <div>
+                <p class="status-label">Active service</p>
+                <p id="service-status">None</p>
+              </div>
+              <div>
+                <p class="status-label">Performance and security</p>
+                <p id="diagnostics-status">Waiting for GPU and process metrics…</p>
+              </div>
+            </section>
+
+            <button class="secondary-action close-service" id="close-service" type="button">
+              Close active service
+            </button>
+          </details>
+        </section>
+      </section>
+
+      <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
     </main>
+
+    <dialog class="remote-dialog" id="remote-dialog" aria-labelledby="remote-title">
+      <div class="remote-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Phone remote</p>
+            <h2 id="remote-title">Pair this television</h2>
+          </div>
+          <button class="dialog-close" id="remote-close" type="button" aria-label="Close phone pairing">
+            ×
+          </button>
+        </header>
+
+        <p class="remote-detail" id="remote-detail" role="status" aria-live="polite">
+          Start pairing to create a short-lived local QR code.
+        </p>
+        <p class="remote-safety">
+          Use a trusted home network. The remote can send a search phrase, but never
+          passwords, payment details, or service sign-in fields.
+        </p>
+
+        <div class="remote-pairing-view" id="remote-pairing-view" hidden>
+          <img class="remote-qr" id="remote-qr" alt="QR code for the NHD-TV phone remote" />
+          <p class="remote-expiry" id="remote-expiry"></p>
+        </div>
+
+        <div class="remote-approval" id="remote-approval" hidden>
+          <strong>Allow this phone?</strong>
+          <p>A phone scanned the current code. Confirm here before it can send commands.</p>
+          <div class="remote-dialog-actions" data-nav-group="remote-approval">
+            <button class="primary-action" id="remote-approve" type="button">Allow phone</button>
+            <button class="secondary-action" id="remote-deny" type="button">Deny</button>
+          </div>
+        </div>
+
+        <div class="remote-ready" id="remote-ready" hidden>
+          <span class="remote-ready-dot" aria-hidden="true"></span>
+          <span id="remote-ready-copy">Phone remote connected.</span>
+        </div>
+
+        <button class="primary-action remote-start" id="remote-start" type="button">
+          Create pairing code
+        </button>
+      </div>
+    </dialog>
+
+    <dialog class="app-manage-dialog" id="app-manage-dialog" aria-labelledby="app-manage-title">
+      <div class="app-manage-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Manage app</p>
+            <h2 id="app-manage-title">App settings</h2>
+          </div>
+          <button class="dialog-close" id="app-manage-close" type="button" aria-label="Close app settings">×</button>
+        </header>
+        <div class="app-manage-summary">
+          <div class="app-manage-brand" id="app-manage-brand" aria-hidden="true"></div>
+          <div>
+            <strong id="app-manage-name"></strong>
+            <span id="app-manage-status"></span>
+          </div>
+        </div>
+        <div class="app-manage-actions" data-nav-group="app-manage-actions">
+          <button class="primary-action" id="app-manage-open" type="button">Open app</button>
+          <button class="secondary-action" id="app-manage-favorite" type="button">Favorite</button>
+          <button class="secondary-action" id="app-manage-earlier" type="button">Move earlier</button>
+          <button class="secondary-action" id="app-manage-later" type="button">Move later</button>
+          <button class="secondary-action" id="app-manage-remove" type="button">Remove from Apps</button>
+          <button class="danger-secondary-action" id="app-manage-clear" type="button">Clear sign-in data</button>
+          <button class="danger-action" id="app-manage-delete" type="button" hidden>Delete custom app</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+      <div class="profile-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Local profiles</p>
+            <h2 id="profile-title">Who is watching?</h2>
+          </div>
+          <button class="dialog-close" id="profile-close" type="button" aria-label="Close profiles">×</button>
+        </header>
+        <p class="profile-privacy">Each profile has its own lineup and Continue Watching history. Streaming-service sign-ins remain shared on this computer.</p>
+        <div class="profile-list" id="profile-list" data-nav-group="profile-list"></div>
+        <form class="profile-create-form" id="profile-create-form">
+          <label for="profile-create-name">Add a profile</label>
+          <div>
+            <input id="profile-create-name" maxlength="32" autocomplete="off" placeholder="Profile name" required />
+            <button class="primary-action" type="submit">Create</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog class="search-dialog" id="search-dialog" aria-labelledby="search-title">
+      <div class="search-dialog-shell">
+        <header class="search-dialog-header">
+          <div>
+            <p class="eyebrow">NHD-TV Search</p>
+            <h2 id="search-title">Find something to watch.</h2>
+          </div>
+          <button class="dialog-close" id="search-close" type="button" aria-label="Close search">×</button>
+        </header>
+        <form class="tv-search-form" id="search-form">
+          <label for="search-input">Title, person, genre, or topic</label>
+          <div>
+            <span aria-hidden="true">⌕</span>
+            <input
+              id="search-input"
+              type="search"
+              maxlength="120"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="Try a title, actor, genre, or topic"
+            />
+          </div>
+        </form>
+        <p class="search-privacy">For queries of 2 or more characters, the text is sent to TVmaze to retrieve TV-show results and is not saved by NHD-TV. App searches are sent only after you choose an app.</p>
+        <section class="search-results catalog-search-section" id="catalog-search-section" aria-labelledby="catalog-search-title" hidden>
+          <div class="section-heading">
+            <h2 id="catalog-search-title">Shows matching your search</h2>
+            <span class="section-hint" id="catalog-search-status">Show data and posters: TVmaze.com</span>
+          </div>
+          <div class="catalog-search-grid" id="catalog-search-results" data-nav-group="catalog-search"></div>
+        </section>
+        <section class="search-results search-history-section" id="search-history-section" aria-labelledby="search-history-title">
+          <div class="section-heading">
+            <h2 id="search-history-title">Pick up where you left off</h2>
+            <span class="section-hint" id="search-history-count"></span>
+          </div>
+          <div class="search-result-row" id="search-history-results" data-nav-group="search-history"></div>
+          <div class="search-empty-state" id="search-empty-state" hidden>
+            <span aria-hidden="true">⌕</span>
+            <div>
+              <strong id="search-empty-title">Your search starts here</strong>
+              <p id="search-empty-copy">Start watching in one of your apps and NHD-TV will make that local history searchable.</p>
+            </div>
+          </div>
+        </section>
+        <section class="search-results search-provider-section" id="search-provider-section" aria-labelledby="search-results-title" hidden>
+          <div class="section-heading">
+            <h2 id="search-results-title">Search in your apps</h2>
+            <span class="section-hint" id="search-result-count">The app owns its catalog and results</span>
+          </div>
+          <div class="search-result-row" id="search-results" data-nav-group="search-results"></div>
+        </section>
+      </div>
+    </dialog>
+
+    <img class="quit-service-preview" id="quit-service-preview" alt="" aria-hidden="true" hidden />
+
+    <dialog class="quit-dialog" id="quit-dialog" aria-labelledby="quit-title">
+      <div class="quit-dialog-shell">
+        <p class="eyebrow">Leave service?</p>
+        <h2 id="quit-title">Return to NHD-TV?</h2>
+        <p id="quit-copy">You are at the service home screen.</p>
+        <div class="quit-actions" data-nav-group="quit-actions">
+          <button class="primary-action" id="quit-cancel" type="button">Keep watching</button>
+          <button class="secondary-action" id="quit-confirm" type="button">Exit service</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="quit-dialog" id="clear-data-dialog" aria-labelledby="clear-data-title">
+      <div class="quit-dialog-shell">
+        <p class="eyebrow">Clear service data?</p>
+        <h2 id="clear-data-title">Sign out of this service?</h2>
+        <p id="clear-data-copy">This removes the service's local cookies, storage, and cache from this computer.</p>
+        <div class="quit-actions" data-nav-group="clear-data-actions">
+          <button class="secondary-action" id="clear-data-cancel" type="button">Cancel</button>
+          <button class="danger-action" id="clear-data-confirm" type="button">Clear data</button>
+        </div>
+      </div>
+    </dialog>
+
     <script type="module" src="/index.ts"></script>
   </body>
 </html>

@@ -24,25 +24,28 @@ NHD-TV supports multiple input adapters that produce a shared set of application
 - Xbox-style and compatible game controllers
 - QR-paired phone remote over the local network
 
-The NHD-TV shell uses spatial D-pad navigation. The initial generic service interaction uses pointer input through a mouse, controller thumbstick, or phone trackpad. Service adapters may add reliable D-pad behavior when available.
+The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a fixed host-provided focus overlay that remains visible above clipped carousels. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and the phone remote provides an optional bounded precision pad.
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
+
+The current controller foundation maps a standard Gamepad API layout: D-pad or left stick moves focus, A selects, B goes back, and Guide returns Home. View plus Menu is the Home fallback where Guide is unavailable. Physical Windows validation and nonstandard controller mappings remain release qualification work.
 
 ## Home
 
 The first home experience contains:
 
 - Continue Watching
+- Result-first TV-show discovery, local history matches, and app-owned catalog actions
 - Enabled services
 - Profile access
-- Store access
-- Settings
+- App Library access
+- Settings utility access
 
-Universal cross-service search, algorithmic recommendations, voice control, and cloud synchronization are not MVP requirements.
+The first search slice is a privacy-scoped discovery surface. Before typing, it presents the active profile's recent Continue Watching items. While typing, it immediately filters renderer-safe local titles, subtitles, and service names. Queries of two or more characters are also sent to TVmaze after a debounce to retrieve attributed TV-show titles and posters; NHD-TV does not retain those queries. TVmaze results do not claim service availability. App-owned search actions appear on each discovered title and receive that title only when selected. From the phone remote while a searchable service is open, that service is still the default destination. Search routing never types into arbitrary focused fields. Movie/person aggregation, verified regional availability, algorithmic recommendations, direct microphone capture, and cloud synchronization remain later capabilities.
 
 ## Store
 
-The Store is a catalog of available service integrations, not a payment or binary-download marketplace.
+Apps and Store are separate TV destinations. Apps contains only installed launchers and a single Manage entry point per app. Store contains only uninstalled integrations, provides a local name filter, and retains the custom-service form. Store is not a payment or binary-download marketplace. Core, experimental, custom, and diagnostic integrations are visually separated so a new provider is never mistaken for a qualified one. Experimental providers use a compact multi-row grid that exposes the full catalog to mouse, D-pad, and precision navigation without clipping it into one long carousel.
 
 - Adding a service enables its home tile.
 - Removing a service hides it but preserves its login and local history.
@@ -51,13 +54,17 @@ The Store is a catalog of available service integrations, not a payment or binar
 - Services display platform support and integration status.
 - A custom-service flow accepts declarative configuration such as name, icon, URL, allowed origins, and root-page rules.
 
-Executable third-party plugins and remotely downloaded adapter code are excluded from the first version.
+Executable third-party plugins and remotely downloaded adapter code are excluded from the first version. The current custom-service foundation accepts a name and HTTPS start page, allows only that exact origin, and creates a dedicated isolated session. Removing a custom integration also clears its partition and removes it from all profiles.
+
+The current Apps foundation saves the enabled, ordered, and favorited Home lineup per local profile. Favorite, order, removal, and data controls live in the app-management dialog rather than under every card. Removing an item from Apps never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
+
+The current experimental catalog includes Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch. These use official HTTPS entry points, exact-origin navigation boundaries, and separate persistent partitions. They remain disabled by default and do not advertise search, playback observation, or compatibility until per-platform qualification is complete.
 
 ## Profiles and sessions
 
 NHD-TV profiles have separate preferences and local viewing history. Streaming-service sessions are shared across NHD-TV profiles initially, and each service retains its own account/profile selection experience. Isolated service accounts per NHD-TV profile can be added later.
 
-All profile information is stored locally in the first version.
+All profile information is stored locally in the first version. The current foundation supports creating and switching up to eight profiles. A profile switch checkpoints and closes the active service before replacing the lineup and Continue Watching view, preventing playback from being attributed to the wrong profile.
 
 ## Continue Watching
 
@@ -74,13 +81,17 @@ For recognized playback, store:
 - Observed playback position and duration
 - Last engagement time
 
-The listener checkpoints active playback periodically and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful playback from previews and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position.
+The listener qualifies actual played ranges, then checkpoints active playback shortly after engagement, periodically, and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful visible playback from previews, cloud-position seeks, and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position. A local Remove action deletes only the NHD-TV history item and does not affect the service session or provider account.
+
+The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a visible long-form media element and at least five seconds in its actual played ranges, strips undeclared URL parameters, and checkpoints shortly after qualification plus every ten seconds, pause, navigation, service exit, and window shutdown. It removes items observed at 95% completion or manually removed on Home. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
 
 ## Phone remote
 
-The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
+The desktop app exposes a local controller page and displays a compact top-right QR invite whenever no phone remote is connected. The invite disappears after connection. A default-on device setting may auto-approve only the first valid scan when no controller exists; users can disable it to require television approval for every scan, and additional phones always require approval before receiving a revocable device token.
 
-The remote provides navigation, Select, Back, a trackpad, and non-sensitive text entry. Password entry over the remote is excluded until the channel has an appropriate encryption design.
+The first remote slice provides a full-height phone controller with directional navigation, Select, icon-only Back and Home controls in the upper corners, a single bounded Search field, and an optional relative precision pad. It is session-only. Global Search text is delivered to trusted main-process routing; it opens the active service's declared search destination or returns to the Home chooser. When the precision cursor selects an explicitly declared Netflix or YouTube search field or launcher, the same phone field switches into direct-entry mode and mirrors bounded text into the provider field, including native keyboard dictation and Enter submission. Launchers advertise the safe capability before selection, while a short post-click settle step handles providers that mount their input or textarea lazily. The host admits only the adapter's declared selectors and rejects login, password, payment, popup, custom-app, hidden, ambiguous, and arbitrary fields. The clean phone surface controls a persistent virtual cursor shown on the TV rather than duplicating its position under the user's finger. Swipes move that cursor with bounded acceleration, lifting preserves it for a recentered follow-up swipe, and a tap anywhere activates its current safe target. Vertical edge motion scrolls the page; horizontal edge motion scrolls only the active overflowing rail. Nearby controls add a hysteresis-backed locked-target state and one high-contrast focus frame without taking DOM focus. Provider modals constrain snapping to their topmost visible modal and Netflix episodes highlight as full rows. The free cursor fades while locked, and all pointer treatment disappears after a short idle period without resetting the virtual cursor. The phone gives haptic feedback and the TV plays its navigation cue when the precision pad snaps to a new target.
+
+Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. The optional precision pad sends the resulting bounded virtual coordinates and a movement-scaled edge-drag value only after deliberate vertical movement. Coalesced touch samples reduce event noise, subpixel jitter is discarded, each input delta is capped, and a terminal tap bypasses a pending throttle timer. The host snaps only to visible controls plus a service's explicitly declared search input and performs a native tap only after a safe snap; arbitrary selectors, target metadata, credential/payment fields, popup windows, and permission surfaces remain out of scope.
 
 ## Desktop behavior
 
@@ -91,3 +102,8 @@ The remote provides navigation, Select, Back, a trackpad, and non-sensitive text
 - Handle sleep, wake, offline state, service crashes, and application updates.
 - Avoid preventing system sleep unless active playback requires it.
 
+The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, reduced motion, and first-remote auto-connect. Audio output, startup-at-login, pointer inactivity, sleep/wake recovery, and updater behavior still require platform-specific qualification.
+
+## Future multiview
+
+Multiview is a planned, gated capability rather than an extension of the current one-active-service model. A spike must first prove two-up and four-up layouts, one active audio source, deterministic focus and Back behavior, independent service isolation, and acceptable decoder, GPU, memory, and bandwidth use on the Windows target. Simultaneous DRM sessions and provider restrictions must be tested before any production control is exposed.

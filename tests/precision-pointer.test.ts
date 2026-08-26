@@ -34,7 +34,10 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("distance <= 28 && nearest.distance > 0");
     expect(script).toContain("nearest.distance > 0");
     expect(script).toContain("visibleModalRoots");
-    expect(script).toContain("modalRoot !== null && !modalRoot.contains(element)");
+    expect(script).toContain("element === modalRoot || !modalRoot.contains(element)");
+    expect(script).toContain("element.contains(descendant)");
+    expect(script).toContain("descendantPriority > priority");
+    expect(script).toContain("target.querySelectorAll(selectors)");
     expect(script).toContain('[class*="previewModal"]');
     expect(script).toContain("netflixEpisodeRect.height <= 260");
     expect(script).not.toContain("element.focus(");

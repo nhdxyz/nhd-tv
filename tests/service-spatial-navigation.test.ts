@@ -23,10 +23,14 @@ describe("service spatial navigation", () => {
     expect(script).toContain("visibleModalRoots");
     expect(script).toContain("modalRoot.contains(element)");
     expect(script).toContain("element !== modalRoot");
+    expect(script).toContain("candidates = modalCandidates");
     expect(script).toContain("primaryModalTargets");
     expect(script).toContain("primaryModalTargets.includes(current)");
     expect(script).toContain("play|resume|watch now|continue watching");
     expect(script).toContain("location.hostname === 'www.netflix.com'");
+    expect(script).toContain("element.contains(descendant)");
+    expect(script).toContain("descendantPriority > priority");
+    expect(script).toContain("modalArea * 0.55");
   });
 
   it("keeps horizontal movement in the current visual row", () => {

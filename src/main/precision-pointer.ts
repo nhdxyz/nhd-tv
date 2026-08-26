@@ -3,6 +3,7 @@ import type {
   RemotePointerInput,
   RemotePointerResult
 } from "./contracts";
+import { spatialCandidatePriority } from "./spatial-focus";
 
 interface PointerTarget {
   key: string | null;
@@ -65,6 +66,7 @@ export function buildPrecisionPointerTargetScript(
     const requestedX = Math.max(0, Math.min(1, ${JSON.stringify(x)})) * innerWidth;
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
     const phase = ${JSON.stringify(phase)};
+    const candidatePriority = (${spatialCandidatePriority.toString()});
     const declaredTextEntrySelectors = ${JSON.stringify(remoteTextEntrySelectors)};
     const declaredTextEntryTriggerSelectors = ${JSON.stringify(remoteTextEntryTriggerSelectors)};
     const cursorId = 'nhd-tv-precision-cursor';
@@ -162,6 +164,12 @@ export function buildPrecisionPointerTargetScript(
     const snapRadius = Math.max(52, Math.min(108, Math.min(innerWidth, innerHeight) * 0.1));
     const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
     const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
+    const priorityFor = (element) => candidatePriority({
+      hasHref: element instanceof HTMLAnchorElement && element.hasAttribute('href'),
+      role: element.getAttribute('role'),
+      tabIndex: element.tabIndex,
+      tagName: element.tagName
+    });
     const cardSelector = [
       'ytd-rich-item-renderer',
       'ytd-video-renderer',
@@ -229,7 +237,7 @@ export function buildPrecisionPointerTargetScript(
     const isCandidate = (element) => {
       if (
         !(element instanceof HTMLElement) ||
-        (modalRoot !== null && !modalRoot.contains(element)) ||
+        (modalRoot !== null && (element === modalRoot || !modalRoot.contains(element))) ||
         blocked(element) ||
         element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
         element.closest('[aria-hidden="true"],[inert]') !== null
@@ -262,10 +270,30 @@ export function buildPrecisionPointerTargetScript(
               candidate.closest('[aria-hidden="true"],[inert]') === null
             );
         const target = cardTarget || element.closest(selectors);
-        if (target instanceof HTMLElement) nearby.add(target);
+        if (target instanceof HTMLElement) {
+          nearby.add(target);
+          if (priorityFor(target) < 4) {
+            for (const descendant of [...target.querySelectorAll(selectors)].slice(0, 24)) {
+              if (descendant instanceof HTMLElement) nearby.add(descendant);
+            }
+          }
+        }
       }
     }
-    const candidates = [...nearby].filter(isCandidate);
+    const visibleCandidates = [...nearby].filter(isCandidate);
+    const candidates = visibleCandidates.filter((element) => {
+      const priority = priorityFor(element);
+      const rect = element.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      return !visibleCandidates.some((descendant) => {
+        if (descendant === element || !element.contains(descendant)) return false;
+        const descendantPriority = priorityFor(descendant);
+        if (descendantPriority > priority) return true;
+        if (descendantPriority < priority) return false;
+        const descendantRect = descendant.getBoundingClientRect();
+        return descendantRect.width * descendantRect.height < area * 0.92;
+      });
+    });
 
     const distanceTo = (rect) => Math.hypot(
       Math.max(rect.left - requestedX, 0, requestedX - rect.right),

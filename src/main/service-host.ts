@@ -51,6 +51,7 @@ import {
   type ServiceBackState
 } from "./service-navigation";
 import { scoreSpatialCandidate } from "./spatial-navigation";
+import { spatialCandidatePriority } from "./spatial-focus";
 import {
   isSystemVolumeAction,
   type SystemVolumeAction
@@ -176,6 +177,7 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
   return `(() => {
     const action = ${JSON.stringify(action)};
     const scoreCandidate = (${scoreSpatialCandidate.toString()});
+    const candidatePriority = (${spatialCandidatePriority.toString()});
     const clearFocus = () => {
       document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
         element.removeAttribute('data-nhd-tv-focus');
@@ -204,6 +206,12 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       '[tabindex]:not([tabindex="-1"])'
     ].join(',');
     const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
+    const priorityFor = (element) => candidatePriority({
+      hasHref: element instanceof HTMLAnchorElement && element.hasAttribute('href'),
+      role: element.getAttribute('role'),
+      tabIndex: element.tabIndex,
+      tagName: element.tagName
+    });
     let candidates = [...document.querySelectorAll(selectors)].filter((element) => {
       if (
         !(element instanceof HTMLElement) ||
@@ -248,7 +256,7 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       const modalCandidates = candidates.filter((element) =>
         element !== modalRoot && modalRoot.contains(element)
       );
-      if (modalCandidates.length > 0) candidates = modalCandidates;
+      candidates = modalCandidates;
     }
 
     const youtubeCardTargets = new Set();
@@ -272,12 +280,30 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       });
     }
 
-    candidates = candidates.filter((element, index, all) =>
-      youtubeCardTargets.has(element) || !all.some((other, otherIndex) =>
-        otherIndex < index && other.contains(element) &&
-          other.getBoundingClientRect().width === element.getBoundingClientRect().width
-      )
-    );
+    candidates = candidates.filter((element, _index, all) => {
+      if (youtubeCardTargets.has(element)) return true;
+      const priority = priorityFor(element);
+      const rect = element.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      return !all.some((descendant) => {
+        if (descendant === element || !element.contains(descendant)) return false;
+        const descendantPriority = priorityFor(descendant);
+        if (descendantPriority > priority) return true;
+        if (descendantPriority < priority) return false;
+        const descendantRect = descendant.getBoundingClientRect();
+        return descendantRect.width * descendantRect.height < area * 0.92;
+      });
+    });
+
+    if (netflix && modalRoot instanceof HTMLElement) {
+      const modalRect = modalRoot.getBoundingClientRect();
+      const modalArea = modalRect.width * modalRect.height;
+      candidates = candidates.filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const isNativeControl = element.matches('button,a[href],summary');
+        return isNativeControl || rect.width * rect.height < modalArea * 0.55;
+      });
+    }
 
     if (candidates.length === 0) {
       clearFocus();
@@ -313,12 +339,12 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
     if (!(current instanceof HTMLElement)) {
       const primaryModalTargets = modalRoot instanceof HTMLElement && netflix
         ? candidates.filter((element) => {
-          const label = [
-            element.getAttribute('aria-label') || '',
-            element.getAttribute('data-uia') || '',
-            element.textContent || ''
-          ].join(' ').trim();
-          return /(?:^|\\b)(?:play|resume|watch now|continue watching)(?:\\b|$)/i.test(label);
+          const ariaLabel = (element.getAttribute('aria-label') || '').trim();
+          const dataUia = (element.getAttribute('data-uia') || '').trim();
+          const visibleText = (element.innerText || '').replace(/\\s+/g, ' ').trim();
+          return /(?:^|[-_])(?:play|resume)(?:[-_]|$)/i.test(dataUia) ||
+            /^(?:play|resume|watch now|continue watching)(?:\\s.*)?$/i.test(ariaLabel) ||
+            /^(?:play|resume|watch now|continue watching)$/i.test(visibleText);
         })
         : [];
       const youtubeInitialTargets = [...youtubeCardTargets]
@@ -328,7 +354,15 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       const initialTargets = primaryModalTargets.length > 0
         ? primaryModalTargets
         : youtubeInitialTargets;
-      current = (initialTargets.length > 0 ? initialTargets : candidates).sort((left, right) => {
+      current = [...(initialTargets.length > 0 ? initialTargets : candidates)].sort((left, right) => {
+        if (primaryModalTargets.includes(left) && primaryModalTargets.includes(right)) {
+          const priorityDifference = priorityFor(right) - priorityFor(left);
+          if (priorityDifference !== 0) return priorityDifference;
+          const leftRect = left.getBoundingClientRect();
+          const rightRect = right.getBoundingClientRect();
+          const areaDifference = leftRect.width * leftRect.height - rightRect.width * rightRect.height;
+          if (areaDifference !== 0) return areaDifference;
+        }
         const leftRect = left.getBoundingClientRect();
         const rightRect = right.getBoundingClientRect();
         return leftRect.top - rightRect.top || leftRect.left - rightRect.left;

@@ -16,6 +16,7 @@ import {
 import {
   IPC_CHANNELS,
   REMOTE_ACTIONS,
+  type CatalogSearchResult,
   type HostStatus,
   type ContinueWatchingItem,
   type LocalAppState,
@@ -25,6 +26,10 @@ import {
   type RemoteStatus,
   type WidevineState
 } from "./contracts";
+import {
+  normalizeCatalogQuery,
+  parseTvmazeSearchPayload
+} from "./catalog-search";
 import { ContinueWatchingStore } from "./continue-watching-store";
 import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
@@ -46,6 +51,9 @@ import {
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
 const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
+const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
+const CATALOG_CACHE_MS = 15 * 60 * 1_000;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -70,6 +78,11 @@ let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
 const artworkRequests = new Set<string>();
+const catalogCache = new Map<string, {
+  expiresAt: number;
+  results: readonly CatalogSearchResult[];
+}>();
+const catalogImageCache = new Map<string, string | null>();
 
 async function initializeContinueWatchingForProfile(
   profileId: string,
@@ -265,6 +278,112 @@ async function cacheArtwork(
   }
 }
 
+function isAllowedCatalogImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "static.tvmaze.com" &&
+      url.pathname.startsWith("/uploads/");
+  } catch {
+    return false;
+  }
+}
+
+async function cacheCatalogImage(imageUrl: string | null): Promise<string | null> {
+  if (imageUrl === null || !isAllowedCatalogImageUrl(imageUrl)) {
+    return null;
+  }
+  if (catalogImageCache.has(imageUrl)) {
+    return catalogImageCache.get(imageUrl) ?? null;
+  }
+
+  try {
+    const response = await net.fetch(imageUrl, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(8_000)
+    });
+    const contentLength = Number(response.headers.get("content-length") ?? 0);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (
+      !response.ok ||
+      !contentType.toLowerCase().startsWith("image/") ||
+      contentLength > MAX_CATALOG_IMAGE_BYTES ||
+      !isAllowedCatalogImageUrl(response.url)
+    ) {
+      catalogImageCache.set(imageUrl, null);
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0 || buffer.length > MAX_CATALOG_IMAGE_BYTES) {
+      catalogImageCache.set(imageUrl, null);
+      return null;
+    }
+    const source = nativeImage.createFromBuffer(buffer);
+    if (source.isEmpty()) {
+      catalogImageCache.set(imageUrl, null);
+      return null;
+    }
+    const size = source.getSize();
+    const resized = size.width > 320
+      ? source.resize({ quality: "good", width: 320 })
+      : source;
+    const dataUrl = "data:image/jpeg;base64," + resized.toJPEG(80).toString("base64");
+    catalogImageCache.set(imageUrl, dataUrl);
+    return dataUrl;
+  } catch {
+    catalogImageCache.set(imageUrl, null);
+    return null;
+  }
+}
+
+async function searchCatalog(value: unknown): Promise<readonly CatalogSearchResult[]> {
+  const query = normalizeCatalogQuery(value);
+  if (query === null) {
+    return [];
+  }
+  const cacheKey = query.toLocaleLowerCase();
+  const cached = catalogCache.get(cacheKey);
+  if (cached !== undefined && cached.expiresAt > Date.now()) {
+    return cached.results;
+  }
+
+  const url = new URL("https://api.tvmaze.com/search/shows");
+  url.searchParams.set("q", query);
+  const response = await net.fetch(url.toString(), {
+    headers: { accept: "application/json" },
+    redirect: "error",
+    signal: AbortSignal.timeout(8_000)
+  });
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (!response.ok || contentLength > MAX_CATALOG_RESPONSE_BYTES) {
+    throw new Error(response.status === 429
+      ? "Show search is busy. Please wait a moment and try again."
+      : "Show search is temporarily unavailable.");
+  }
+  const text = await response.text();
+  if (text.length === 0 || Buffer.byteLength(text) > MAX_CATALOG_RESPONSE_BYTES) {
+    throw new Error("Show search returned an invalid response.");
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error("Show search returned an invalid response.");
+  }
+  const candidates = parseTvmazeSearchPayload(payload);
+  const results = await Promise.all(candidates.map(async ({ imageUrl, ...candidate }) => ({
+    ...candidate,
+    imageDataUrl: await cacheCatalogImage(imageUrl)
+  })));
+  catalogCache.set(cacheKey, {
+    expiresAt: Date.now() + CATALOG_CACHE_MS,
+    results
+  });
+  return results;
+}
+
 async function handlePlaybackObservation(observation: PlaybackObservation): Promise<void> {
   if (
     continueWatchingStore === null ||
@@ -365,6 +484,11 @@ function registerIpc(): void {
   ipcMain.handle(IPC_CHANNELS.getContinueWatching, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return continueWatchingStore?.list() ?? [];
+  });
+
+  ipcMain.handle(IPC_CHANNELS.searchCatalog, (event, query: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return searchCatalog(query);
   });
 
   ipcMain.handle(IPC_CHANNELS.getLocalAppState, (event) => {

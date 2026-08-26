@@ -23,6 +23,7 @@ export const IPC_CHANNELS = {
   removeContinueWatching: "nhd:continue-watching:remove",
   removeCustomService: "nhd:custom-service:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
+  searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
@@ -74,6 +75,17 @@ export interface ContinueWatchingItem {
   subtitle: string | null;
   title: string;
   updatedAt: number;
+}
+
+export interface CatalogSearchResult {
+  genres: string[];
+  id: string;
+  imageDataUrl: string | null;
+  network: string | null;
+  premiered: string | null;
+  sourceUrl: string;
+  summary: string | null;
+  title: string;
 }
 
 export interface LocalProfile {

@@ -2,9 +2,9 @@
 
 ## Current implementation
 
-NHD-TV provides a TV-scale, result-first overlay. With an empty query it shows recent Continue Watching items. As the user types a bounded query, it filters the active profile's renderer-safe title, subtitle, and provider metadata immediately. App-owned catalog destinations are compact secondary actions rather than the main result model. Netflix and YouTube adapters declare allowlisted query URLs; Disney+ opens its own search page because its current adapter does not declare a query parameter. A query leaves NHD-TV only after the user chooses one of those app actions, and it is not stored or logged.
+NHD-TV provides a TV-scale, result-first overlay. With an empty query it shows recent Continue Watching items. As the user types a bounded query, it filters the active profile's renderer-safe title, subtitle, and provider metadata immediately. At two characters, a 450 ms debounce sends the query to the public [TVmaze show-search endpoint](https://www.tvmaze.com/api#show-search), which returns fuzzy TV-show matches and poster metadata. The main process accepts only exact TVmaze API and image hosts, bounds the response and image sizes, converts posters to local data URLs, and caches public results in memory for 15 minutes. The query is not stored by NHD-TV.
 
-When no local item matches, the overlay explains that NHD-TV can currently search only its local viewing history and offers the enabled apps below. This is an intentional metadata-unavailable state, not a claim that the title is absent from a provider.
+TVmaze results are title discovery, not provider-availability claims. Each result offers explicit search actions for the enabled apps that support a safe search route. Netflix and YouTube accept the selected title as an allowlisted query; Disney+ opens its own search page. The service receives a title only after the user selects that action. The user makes the final catalog match inside the service.
 
 The paired phone exposes the same bounded `type="search"` field with a 120-character limit, but defaults to the current viewing context:
 
@@ -13,7 +13,7 @@ The paired phone exposes the same bounded `type="search"` field with a 120-chara
 - while Disney+ is open, the service's search page opens because its adapter has no supported query parameter;
 - from Home or a service without a search route, NHD-TV presents the TV provider chooser.
 
-This routing occurs in the trusted main process and accepts only adapter-declared, allowlisted destinations. Search never types into the focused web page, so it cannot accidentally target a login or payment field. The query is not stored or logged. iPhone Dictation and Gboard voice typing work in ordinary text fields, providing useful voice search without granting the LAN page microphone access.
+This routing occurs in the trusted main process and accepts only adapter-declared, allowlisted destinations. Search never types into the focused web page, so it cannot accidentally target a login or payment field. Queries are not stored or logged. The TV UI discloses that two-character-or-longer Home queries are sent to TVmaze. iPhone Dictation and Gboard voice typing work in ordinary text fields, providing useful voice search without granting the LAN page microphone access.
 
 ## Why direct microphone capture is deferred
 
@@ -27,19 +27,22 @@ The supported first path is native keyboard dictation: [Apple documents Dictatio
 
 ## Metadata aggregation research
 
+The current zero-key discovery slice uses [TVmaze's public API](https://www.tvmaze.com/api), which permits image hotlinking but recommends caching. Its free data is licensed under CC BY-SA, so the UI visibly credits TVmaze. It covers television shows and does not establish where a title is available. Before public distribution, the project must confirm that the intended product/data distribution model satisfies the license and attribution requirements.
+
 TMDB exposes an official [`search/multi` endpoint](https://developer.themoviedb.org/reference/search-multi) for movies, shows, and people, plus [watch-provider data](https://developer.themoviedb.org/reference/movie-watch-providers) powered by JustWatch. Its [FAQ](https://developer.themoviedb.org/docs/faq) requires TMDB attribution, requires JustWatch attribution for watch-provider data, and distinguishes non-commercial from commercial use. Provider data describes regional streaming, rental, and purchase availability, but explicitly does not supply full provider deep links.
 
 The official [YouTube Data API `search.list` endpoint](https://developers.google.com/youtube/v3/docs/search/list) returns videos, channels, and playlists and supports region and language hints. It requires a Google Cloud project and credentials, and its search quota is separately constrained and may change. NHD-TV should not silently embed a shared developer key in a distributed desktop client.
 
-## Recommended dynamic-results path
+## Recommended expansion path
 
 1. Keep contextual provider search as the fast, private default while a service is open.
-2. Add an optional Home discovery provider that queries TMDB for debounced title/person results and resolves regional availability only for the highlighted result.
-3. Display provider badges only when the configured region and availability type are known. Label unknown availability honestly.
-4. Selecting a result should open an enabled provider's supported search route, not manufacture an unsupported title deep link. The user makes the final match inside the service.
-5. Add YouTube result cards through its official API as a separate adapter. Use a protected NHD-TV backend for a distributed build, or an explicit bring-your-own-key developer mode; never ship a reusable secret in the desktop bundle.
-6. Cache only public metadata with a short expiry. Keep viewing history, enabled services, queries, and account state local.
-7. Do not scrape provider catalogs or inject discovery code into signed-in service pages. Provider adapters remain narrow navigation integrations.
+2. Keep TVmaze as a clearly attributed, TV-show-only discovery adapter while its license remains compatible with the distribution model.
+3. Add an optional TMDB adapter for movies, people, and regional availability only after credentials and commercial-use terms are settled.
+4. Display provider badges only when the configured region and availability type are known. Label unknown availability honestly.
+5. Selecting a result should open an enabled provider's supported search route, not manufacture an unsupported title deep link. The user makes the final match inside the service.
+6. Add YouTube result cards through its official API as a separate adapter. Use a protected NHD-TV backend for a distributed build, or an explicit bring-your-own-key developer mode; never ship a reusable secret in the desktop bundle.
+7. Cache only public metadata with a short expiry. Keep viewing history, enabled services, queries, and account state local.
+8. Do not scrape provider catalogs or inject discovery code into signed-in service pages. Provider adapters remain narrow navigation integrations.
 
 This produces a dynamic Apple TV/Google TV-style result surface without pretending NHD-TV has a licensed, real-time view of every subscription catalog.
 

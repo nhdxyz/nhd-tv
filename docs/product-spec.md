@@ -35,17 +35,17 @@ The current controller foundation maps a standard Gamepad API layout: D-pad or l
 The first home experience contains:
 
 - Continue Watching
-- Result-first local search with app-owned catalog actions
+- Result-first TV-show discovery, local history matches, and app-owned catalog actions
 - Enabled services
 - Profile access
 - App Library access
 - Settings utility access
 
-The first search slice is a privacy-scoped discovery surface. Before typing, it presents the active profile's recent Continue Watching items. While typing, it immediately filters renderer-safe local titles, subtitles, and service names. App-owned catalog searches appear as smaller secondary actions, and the UI explicitly distinguishes them from local results. Integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination. Search routing never types into arbitrary focused fields. Licensed provider-neutral metadata, algorithmic recommendations, direct microphone capture, and cloud synchronization remain later capabilities.
+The first search slice is a privacy-scoped discovery surface. Before typing, it presents the active profile's recent Continue Watching items. While typing, it immediately filters renderer-safe local titles, subtitles, and service names. Queries of two or more characters are also sent to TVmaze after a debounce to retrieve attributed TV-show titles and posters; NHD-TV does not retain those queries. TVmaze results do not claim service availability. App-owned search actions appear on each discovered title and receive that title only when selected. From the phone remote while a searchable service is open, that service is still the default destination. Search routing never types into arbitrary focused fields. Movie/person aggregation, verified regional availability, algorithmic recommendations, direct microphone capture, and cloud synchronization remain later capabilities.
 
 ## Store
 
-The App Library is a catalog of available service integrations, not a payment or binary-download marketplace. Core, experimental, custom, and diagnostic integrations are visually separated so a new provider is never mistaken for a qualified one.
+Apps and Store are separate TV destinations. Apps contains only installed launchers and a single Manage entry point per app. Store contains only uninstalled integrations, provides a local name filter, and retains the custom-service form. Store is not a payment or binary-download marketplace. Core, experimental, custom, and diagnostic integrations are visually separated so a new provider is never mistaken for a qualified one.
 
 - Adding a service enables its home tile.
 - Removing a service hides it but preserves its login and local history.
@@ -56,7 +56,7 @@ The App Library is a catalog of available service integrations, not a payment or
 
 Executable third-party plugins and remotely downloaded adapter code are excluded from the first version. The current custom-service foundation accepts a name and HTTPS start page, allows only that exact origin, and creates a dedicated isolated session. Removing a custom integration also clears its partition and removes it from all profiles.
 
-The current Store foundation saves the enabled, ordered, and favorited Home lineup per local profile. Removing an item from Home never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
+The current Apps foundation saves the enabled, ordered, and favorited Home lineup per local profile. Favorite, order, removal, and data controls live in the app-management dialog rather than under every card. Removing an item from Apps never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
 
 The current experimental catalog includes Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch. These use official HTTPS entry points, exact-origin navigation boundaries, and separate persistent partitions. They remain disabled by default and do not advertise search, playback observation, or compatibility until per-platform qualification is complete.
 

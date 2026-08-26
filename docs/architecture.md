@@ -86,9 +86,9 @@ Device preferences share the versioned local-state document but are not profile-
 
 Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.
 
-The shell presents recent Continue Watching items before typing, then matches the normalized query against renderer-safe title, subtitle, and service fields already present in the active profile's Continue Watching view. These local results update while typing and resume through item-ID IPC; they do not expose stored watch URLs. Provider destinations are secondary actions, not synthetic result cards.
+The shell presents recent Continue Watching items before typing, then matches the normalized query against renderer-safe title, subtitle, and service fields already present in the active profile's Continue Watching view. These local results update while typing and resume through item-ID IPC; they do not expose stored watch URLs.
 
-Provider search remains federated launching, not a metadata index: NHD-TV does not scrape provider catalogs or claim that a result is available in a subscription. A later metadata provider must have explicit attribution, regional availability semantics, caching limits, and commercial-use terms before its results appear in the shell.
+For two-character-or-longer Home queries, a separate narrow IPC route queries TVmaze's public show-search endpoint after a debounce. The trusted main process caps the query, JSON response, result count, poster bytes, image dimensions, cache lifetime, and accepted hosts. The shell receives sanitized public metadata and local poster data URLs. TVmaze attribution is visible, and the UI does not treat its title results as subscription availability. Provider search remains federated launching: NHD-TV does not scrape provider catalogs, and an enabled service receives a selected result title only after a user invokes that service's action.
 
 ## Performance strategy
 

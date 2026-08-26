@@ -1,4 +1,5 @@
 import type {
+  CatalogSearchResult,
   ContinueWatchingItem,
   DevicePreferences,
   HostStatus,
@@ -40,6 +41,7 @@ declare global {
       removeContinueWatching: (itemId: string) => Promise<boolean>;
       removeCustomService: (serviceId: string) => Promise<LocalAppState>;
       resumeContinueWatching: (itemId: string) => Promise<void>;
+      searchCatalog: (query: string) => Promise<readonly CatalogSearchResult[]>;
       searchService: (serviceId: string, query: string) => Promise<void>;
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;

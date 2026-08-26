@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  CatalogSearchResult,
   ContinueWatchingItem,
   DevicePreferences,
   HostStatus,
@@ -39,6 +40,7 @@ const IPC_CHANNELS = {
   removeContinueWatching: "nhd:continue-watching:remove",
   removeCustomService: "nhd:custom-service:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
+  searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
@@ -117,6 +119,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.removeCustomService, serviceId),
   resumeContinueWatching: (itemId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.resumeContinueWatching, itemId),
+  searchCatalog: (query: string): Promise<readonly CatalogSearchResult[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.searchCatalog, query),
   searchService: (serviceId: string, query: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.searchService, serviceId, query),
   selectProfile: (profileId: string): Promise<LocalAppState> =>

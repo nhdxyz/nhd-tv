@@ -1,5 +1,6 @@
 import "./style.css";
 import type {
+  CatalogSearchResult,
   ContinueWatchingItem,
   HostStatus,
   LocalAppState,
@@ -42,6 +43,9 @@ const elements = {
   appManageRemove: requireElement<HTMLButtonElement>("#app-manage-remove", "app-manage-remove"),
   appManageStatus: requireElement<HTMLElement>("#app-manage-status", "app-manage-status"),
   appsActions: requireElement<HTMLDivElement>("#apps-actions", "apps-actions"),
+  catalogSearchResults: requireElement<HTMLDivElement>("#catalog-search-results", "catalog-search-results"),
+  catalogSearchSection: requireElement<HTMLElement>("#catalog-search-section", "catalog-search-section"),
+  catalogSearchStatus: requireElement<HTMLSpanElement>("#catalog-search-status", "catalog-search-status"),
   clearDataCancel: requireElement<HTMLButtonElement>("#clear-data-cancel", "clear-data-cancel"),
   clearDataConfirm: requireElement<HTMLButtonElement>("#clear-data-confirm", "clear-data-confirm"),
   clearDataCopy: requireElement<HTMLParagraphElement>("#clear-data-copy", "clear-data-copy"),
@@ -135,6 +139,8 @@ const elements = {
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
+let catalogSearchTimer: number | null = null;
+let catalogSearchVersion = 0;
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
@@ -447,34 +453,28 @@ function moveService(serviceId: string, offset: -1 | 1): void {
 }
 
 function storeCard(service: ServiceSummary): HTMLElement {
-  const enabled = enabledServiceIds.has(service.id);
-  const favorite = favoriteServiceIds.has(service.id);
   const shell = document.createElement("article");
   shell.className = "catalog-card-shell";
   shell.dataset.serviceId = service.id;
   const button = document.createElement("button");
   button.className = "catalog-card";
-  button.dataset.enabled = String(enabled);
+  button.dataset.enabled = "false";
   button.dataset.serviceId = service.id;
   button.type = "button";
-  button.setAttribute("aria-label", `${enabled ? "Remove" : "Add"} ${service.name} ${enabled ? "from" : "to"} Home`);
+  button.setAttribute("aria-label", "Add " + service.name + " to Apps");
 
   const top = document.createElement("span");
   top.className = "catalog-card-top";
   top.append(createServiceMark(service.id, service.name));
   const status = document.createElement("span");
   status.className = "catalog-status";
-  status.textContent = favorite
-    ? "Favorite"
-    : enabled
-      ? "On Home"
-      : service.kind === "experimental"
-        ? "Experimental"
-      : service.kind === "test"
-        ? "Test tool"
-        : service.kind === "custom"
-          ? "Custom"
-          : "Available";
+  status.textContent = service.kind === "experimental"
+    ? "Experimental"
+    : service.kind === "test"
+      ? "Test tool"
+      : service.kind === "custom"
+        ? "Custom"
+        : "Available";
   top.append(status);
 
   const copy = document.createElement("span");
@@ -495,25 +495,20 @@ function storeCard(service: ServiceSummary): HTMLElement {
   footer.className = "catalog-card-footer";
   const action = document.createElement("span");
   action.className = "catalog-action";
-  action.textContent = enabled ? "Remove" : "Add to Apps";
+  action.textContent = "Add to Apps";
   footer.append(action);
 
   button.append(top, copy, footer);
   button.addEventListener("click", async () => {
-    if (enabledServiceIds.has(service.id)) {
-      enabledServiceIds.delete(service.id);
-      favoriteServiceIds.delete(service.id);
-      serviceOrder = serviceOrder.filter((id) => id !== service.id);
-      showFeedback(`${service.name} removed from Home. Its local session was kept.`);
-    } else {
-      enabledServiceIds.add(service.id);
+    enabledServiceIds.add(service.id);
+    if (!serviceOrder.includes(service.id)) {
       serviceOrder.push(service.id);
-      showFeedback(`${service.name} added to Apps and Home.`);
     }
 
     try {
       await saveProfilePreferences();
       renderServiceViews();
+      showFeedback(`${service.name} added to Apps and Home.`);
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : String(error));
       if (localAppState !== null) {
@@ -523,91 +518,6 @@ function storeCard(service: ServiceSummary): HTMLElement {
     }
   });
 
-  const controls = document.createElement("div");
-  controls.className = "catalog-card-controls";
-  controls.dataset.navGroup = `store-controls-${service.id}`;
-
-  const favoriteButton = document.createElement("button");
-  favoriteButton.type = "button";
-  favoriteButton.disabled = !enabled;
-  favoriteButton.textContent = favorite ? "Unfavorite" : "Favorite";
-  favoriteButton.setAttribute("aria-pressed", String(favorite));
-  favoriteButton.addEventListener("click", async () => {
-    const previousState = localAppState;
-    if (favoriteServiceIds.has(service.id)) {
-      favoriteServiceIds.delete(service.id);
-    } else {
-      favoriteServiceIds.add(service.id);
-    }
-    try {
-      await saveProfilePreferences();
-      renderServiceViews();
-      showFeedback(`${service.name} ${favorite ? "removed from favorites" : "moved to favorites"}.`);
-    } catch (error) {
-      if (previousState !== null) {
-        applyLocalAppState(previousState);
-      }
-      renderServiceViews();
-      showFeedback(error instanceof Error ? error.message : String(error));
-    }
-  });
-
-  const earlierButton = document.createElement("button");
-  earlierButton.type = "button";
-  earlierButton.disabled = !enabled || serviceOrder.filter((id) => enabledServiceIds.has(id))[0] === service.id;
-  earlierButton.textContent = "Earlier";
-  earlierButton.addEventListener("click", async () => {
-    const previousState = localAppState;
-    moveService(service.id, -1);
-    try {
-      await saveProfilePreferences();
-      renderServiceViews();
-      showFeedback(`${service.name} moved earlier.`);
-    } catch (error) {
-      if (previousState !== null) {
-        applyLocalAppState(previousState);
-      }
-      renderServiceViews();
-      showFeedback(error instanceof Error ? error.message : String(error));
-    }
-  });
-
-  const laterButton = document.createElement("button");
-  laterButton.type = "button";
-  const enabledOrder = serviceOrder.filter((id) => enabledServiceIds.has(id));
-  laterButton.disabled = !enabled || enabledOrder.at(-1) === service.id;
-  laterButton.textContent = "Later";
-  laterButton.addEventListener("click", async () => {
-    const previousState = localAppState;
-    moveService(service.id, 1);
-    try {
-      await saveProfilePreferences();
-      renderServiceViews();
-      showFeedback(`${service.name} moved later.`);
-    } catch (error) {
-      if (previousState !== null) {
-        applyLocalAppState(previousState);
-      }
-      renderServiceViews();
-      showFeedback(error instanceof Error ? error.message : String(error));
-    }
-  });
-
-  const clearButton = document.createElement("button");
-  clearButton.type = "button";
-  clearButton.className = "catalog-clear-data";
-  clearButton.textContent = "Clear data";
-  clearButton.addEventListener("click", () => openClearDataDialog(service));
-
-  controls.append(favoriteButton, earlierButton, laterButton, clearButton);
-  if (service.kind === "custom") {
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "catalog-remove-service";
-    removeButton.textContent = "Remove app";
-    removeButton.addEventListener("click", () => openRemoveCustomDialog(service));
-    controls.append(removeButton);
-  }
   shell.append(button);
   return shell;
 }
@@ -753,11 +663,149 @@ function renderServiceViews(): void {
   }
 }
 
-function renderSearchResults(rawQuery: string): void {
-  const query = rawQuery.replace(/\s+/g, " ").trim();
-  const searchable = services.filter(
+function enabledSearchServices(): ServiceSummary[] {
+  return services.filter(
     (service) => enabledServiceIds.has(service.id) && service.searchMode !== "none"
   );
+}
+
+async function openProviderSearch(service: ServiceSummary, query: string): Promise<void> {
+  showFeedback("Opening " + service.name + " search…");
+  try {
+    await window.nhd.searchService(service.id, query);
+    elements.searchDialog.close();
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function renderCatalogSearchResults(
+  results: readonly CatalogSearchResult[],
+  query: string
+): void {
+  const searchable = enabledSearchServices();
+  const cards = results.map((result) => {
+    const card = document.createElement("article");
+    card.className = "catalog-search-card";
+
+    const art = document.createElement("div");
+    art.className = "catalog-search-art";
+    if (result.imageDataUrl !== null) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = result.imageDataUrl;
+      art.append(image);
+    } else {
+      const placeholder = document.createElement("span");
+      placeholder.textContent = result.title.slice(0, 1).toLocaleUpperCase();
+      placeholder.setAttribute("aria-hidden", "true");
+      art.append(placeholder);
+    }
+
+    const copy = document.createElement("div");
+    copy.className = "catalog-search-copy";
+    const title = document.createElement("h3");
+    title.textContent = result.title;
+    const meta = document.createElement("p");
+    const year = result.premiered?.slice(0, 4) ?? null;
+    meta.textContent = [year, result.network, ...result.genres]
+      .filter((value) => value !== null && value.length > 0)
+      .join(" · ");
+    const summary = document.createElement("p");
+    summary.className = "catalog-search-summary";
+    summary.textContent = result.summary ?? "Choose an installed app to search for this title.";
+    const source = document.createElement("small");
+    source.textContent = "TV show metadata by TVmaze";
+
+    const actions = document.createElement("div");
+    actions.className = "catalog-search-actions";
+    actions.dataset.navGroup = "catalog-result-" + result.id;
+    for (const service of searchable) {
+      const button = document.createElement("button");
+      button.className = "catalog-result-provider";
+      button.type = "button";
+      button.setAttribute("aria-label", "Search " + service.name + " for " + result.title);
+      button.append(createServiceMark(service.id, service.name));
+      const label = document.createElement("span");
+      label.textContent = service.searchMode === "query"
+        ? "Search " + service.name
+        : "Open " + service.name + " search";
+      button.append(label);
+      button.addEventListener("click", () => void openProviderSearch(service, result.title));
+      actions.append(button);
+    }
+    if (searchable.length === 0) {
+      const browse = document.createElement("button");
+      browse.className = "catalog-result-provider";
+      browse.type = "button";
+      browse.textContent = "Add a searchable app";
+      browse.addEventListener("click", () => {
+        elements.searchDialog.close();
+        showView("store");
+      });
+      actions.append(browse);
+    }
+    copy.append(title, meta, summary, source, actions);
+    card.append(art, copy);
+    return card;
+  });
+  elements.catalogSearchResults.replaceChildren(...cards);
+  elements.catalogSearchStatus.textContent = cards.length === 0
+    ? "No TV-show matches · try another title"
+    : String(cards.length) + " TV-show results · data and posters: TVmaze.com";
+  elements.catalogSearchSection.hidden = false;
+
+  if (cards.length === 0 && query.length >= 2) {
+    const empty = document.createElement("div");
+    empty.className = "catalog-search-empty";
+    empty.textContent = "No online TV-show results for “" + query + "”.";
+    elements.catalogSearchResults.append(empty);
+  }
+}
+
+function scheduleCatalogSearch(query: string): void {
+  catalogSearchVersion += 1;
+  const version = catalogSearchVersion;
+  if (catalogSearchTimer !== null) {
+    window.clearTimeout(catalogSearchTimer);
+    catalogSearchTimer = null;
+  }
+  if (query.length < 2) {
+    elements.catalogSearchSection.hidden = true;
+    elements.catalogSearchResults.replaceChildren();
+    return;
+  }
+
+  elements.catalogSearchSection.hidden = false;
+  elements.catalogSearchStatus.textContent = "Searching TVmaze…";
+  elements.catalogSearchResults.replaceChildren();
+  catalogSearchTimer = window.setTimeout(() => {
+    catalogSearchTimer = null;
+    void window.nhd.searchCatalog(query)
+      .then((results) => {
+        if (version === catalogSearchVersion) {
+          renderCatalogSearchResults(results, query);
+        }
+      })
+      .catch((error: unknown) => {
+        if (version !== catalogSearchVersion) {
+          return;
+        }
+        elements.catalogSearchStatus.textContent = error instanceof Error
+          ? error.message
+          : "Show search is temporarily unavailable.";
+        const unavailable = document.createElement("div");
+        unavailable.className = "catalog-search-empty";
+        unavailable.textContent = "Local history and app search are still available below.";
+        elements.catalogSearchResults.replaceChildren(unavailable);
+      });
+  }, 450);
+}
+
+function renderSearchResults(rawQuery: string): void {
+  const query = rawQuery.replace(/\s+/g, " ").trim();
+  const searchable = enabledSearchServices();
+  scheduleCatalogSearch(query);
 
   const localResults = query.length === 0
     ? continueWatchingItems
@@ -810,7 +858,7 @@ function renderSearchResults(rawQuery: string): void {
     : `No local match for “${query}”`;
   elements.searchEmptyCopy.textContent = query.length === 0
     ? "Start watching in one of your apps and NHD-TV will make that local history searchable."
-    : "NHD-TV can search local viewing history today. Use an app below for its full catalog.";
+    : "No saved local match. Online TV-show results appear above, with app search shortcuts below.";
 
   if (query.length === 0) {
     elements.searchProviderSection.hidden = true;
@@ -862,7 +910,8 @@ function openSearchDialog(query = "", remote = false): void {
   elements.searchInput.value = query;
   renderSearchResults(query);
   if (remote && query.length > 0) {
-    const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+    const firstResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
+      ?? elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
       ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
     firstResult?.focus({ preventScroll: true });
     setRemoteFocusedElement(firstResult ?? null);
@@ -876,7 +925,8 @@ elements.searchClose.addEventListener("click", () => elements.searchDialog.close
 elements.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   renderSearchResults(elements.searchInput.value);
-  const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+  const firstResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
+    ?? elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
     ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
   firstResult?.focus();
 });

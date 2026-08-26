@@ -410,7 +410,14 @@
             />
           </div>
         </form>
-        <p class="search-privacy">Results update as you type. Your query stays on this TV until you open an app, and it is never saved.</p>
+        <p class="search-privacy">For queries of 2 or more characters, the text is sent to TVmaze to retrieve TV-show results and is not saved by NHD-TV. App searches are sent only after you choose an app.</p>
+        <section class="search-results catalog-search-section" id="catalog-search-section" aria-labelledby="catalog-search-title" hidden>
+          <div class="section-heading">
+            <h2 id="catalog-search-title">Shows matching your search</h2>
+            <span class="section-hint" id="catalog-search-status">Show data and posters: TVmaze.com</span>
+          </div>
+          <div class="catalog-search-grid" id="catalog-search-results" data-nav-group="catalog-search"></div>
+        </section>
         <section class="search-results search-history-section" id="search-history-section" aria-labelledby="search-history-title">
           <div class="section-heading">
             <h2 id="search-history-title">Pick up where you left off</h2>

@@ -15,18 +15,19 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 1: TV shell
 
-- Fullscreen display selection and persistence
-- Controller-first home navigation
-- Keyboard and mouse support
-- Shared input-action router
-- Service hosting and host-owned overlays
+- [ ] Fullscreen display selection and persistence
+- [x] Controller-first home navigation foundation
+- [x] Keyboard and mouse support
+- [x] Shared input-action router
+- [x] Service hosting and root-level quit overlay foundation
 - Crash, reload, offline, and emergency-return behavior
 
 ## Milestone 2: Profiles, Store, and sessions
 
-- Local profiles
-- Curated service catalog
-- Add, remove, reorder, and favorite services
+- [ ] Local profiles
+- [x] Curated service catalog foundation
+- [x] Add and remove services without clearing sessions
+- [ ] Reorder and favorite services
 - Declarative custom services
 - Session clearing and privacy controls
 

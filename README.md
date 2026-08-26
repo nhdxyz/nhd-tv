@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its TV-first home includes a hero, Continue Watching foundation, service rail, planned Store/Profile affordances, spatial arrow-key focus, configurable navigation sounds, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, privacy-safe compatibility diagnostics, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, Settings, a Continue Watching foundation, branded service rails, row-aware spatial focus, configurable navigation sounds, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 
@@ -39,9 +39,9 @@ pnpm check
 pnpm start
 ```
 
-In the feasibility shell, select a service from the matrix and press Escape to return to NHD-TV. The Shaka entry is the public Widevine test; commercial-service credentials must be entered directly into their isolated service pages. Escape is a temporary spike behavior; the nested Back and quit flow is tracked separately.
+In the feasibility shell, select a service from Home or the Store. The Shaka entry is the public Widevine test; commercial-service credentials must be entered directly into their isolated service pages. Back/Escape traverses the service first. At a declared service root, NHD-TV shows its own confirmation before returning Home. Authentication popups on exact adapter origins open as sandboxed, app-owned windows using the same isolated service session; unexpected origins remain blocked.
 
-To use a phone as a session-only remote, choose **Pair a phone**, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The local controller sends only directional, Select, Back, and Home actions; it cannot send credentials or arbitrary text. Restarting NHD-TV revokes all paired phones.
+To use a phone as a session-only remote, choose **Pair a phone** in the top bar or Settings, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The local controller sends only directional, Select, Back, and Home actions; it cannot send credentials or arbitrary text. Supported phones provide light haptic confirmation after the TV accepts a command. Restarting NHD-TV revokes all paired phones.
 
 ### Production Widevine signing
 
@@ -54,7 +54,7 @@ pnpm evs:sign:dev
 pnpm evs:verify:dev
 ```
 
-Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. The optional `pnpm start -- --netflix-smoke-test` command uses the saved Netflix service session to play Netflix's official Test Patterns title and emits only a sanitized pass/fail result. Packaged releases will run production VMP signing before application code-signing on macOS and after application code-signing on Windows.
+Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. The optional `pnpm start -- --netflix-smoke-test` command uses the saved Netflix service session to play Netflix's official Test Patterns title and emits only a sanitized pass/fail result. `pnpm start -- --youtube-auth-smoke-test` verifies the visible YouTube account state or Sign in route without reading account details. Packaged releases will run production VMP signing before application code-signing on macOS and after application code-signing on Windows.
 
 ## Project documents
 

@@ -6,6 +6,8 @@ export interface ServiceDefinition {
   mediaKeySystemOrigins: readonly string[];
   name: string;
   partition: string;
+  rootUrls: readonly string[];
+  spatialNavigation: "dom" | "native";
   startUrl: string;
 }
 
@@ -42,6 +44,30 @@ export function isAllowedServiceUrl(
   }
 
   return allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === candidateOrigin);
+}
+
+function normalizedRoot(value: string): string | null {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== "https:") {
+      return null;
+    }
+
+    const path = url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/, "");
+    return `${url.origin}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+export function isServiceRootUrl(
+  candidate: string,
+  rootUrls: readonly string[]
+): boolean {
+  const candidateRoot = normalizedRoot(candidate);
+
+  return candidateRoot !== null && rootUrls.some((rootUrl) => normalizedRoot(rootUrl) === candidateRoot);
 }
 
 export function isExpectedAllowedNavigationAbort(
@@ -89,5 +115,16 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
 
   if (!isAllowedServiceUrl(definition.startUrl, definition.allowedOrigins)) {
     throw new Error(`Service start URL is not in its allowed origins: ${definition.id}`);
+  }
+
+  if (
+    definition.rootUrls.length === 0 ||
+    definition.rootUrls.some((rootUrl) => !isAllowedServiceUrl(rootUrl, definition.allowedOrigins))
+  ) {
+    throw new Error(`Service root URLs must use allowed HTTPS origins: ${definition.id}`);
+  }
+
+  if (!definition.rootUrls.some((rootUrl) => isServiceRootUrl(definition.startUrl, [rootUrl]))) {
+    throw new Error(`Service start URL must be one of its roots: ${definition.id}`);
   }
 }

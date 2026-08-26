@@ -12,6 +12,8 @@ const services: readonly ServiceDefinition[] = [
     mediaKeySystemOrigins: ["https://shaka-project.github.io"],
     name: "Shaka Player DRM Demo",
     partition: "persist:service-shaka-demo",
+    rootUrls: ["https://shaka-project.github.io/shaka-player-release/demo/"],
+    spatialNavigation: "native",
     startUrl: "https://shaka-project.github.io/shaka-player-release/demo/"
   },
   {
@@ -21,10 +23,16 @@ const services: readonly ServiceDefinition[] = [
     mediaKeySystemOrigins: ["https://www.netflix.com"],
     name: "Netflix",
     partition: "persist:service-netflix",
+    rootUrls: ["https://www.netflix.com/browse"],
+    spatialNavigation: "dom",
     startUrl: "https://www.netflix.com/browse"
   },
   {
-    allowedOrigins: ["https://www.youtube.com", "https://accounts.google.com"],
+    allowedOrigins: [
+      "https://www.youtube.com",
+      "https://accounts.google.com",
+      "https://accounts.youtube.com"
+    ],
     authenticationNote:
       "If Google asks for a passkey but no system prompt appears, choose Try another way, then Enter your password. Native macOS passkeys require a signed, entitled app build.",
     id: "youtube",
@@ -32,6 +40,8 @@ const services: readonly ServiceDefinition[] = [
     mediaKeySystemOrigins: ["https://www.youtube.com"],
     name: "YouTube",
     partition: "persist:service-youtube",
+    rootUrls: ["https://www.youtube.com/"],
+    spatialNavigation: "dom",
     startUrl: "https://www.youtube.com/"
   },
   {
@@ -41,6 +51,8 @@ const services: readonly ServiceDefinition[] = [
     mediaKeySystemOrigins: ["https://www.disneyplus.com"],
     name: "Disney+",
     partition: "persist:service-disney-plus",
+    rootUrls: ["https://www.disneyplus.com/home"],
+    spatialNavigation: "dom",
     startUrl: "https://www.disneyplus.com/home"
   }
 ];

@@ -1,6 +1,8 @@
 export const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
+  cancelServiceQuit: "nhd:service:quit:cancel",
   closeService: "nhd:service:close",
+  confirmServiceQuit: "nhd:service:quit:confirm",
   denyRemotePairing: "nhd:remote:pairing:deny",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
@@ -9,6 +11,7 @@ export const IPC_CHANNELS = {
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
   remoteStatusChanged: "nhd:remote:status:changed",
+  serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start"
 } as const;
 
@@ -42,6 +45,11 @@ export interface ServiceSummary {
   id: string;
   kind: ServiceKind;
   name: string;
+}
+
+export interface ServiceQuitRequest {
+  serviceId: string;
+  serviceName: string;
 }
 
 export type WidevineState = "checking" | "ready" | "timed-out" | "unavailable";

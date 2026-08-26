@@ -25,6 +25,7 @@ describe("service registry", () => {
     const youtube = getServiceDefinition("youtube");
 
     expect(youtube?.allowedOrigins).toContain("https://accounts.google.com");
+    expect(youtube?.allowedOrigins).toContain("https://accounts.youtube.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
   });
 

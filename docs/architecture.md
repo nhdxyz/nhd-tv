@@ -33,6 +33,8 @@ The host decides whether an action belongs to the shell, the service, or an NHD-
 3. At an adapter-defined root state, display the host-owned quit confirmation.
 4. Provide a hold-to-force-return escape path.
 
+The shell locks horizontal movement to the current labeled rail while vertical movement can cross sections. Curated service adapters can add a DOM-spatial layer on browse routes; it applies a visible focus marker and falls back to native key events when no safe target is found. Watch/player routes and HTML fullscreen bypass that layer.
+
 The current phone-remote slice starts an HTTP server on a random port only when pairing is requested. Its QR secret is 256-bit random data held in memory and expires quickly. Scanning creates a pending request; the TV must approve it before the server returns a separate session-only controller token. Pairing and controller tokens are stored as hashes in the host, never logged, and revoked at app shutdown. The local page has a restrictive Content Security Policy and accepts only a fixed action vocabulary. It intentionally has no text-entry channel.
 
 The first implementation uses small authenticated HTTP requests for commands rather than a persistent WebSocket. This keeps the exposed local surface narrow while retaining adequate D-pad latency; the normalized action layer allows the transport to change later without changing shell or service routing.
@@ -51,6 +53,8 @@ A versioned adapter contract will separate common hosting from service-specific 
 - Platform support declarations
 
 The custom-service MVP uses declarative manifests. Arbitrary plugin execution requires a future permissions and signing model.
+
+Service popup policy never creates an unrestricted child window. A popup URL on the adapter's exact origin allowlist may open as a sandboxed, app-owned modal using the service's isolated session, preserving authentication opener/close semantics without weakening the navigation boundary. Its redirects are checked against the same allowlist. Every other popup is denied and only its origin is retained for diagnostics.
 
 ## Local data
 

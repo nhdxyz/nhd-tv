@@ -127,12 +127,19 @@ function publishRemoteStatus(status: RemoteStatus): void {
 
 function handleRemoteAction(action: RemoteAction): void {
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
+    if (serviceHost.isQuitPromptVisible) {
+      if (mainWindow !== null && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
+      }
+      return;
+    }
+
     if (action === "home") {
       serviceHost.close();
       return;
     }
 
-    serviceHost.sendRemoteAction(action);
+    void serviceHost.sendRemoteAction(action);
     return;
   }
 
@@ -242,6 +249,16 @@ function registerIpc(): void {
     validateShellSender(event.senderFrame?.url ?? "");
     serviceHost?.close();
   });
+
+  ipcMain.handle(IPC_CHANNELS.cancelServiceQuit, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    serviceHost?.cancelQuit();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.confirmServiceQuit, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    serviceHost?.confirmQuit();
+  });
 }
 
 async function initializeWidevine(): Promise<void> {
@@ -296,7 +313,15 @@ async function createMainWindow(): Promise<void> {
     }
   });
 
-  serviceHost = new ServiceHost(mainWindow, publishHostStatus);
+  serviceHost = new ServiceHost(
+    mainWindow,
+    publishHostStatus,
+    (request) => {
+      if (mainWindow !== null && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_CHANNELS.serviceQuitRequested, request);
+      }
+    }
+  );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
     onStatusChanged: publishRemoteStatus
@@ -352,6 +377,32 @@ app.whenReady().then(async () => {
     } catch {
       console.log(`[netflix-smoke] ${JSON.stringify({
         detail: "The playback check failed unexpectedly.",
+        status: "failed"
+      })}`);
+      app.exit(2);
+    }
+  }
+
+  if (process.argv.includes("--youtube-auth-smoke-test")) {
+    const youtube = getServiceDefinition("youtube");
+
+    if (youtube === null || serviceHost === null) {
+      console.log(`[youtube-auth-smoke] ${JSON.stringify({
+        detail: "YouTube is not registered in the service host.",
+        status: "inconclusive"
+      })}`);
+      app.exit(2);
+      return;
+    }
+
+    try {
+      await serviceHost.open(youtube);
+      const result = await serviceHost.runYouTubeAuthSmokeTest();
+      console.log(`[youtube-auth-smoke] ${JSON.stringify(result)}`);
+      app.exit(result.status === "passed" || result.status === "already-signed-in" ? 0 : 2);
+    } catch {
+      console.log(`[youtube-auth-smoke] ${JSON.stringify({
+        detail: "The YouTube authentication check failed unexpectedly.",
         status: "failed"
       })}`);
       app.exit(2);

@@ -7,16 +7,28 @@ import {
 import {
   isAllowedServiceUrl,
   isExpectedAllowedNavigationAbort,
+  isServiceRootUrl,
   originForDiagnostics,
   type ServiceDefinition
 } from "./security/navigation-policy";
 import type { NavigationDiagnostic, RemoteAction } from "./contracts";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
+export type ServiceQuitListener = (request: {
+  serviceId: string;
+  serviceName: string;
+}) => void;
+
+type ServiceSpatialAction = Exclude<RemoteAction, "back" | "home">;
 
 export interface NetflixSmokeResult {
   detail: string;
   status: "auth-required" | "failed" | "inconclusive" | "passed" | "profile-required";
+}
+
+export interface YouTubeAuthSmokeResult {
+  detail: string;
+  status: "already-signed-in" | "failed" | "inconclusive" | "passed";
 }
 
 interface NetflixSmokeSnapshot {
@@ -34,6 +46,136 @@ interface NetflixSmokeSnapshot {
 const configuredSessions = new WeakSet<Session>();
 const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
+const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
+const SERVICE_FOCUS_STYLE = `
+  [data-nhd-tv-focus="true"] {
+    outline: 4px solid #63e6ff !important;
+    outline-offset: 5px !important;
+    box-shadow: 0 0 0 2px rgb(2 8 23 / 88%), 0 0 28px rgb(34 211 238 / 82%) !important;
+    border-radius: 8px !important;
+  }
+`;
+
+function shouldUseDomSpatialNavigation(
+  definition: ServiceDefinition,
+  currentUrl: string,
+  htmlFullscreen: boolean
+): boolean {
+  if (definition.spatialNavigation !== "dom" || htmlFullscreen) {
+    return false;
+  }
+
+  try {
+    const path = new URL(currentUrl).pathname;
+    return !/(?:^|\/)(?:play|player|video|watch)(?:\/|$)/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
+  return `(() => {
+    const action = ${JSON.stringify(action)};
+    if (document.fullscreenElement !== null) return false;
+
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))
+    ) {
+      return false;
+    }
+
+    const selectors = [
+      'a[href]',
+      'button',
+      '[role="button"]',
+      '[role="link"]',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+    const candidates = [...document.querySelectorAll(selectors)].filter((element) => {
+      if (!(element instanceof HTMLElement) || element.matches(':disabled,[aria-disabled="true"]')) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0.05 &&
+        rect.width >= 12 &&
+        rect.height >= 12
+      );
+    });
+
+    if (candidates.length === 0) return false;
+
+    let current = candidates.includes(active)
+      ? active
+      : candidates.find((candidate) => candidate.dataset.nhdTvFocus === 'true');
+
+    const applyFocus = (element) => {
+      document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((focused) => {
+        focused.removeAttribute('data-nhd-tv-focus');
+      });
+      element.dataset.nhdTvFocus = 'true';
+      element.focus({ preventScroll: true });
+      element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    };
+
+    if (!(current instanceof HTMLElement)) {
+      current = candidates.sort((left, right) => {
+        const leftRect = left.getBoundingClientRect();
+        const rightRect = right.getBoundingClientRect();
+        return leftRect.top - rightRect.top || leftRect.left - rightRect.left;
+      })[0];
+      applyFocus(current);
+      return true;
+    }
+
+    if (action === 'select') {
+      applyFocus(current);
+      current.click();
+      return true;
+    }
+
+    const currentRect = current.getBoundingClientRect();
+    const currentX = currentRect.left + currentRect.width / 2;
+    const currentY = currentRect.top + currentRect.height / 2;
+    let best = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (const candidate of candidates) {
+      if (candidate === current) continue;
+      const rect = candidate.getBoundingClientRect();
+      const deltaX = rect.left + rect.width / 2 - currentX;
+      const deltaY = rect.top + rect.height / 2 - currentY;
+      const horizontal = action === 'left' || action === 'right';
+      const directional =
+        (action === 'left' && deltaX < -8) ||
+        (action === 'right' && deltaX > 8) ||
+        (action === 'up' && deltaY < -8) ||
+        (action === 'down' && deltaY > 8);
+      if (!directional) continue;
+
+      if (horizontal) {
+        const overlap = Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top);
+        const requiredOverlap = Math.min(currentRect.height, rect.height) * 0.3;
+        if (overlap < requiredOverlap) continue;
+      }
+
+      const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
+      const cross = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
+      const score = primary * 3 + cross;
+      if (score < bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+
+    if (!(best instanceof HTMLElement)) return false;
+    applyFocus(best);
+    return true;
+  })()`;
+}
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -84,6 +226,54 @@ const netflixClickPlayScript = `(() => {
   return true;
 })()`;
 
+const youtubeSignInSnapshotScript = `(() => {
+  const controls = [...document.querySelectorAll("a, button, [role=button]")];
+  const signIn = controls.find((element) => {
+    const label = [
+      element.getAttribute("aria-label") ?? "",
+      element.textContent ?? ""
+    ].join(" ").trim();
+    const href = element instanceof HTMLAnchorElement ? element.href : "";
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const visible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.display !== "none" &&
+      style.visibility !== "hidden";
+    return visible && (/sign in/i.test(label) || href.startsWith("https://accounts.google.com/"));
+  });
+
+  return {
+    hasAccount: Boolean(document.querySelector('#avatar-btn, button[aria-label^="Account menu"]')),
+    hasSignIn: Boolean(signIn),
+    isGoogleAccounts: location.origin === "https://accounts.google.com"
+  };
+})()`;
+
+const youtubeClickSignInScript = `(() => {
+  const controls = [...document.querySelectorAll("a, button, [role=button]")];
+  const signIn = controls.find((element) => {
+    const label = [
+      element.getAttribute("aria-label") ?? "",
+      element.textContent ?? ""
+    ].join(" ").trim();
+    const href = element instanceof HTMLAnchorElement ? element.href : "";
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const visible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.display !== "none" &&
+      style.visibility !== "hidden";
+    return visible && (/sign in/i.test(label) || href.startsWith("https://accounts.google.com/"));
+  });
+
+  if (!(signIn instanceof HTMLElement)) return false;
+  signIn.click();
+  return true;
+})()`;
+
 function configureServiceSession(serviceSession: Session, definition: ServiceDefinition): void {
   if (configuredSessions.has(serviceSession)) {
     return;
@@ -108,15 +298,24 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
 export class ServiceHost {
   readonly #window: BrowserWindow;
   readonly #onStateChanged: ServiceStateListener;
+  readonly #onQuitRequested: ServiceQuitListener;
   #activeDefinition: ServiceDefinition | null = null;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
+  #popupWindow: BrowserWindow | null = null;
+  #quitPromptVisible = false;
+  #replayingInput = false;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
 
-  constructor(window: BrowserWindow, onStateChanged: ServiceStateListener) {
+  constructor(
+    window: BrowserWindow,
+    onStateChanged: ServiceStateListener,
+    onQuitRequested: ServiceQuitListener
+  ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
+    this.#onQuitRequested = onQuitRequested;
     this.#window.on("resize", () => this.#resize());
   }
 
@@ -135,6 +334,10 @@ export class ServiceHost {
 
   get isHtmlFullscreen(): boolean {
     return this.#htmlFullscreen;
+  }
+
+  get isQuitPromptVisible(): boolean {
+    return this.#quitPromptVisible;
   }
 
   get lastBlockedNavigation(): NavigationDiagnostic | null {
@@ -163,20 +366,106 @@ export class ServiceHost {
 
     view.setBackgroundColor("#05070d");
     view.webContents.setWindowOpenHandler(({ url }) => {
+      if (isAllowedServiceUrl(url, definition.allowedOrigins)) {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            backgroundColor: "#05070d",
+            fullscreenable: false,
+            height: 760,
+            modal: true,
+            parent: this.#window,
+            show: true,
+            title: `${definition.name} sign in`,
+            webPreferences: {
+              allowRunningInsecureContent: false,
+              contextIsolation: true,
+              devTools: process.argv.includes("--devtools"),
+              nodeIntegration: false,
+              sandbox: true,
+              session: serviceSession,
+              webSecurity: true
+            },
+            width: 620
+          }
+        };
+      }
+
       this.#recordBlockedNavigation("popup", url, definition);
       return { action: "deny" };
     });
 
-    // Temporary feasibility-spike escape path. Issue #4 replaces this with the
-    // service-aware nested Back stack and root-level quit confirmation.
+    view.webContents.on("did-create-window", (popup) => {
+      if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
+        this.#popupWindow.close();
+      }
+
+      this.#popupWindow = popup;
+      popup.setMenuBarVisibility(false);
+      popup.webContents.setWindowOpenHandler(({ url }) => {
+        this.#recordBlockedNavigation("popup", url, definition);
+        return { action: "deny" };
+      });
+      popup.webContents.on("will-navigate", (event, url) => {
+        if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+          event.preventDefault();
+          this.#recordBlockedNavigation("navigation", url, definition);
+        }
+      });
+      popup.webContents.on("will-redirect", (event, url) => {
+        if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+          event.preventDefault();
+          this.#recordBlockedNavigation("redirect", url, definition);
+        }
+      });
+      popup.on("closed", () => {
+        if (this.#popupWindow === popup) {
+          this.#popupWindow = null;
+        }
+      });
+    });
+
     view.webContents.on("before-input-event", (event, input) => {
-      if (input.type === "keyDown" && input.key === "Escape") {
+      if (input.type !== "keyDown" || this.#replayingInput) {
+        return;
+      }
+
+      if (input.key === "Escape") {
         if (this.#htmlFullscreen) {
           return;
         }
 
         event.preventDefault();
-        this.close();
+        void this.requestBack();
+        return;
+      }
+
+      const spatialAction: Readonly<Record<string, ServiceSpatialAction>> = {
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+        ArrowUp: "up",
+        Enter: "select"
+      };
+      const action = spatialAction[input.key];
+
+      if (
+        action !== undefined &&
+        shouldUseDomSpatialNavigation(definition, view.webContents.getURL(), this.#htmlFullscreen)
+      ) {
+        event.preventDefault();
+        void this.#runDomSpatialNavigation(action).then((handled) => {
+          if (!handled) {
+            this.#sendKey(action);
+          }
+        });
+      }
+    });
+
+    view.webContents.on("did-finish-load", () => {
+      if (this.#view === view && definition.spatialNavigation === "dom") {
+        void view.webContents.insertCSS(SERVICE_FOCUS_STYLE).catch(() => undefined);
       }
     });
 
@@ -242,9 +531,16 @@ export class ServiceHost {
 
   close(): void {
     const view = this.#view;
+    const viewWasAttached = view !== null && !this.#quitPromptVisible;
+
+    if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
+      this.#popupWindow.close();
+    }
 
     this.#view = null;
     this.#activeDefinition = null;
+    this.#popupWindow = null;
+    this.#quitPromptVisible = false;
 
     if (this.#htmlFullscreen) {
       this.#htmlFullscreen = false;
@@ -252,7 +548,9 @@ export class ServiceHost {
     }
 
     if (view !== null) {
-      this.#window.contentView.removeChildView(view);
+      if (viewWasAttached) {
+        this.#window.contentView.removeChildView(view);
+      }
 
       if (!view.webContents.isDestroyed()) {
         view.webContents.close();
@@ -262,25 +560,90 @@ export class ServiceHost {
     this.#onStateChanged(null);
   }
 
-  sendRemoteAction(action: Exclude<RemoteAction, "home">): boolean {
+  cancelQuit(): void {
     const view = this.#view;
 
-    if (view === null || view.webContents.isDestroyed()) {
+    if (!this.#quitPromptVisible || view === null || view.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.#quitPromptVisible = false;
+    this.#window.contentView.addChildView(view);
+    this.#resize();
+    view.webContents.focus();
+    this.#onStateChanged(this.activeServiceId);
+  }
+
+  confirmQuit(): void {
+    if (this.#quitPromptVisible) {
+      this.close();
+    }
+  }
+
+  async requestBack(): Promise<boolean> {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+
+    if (view === null || definition === null || view.webContents.isDestroyed()) {
       return false;
     }
 
-    const keyCode: Record<Exclude<RemoteAction, "home">, string> = {
-      back: "Escape",
-      down: "Down",
-      left: "Left",
-      right: "Right",
-      select: "Enter",
-      up: "Up"
-    };
+    if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
+      this.#popupWindow.close();
+      return true;
+    }
 
-    view.webContents.focus();
-    view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyDown" });
-    view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyUp" });
+    if (this.#quitPromptVisible) {
+      return true;
+    }
+
+    if (this.#htmlFullscreen) {
+      this.#sendKey("back");
+      return true;
+    }
+
+    if (isServiceRootUrl(view.webContents.getURL(), definition.rootUrls)) {
+      this.#requestQuit();
+      return true;
+    }
+
+    if (view.webContents.navigationHistory.canGoBack()) {
+      view.webContents.navigationHistory.goBack();
+      return true;
+    }
+
+    try {
+      await view.webContents.loadURL(definition.startUrl);
+      return true;
+    } catch (error) {
+      return isExpectedAllowedNavigationAbort(
+        error,
+        view.webContents.getURL(),
+        definition.allowedOrigins
+      );
+    }
+  }
+
+  async sendRemoteAction(action: Exclude<RemoteAction, "home">): Promise<boolean> {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+
+    if (view === null || definition === null || view.webContents.isDestroyed()) {
+      return false;
+    }
+
+    if (action === "back") {
+      return this.requestBack();
+    }
+
+    if (
+      shouldUseDomSpatialNavigation(definition, view.webContents.getURL(), this.#htmlFullscreen) &&
+      await this.#runDomSpatialNavigation(action)
+    ) {
+      return true;
+    }
+
+    this.#sendKey(action);
     return true;
   }
 
@@ -379,6 +742,157 @@ export class ServiceHost {
       detail: "Playback did not start before the smoke-test timeout.",
       status: "inconclusive"
     };
+  }
+
+  async runYouTubeAuthSmokeTest(): Promise<YouTubeAuthSmokeResult> {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed() || this.activeServiceId !== "youtube") {
+      return {
+        detail: "YouTube is not open in the service host.",
+        status: "inconclusive"
+      };
+    }
+
+    const deadline = Date.now() + YOUTUBE_AUTH_SMOKE_TIMEOUT_MS;
+    let clickedSignIn = false;
+    let lastOrigin = "unavailable";
+    let sawAccountControl = false;
+
+    while (Date.now() < deadline && !view.webContents.isDestroyed()) {
+      try {
+        const popupOrigin = this.#popupWindow === null || this.#popupWindow.isDestroyed()
+          ? null
+          : new URL(this.#popupWindow.webContents.getURL()).origin;
+
+        if (popupOrigin === "https://accounts.google.com") {
+          return {
+            detail: "YouTube Sign in opened Google Accounts in a controlled NHD-TV window.",
+            status: "passed"
+          };
+        }
+
+        const currentOrigin = new URL(view.webContents.getURL()).origin;
+        lastOrigin = currentOrigin;
+
+        if (currentOrigin === "https://accounts.google.com") {
+          return {
+            detail: "YouTube Sign in opened Google Accounts inside the isolated service session.",
+            status: "passed"
+          };
+        }
+
+        const snapshot = await view.webContents.executeJavaScript(
+          youtubeSignInSnapshotScript,
+          true
+        ) as { hasAccount: boolean; hasSignIn: boolean; isGoogleAccounts: boolean };
+
+        sawAccountControl ||= snapshot.hasAccount;
+
+        if (snapshot.isGoogleAccounts) {
+          return {
+            detail: "YouTube Sign in opened Google Accounts inside the isolated service session.",
+            status: "passed"
+          };
+        }
+
+        if (!clickedSignIn && snapshot.hasSignIn) {
+          clickedSignIn = await view.webContents.executeJavaScript(
+            youtubeClickSignInScript,
+            true
+          ) as boolean;
+        }
+      } catch {
+        // Cross-document navigation can invalidate a snapshot while the allowed
+        // authentication page replaces YouTube in the same service view.
+      }
+
+      await delay(500);
+    }
+
+    if (!clickedSignIn) {
+      return {
+        detail: sawAccountControl
+          ? "The saved YouTube session already exposes its account control."
+          : "No visible YouTube Sign in or account control appeared before timeout.",
+        status: sawAccountControl ? "already-signed-in" : "inconclusive"
+      };
+    }
+
+    return {
+      detail: this.#lastBlockedNavigation === null
+        ? `The YouTube Sign in control remained on ${lastOrigin}.`
+        : `The YouTube Sign in flow was blocked at ${this.#lastBlockedNavigation.origin}.`,
+      status: "failed"
+    };
+  }
+
+  #requestQuit(): void {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+
+    if (
+      this.#quitPromptVisible ||
+      view === null ||
+      definition === null ||
+      view.webContents.isDestroyed()
+    ) {
+      return;
+    }
+
+    this.#quitPromptVisible = true;
+    this.#window.contentView.removeChildView(view);
+    this.#window.webContents.focus();
+    this.#onQuitRequested({
+      serviceId: definition.id,
+      serviceName: definition.name
+    });
+    this.#onStateChanged(definition.id);
+  }
+
+  async #runDomSpatialNavigation(action: ServiceSpatialAction): Promise<boolean> {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed()) {
+      return false;
+    }
+
+    try {
+      const result = await view.webContents.executeJavaScript(
+        serviceSpatialNavigationScript(action),
+        true
+      );
+      return result === true;
+    } catch {
+      return false;
+    }
+  }
+
+  #sendKey(action: Exclude<RemoteAction, "home">): void {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed()) {
+      return;
+    }
+
+    const keyCode: Record<Exclude<RemoteAction, "home">, string> = {
+      back: "Escape",
+      down: "Down",
+      left: "Left",
+      right: "Right",
+      select: "Enter",
+      up: "Up"
+    };
+
+    view.webContents.focus();
+    this.#replayingInput = true;
+
+    try {
+      view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyDown" });
+      view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyUp" });
+    } finally {
+      this.#replayingInput = false;
+    }
   }
 
   #resize(): void {

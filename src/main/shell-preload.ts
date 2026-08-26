@@ -1,12 +1,20 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { HostStatus, RemoteAction, RemoteStatus, ServiceSummary } from "./contracts";
+import type {
+  HostStatus,
+  RemoteAction,
+  RemoteStatus,
+  ServiceQuitRequest,
+  ServiceSummary
+} from "./contracts";
 
 // Sandboxed preloads receive a restricted `require` implementation and must not
 // load local CommonJS modules at runtime. Keep channel names self-contained here;
 // the HostStatus import is type-only and is erased by TypeScript.
 const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
+  cancelServiceQuit: "nhd:service:quit:cancel",
   closeService: "nhd:service:close",
+  confirmServiceQuit: "nhd:service:quit:confirm",
   denyRemotePairing: "nhd:remote:pairing:deny",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
@@ -15,13 +23,18 @@ const IPC_CHANNELS = {
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
   remoteStatusChanged: "nhd:remote:status:changed",
+  serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start"
 } as const;
 
 contextBridge.exposeInMainWorld("nhd", {
   approveRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.approveRemotePairing),
+  cancelServiceQuit: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.cancelServiceQuit),
   closeService: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.closeService),
+  confirmServiceQuit: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.confirmServiceQuit),
   denyRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.denyRemotePairing),
   getServices: (): Promise<readonly ServiceSummary[]> =>
@@ -42,6 +55,11 @@ contextBridge.exposeInMainWorld("nhd", {
   onRemoteStatusChanged: (callback: (status: RemoteStatus) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.remoteStatusChanged, (_event, status: RemoteStatus) => {
       callback(status);
+    });
+  },
+  onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.serviceQuitRequested, (_event, request: ServiceQuitRequest) => {
+      callback(request);
     });
   },
   openService: (serviceId: string): Promise<void> =>

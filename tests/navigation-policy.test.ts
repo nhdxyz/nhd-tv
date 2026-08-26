@@ -3,6 +3,7 @@ import {
   assertValidServiceDefinition,
   isAllowedServiceUrl,
   isExpectedAllowedNavigationAbort,
+  isServiceRootUrl,
   normalizeOrigin,
   originForDiagnostics
 } from "../src/main/security/navigation-policy";
@@ -20,6 +21,15 @@ describe("service navigation policy", () => {
     expect(isAllowedServiceUrl("https://example.com/watch/1", allowed)).toBe(true);
     expect(isAllowedServiceUrl("https://example.com.evil.test/watch/1", allowed)).toBe(false);
     expect(isAllowedServiceUrl("https://cdn.example.com/watch/1", allowed)).toBe(false);
+  });
+
+  it("matches service roots without treating nested pages as roots", () => {
+    const roots = ["https://example.com/browse"];
+
+    expect(isServiceRootUrl("https://example.com/browse?source=tv#top", roots)).toBe(true);
+    expect(isServiceRootUrl("https://example.com/browse/", roots)).toBe(true);
+    expect(isServiceRootUrl("https://example.com/browse/genre/42", roots)).toBe(false);
+    expect(isServiceRootUrl("https://evil.test/browse", roots)).toBe(false);
   });
 
   it("reduces blocked URLs to privacy-safe origins for diagnostics", () => {
@@ -47,6 +57,8 @@ describe("service navigation policy", () => {
         mediaKeySystemOrigins: ["https://example.com"],
         name: "Example",
         partition: "persist:service-example",
+        rootUrls: ["https://example.com"],
+        spatialNavigation: "native",
         startUrl: "https://example.com"
       })
     ).toThrow(/Invalid service id/);
@@ -59,6 +71,8 @@ describe("service navigation policy", () => {
         mediaKeySystemOrigins: ["https://example.com"],
         name: "Example",
         partition: "default",
+        rootUrls: ["https://example.com"],
+        spatialNavigation: "native",
         startUrl: "https://example.com"
       })
     ).toThrow(/persistent and isolated/);
@@ -73,6 +87,8 @@ describe("service navigation policy", () => {
         mediaKeySystemOrigins: ["https://login.example.com"],
         name: "Example",
         partition: "persist:service-example",
+        rootUrls: ["https://example.com"],
+        spatialNavigation: "native",
         startUrl: "https://example.com"
       })
     ).toThrow(/media-key-system origins/);

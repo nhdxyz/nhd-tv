@@ -24,7 +24,7 @@ NHD-TV supports multiple input adapters that produce a shared set of application
 - Xbox-style and compatible game controllers
 - QR-paired phone remote over the local network
 
-The NHD-TV shell uses spatial D-pad navigation. The initial generic service interaction uses pointer input through a mouse, controller thumbstick, or phone trackpad. Service adapters may add reliable D-pad behavior when available.
+The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a visible host-provided focus ring. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and a phone trackpad can be added later.
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
 
@@ -53,6 +53,8 @@ The Store is a catalog of available service integrations, not a payment or binar
 
 Executable third-party plugins and remotely downloaded adapter code are excluded from the first version.
 
+The current Store foundation saves the enabled Home lineup locally. Removing an item from Home never clears its isolated service partition.
+
 ## Profiles and sessions
 
 NHD-TV profiles have separate preferences and local viewing history. Streaming-service sessions are shared across NHD-TV profiles initially, and each service retains its own account/profile selection experience. Isolated service accounts per NHD-TV profile can be added later.
@@ -80,7 +82,7 @@ The listener checkpoints active playback periodically and immediately on pause, 
 
 The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
 
-The first remote slice provides directional navigation, Select, Back, and Home. It is session-only, requires television approval, and deliberately excludes all text entry so a phone cannot forward passwords or payment details. Trackpad and carefully scoped non-sensitive text entry remain later capabilities; password entry is excluded until the channel has an appropriate encryption design.
+The first remote slice provides directional navigation, Select, Back, and Home. It is session-only, requires television approval, and deliberately excludes all text entry so a phone cannot forward passwords or payment details. The phone gives haptic feedback only after a command is accepted when the browser supports vibration. Trackpad and carefully scoped non-sensitive text entry remain later capabilities; password entry is excluded until the channel has an appropriate encryption design.
 
 ## Desktop behavior
 

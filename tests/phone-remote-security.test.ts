@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   remotePostHeadersAreAllowed,
@@ -15,6 +16,10 @@ import {
 
 describe("phone remote boundary", () => {
   const expectedOrigin = "http://192.0.2.10:43123";
+  const serverSource = readFileSync(
+    new URL("../src/main/remote/phone-remote-server.ts", import.meta.url),
+    "utf8"
+  );
 
   it("serves syntactically valid standalone JavaScript", () => {
     expect(() => new Function(REMOTE_JS)).not.toThrow();
@@ -102,6 +107,27 @@ describe("phone remote boundary", () => {
     expect(commandRequest).toBeGreaterThan(-1);
     expect(confirmation).toBeGreaterThan(commandRequest);
     expect(REMOTE_JS).toContain("navigator.vibrate(10)");
+  });
+
+  it("exposes accessible media controls and clearly qualifies volume routing", () => {
+    for (const action of [
+      "play-pause",
+      "rewind",
+      "fast-forward",
+      "volume-down",
+      "volume-up",
+      "mute"
+    ]) {
+      expect(REMOTE_HTML).toContain(`data-action="${action}"`);
+    }
+    expect(REMOTE_HTML).toContain('aria-label="Playback and volume controls"');
+    expect(REMOTE_HTML).toContain('aria-label="Play or pause"');
+    expect(REMOTE_HTML).toContain("TV support varies");
+    expect(REMOTE_CSS).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+    expect(REMOTE_CSS).toContain("min-height: 2.85rem");
+    expect(REMOTE_JS).toContain("error.status = response.status");
+    expect(serverSource).toContain("MIN_COMMAND_INTERVAL_MS");
+    expect(serverSource).toContain("writeJson(response, 429");
   });
 
   it("offers a deliberate long-press emergency return without double-sending Back", () => {

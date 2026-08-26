@@ -26,9 +26,9 @@ Service pages never receive direct access to the application database, filesyste
 
 ## Input routing
 
-Keyboard, controller, and phone adapters emit normalized actions such as `up`, `down`, `left`, `right`, `select`, and `back`.
+Keyboard, controller, and phone adapters emit a fixed normalized action vocabulary. Navigation actions include `up`, `down`, `left`, `right`, `select`, and `back`; media actions include `play-pause`, `rewind`, `fast-forward`, `volume-down`, `volume-up`, and `mute`.
 
-The shell's Gamepad API adapter polls connected standard-mapped controllers, applies a left-stick dead zone and bounded directional repeat, and submits only the normalized action vocabulary over a sender-validated IPC channel. The main process then applies the same overlay, shell, and active-service routing used by phone commands. It does not expose raw controller state to a service page.
+The shell's Gamepad API adapter polls connected standard-mapped controllers, applies a left-stick dead zone and bounded directional repeat, and submits only the normalized action vocabulary over a sender-validated IPC channel. The main process then applies the same overlay, shell, and active-service routing used by phone commands. Hardware media keys and documented Command-or-Control plus Shift fallbacks normalize through that same route. Active services receive only native Electron accelerator or keyboard events; media actions never add provider selectors or directly manipulate player DOM. Native volume routing varies by operating system, display, and service, so the phone labels that limitation instead of claiming the television volume changed. The host safely reports that an app must be open when a shell-only media action has no target. Raw controller state is never exposed to a service page.
 
 The host decides whether an action belongs to the shell, the service, or an NHD-TV overlay. Back handling is stateful:
 

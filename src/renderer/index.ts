@@ -10,6 +10,10 @@ import type {
   ServiceRecoveryRequest,
   ServiceSummary
 } from "../main/contracts";
+import {
+  isMediaAction,
+  mediaActionForKeyInput
+} from "../main/media-actions";
 import { GamepadInput, type GamepadLike } from "./gamepad-input";
 import { NavigationSounds } from "./navigation-sounds";
 import { matchContinueWatching } from "./search-history";
@@ -1833,6 +1837,21 @@ function returnHome(remote = false): void {
 }
 
 document.addEventListener("keydown", (event) => {
+  const mediaAction = mediaActionForKeyInput({
+    alt: event.altKey,
+    control: event.ctrlKey,
+    key: event.key,
+    meta: event.metaKey,
+    shift: event.shiftKey
+  });
+  if (mediaAction !== null) {
+    event.preventDefault();
+    void window.nhd.sendInputAction(mediaAction).catch((error: unknown) => {
+      showFeedback(error instanceof Error ? error.message : String(error));
+    });
+    return;
+  }
+
   const direction = arrowDirections[event.key];
 
   if (direction !== undefined) {
@@ -1889,6 +1908,11 @@ document.addEventListener("click", (event) => {
 }, { capture: true });
 
 function handleShellRemoteAction(action: RemoteAction): void {
+  if (isMediaAction(action)) {
+    showFeedback("Open an app to use playback controls. Volume may also require your TV remote.");
+    return;
+  }
+
   if (action === "up" || action === "down" || action === "left" || action === "right") {
     moveSpatialFocus(action, true);
     return;

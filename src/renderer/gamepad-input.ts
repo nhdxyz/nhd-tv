@@ -1,4 +1,8 @@
-import type { RemoteAction } from "../main/contracts";
+import {
+  MEDIA_ACTIONS,
+  type MediaAction,
+  type RemoteAction
+} from "../main/contracts";
 
 const AXIS_DEAD_ZONE = 0.55;
 const INITIAL_REPEAT_DELAY_MS = 420;
@@ -49,7 +53,19 @@ function dominantDirection(gamepads: readonly GamepadLike[]): RemoteAction | nul
   return null;
 }
 
-function actionPressed(gamepads: readonly GamepadLike[], action: "back" | "home" | "select"): boolean {
+const MEDIA_BUTTONS: Readonly<Record<MediaAction, number>> = {
+  "fast-forward": 5,
+  mute: 3,
+  "play-pause": 2,
+  rewind: 4,
+  "volume-down": 6,
+  "volume-up": 7
+};
+
+function actionPressed(
+  gamepads: readonly GamepadLike[],
+  action: "back" | "home" | "select" | MediaAction
+): boolean {
   return gamepads.some((gamepad) => {
     if (action === "select") {
       return pressed(gamepad, 0);
@@ -59,7 +75,11 @@ function actionPressed(gamepads: readonly GamepadLike[], action: "back" | "home"
       return pressed(gamepad, 1);
     }
 
-    return pressed(gamepad, 16) || (pressed(gamepad, 8) && pressed(gamepad, 9));
+    if (action === "home") {
+      return pressed(gamepad, 16) || (pressed(gamepad, 8) && pressed(gamepad, 9));
+    }
+
+    return pressed(gamepad, MEDIA_BUTTONS[action]);
   });
 }
 
@@ -87,7 +107,7 @@ export class GamepadActionMapper {
       actions.push(direction);
     }
 
-    for (const action of ["select", "back", "home"] as const) {
+    for (const action of ["select", "back", "home", ...MEDIA_ACTIONS] as const) {
       const isPressed = actionPressed(connected, action);
       if (isPressed && !this.#pressedActions.has(action)) {
         actions.push(action);

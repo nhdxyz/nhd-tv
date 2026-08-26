@@ -52,6 +52,22 @@ describe("Xbox-style Gamepad input", () => {
     expect(mapper.update([gamepad([8, 9])], 30)).toEqual(["home"]);
   });
 
+  it("maps standard face, bumper, and trigger buttons to media actions", () => {
+    const mapper = new GamepadActionMapper();
+
+    expect(mapper.update([gamepad([2, 3, 4, 5, 6, 7])], 0)).toEqual([
+      "fast-forward",
+      "mute",
+      "play-pause",
+      "rewind",
+      "volume-down",
+      "volume-up"
+    ]);
+    expect(mapper.update([gamepad([2, 3, 4, 5, 6, 7])], 10)).toEqual([]);
+    expect(mapper.update([gamepad()], 20)).toEqual([]);
+    expect(mapper.update([gamepad([2])], 30)).toEqual(["play-pause"]);
+  });
+
   it("clears held state when a controller disconnects", () => {
     const mapper = new GamepadActionMapper();
 

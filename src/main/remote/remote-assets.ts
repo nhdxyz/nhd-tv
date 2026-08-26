@@ -118,6 +118,15 @@ export const REMOTE_HTML = `<!doctype html>
 
         <button class="control-mode" id="control-mode" type="button" disabled>Use precision pad</button>
 
+        <div class="media-controls" aria-label="Playback and volume controls">
+          <button data-action="rewind" data-feedback="Playback control sent" type="button" disabled aria-label="Rewind"><span aria-hidden="true">↶<small>10</small></span></button>
+          <button class="media-primary" data-action="play-pause" data-feedback="Playback control sent" type="button" disabled aria-label="Play or pause"><span aria-hidden="true">⏯</span></button>
+          <button data-action="fast-forward" data-feedback="Playback control sent" type="button" disabled aria-label="Fast forward"><span aria-hidden="true">↷<small>10</small></span></button>
+          <button data-action="volume-down" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume down"><span aria-hidden="true">−</span></button>
+          <button data-action="mute" data-feedback="Mute sent · TV support varies" type="button" disabled aria-label="Mute"><span aria-hidden="true">×</span></button>
+          <button data-action="volume-up" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume up"><span aria-hidden="true">+</span></button>
+        </div>
+
         <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
 
         <form class="search-panel" id="search-panel" hidden>
@@ -436,6 +445,35 @@ button {
   font-weight: 850;
 }
 
+.media-controls {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+.media-controls button {
+  display: grid;
+  min-height: 2.85rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 0.82rem;
+  background: linear-gradient(145deg, #202939, #141a25);
+  color: #dbe7f7;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 900;
+  box-shadow: inset 0 1px rgb(255 255 255 / 8%);
+}
+.media-controls button.media-primary {
+  border-color: rgb(125 187 255 / 32%);
+  background: linear-gradient(145deg, #1d477a, #162943);
+  color: #fff;
+}
+.media-controls button:not(:disabled).is-pressed,
+.media-controls button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
+.media-controls span { display: inline-flex; align-items: center; gap: 0.08rem; }
+.media-controls small { font-size: 0.48rem; line-height: 1; }
+
 button:disabled { opacity: 0.3; }
 
 .search-toggle {
@@ -489,7 +527,8 @@ button:disabled { opacity: 0.3; }
 .search-panel p { margin: 0.55rem 0 0; color: #7d899d; font-size: 0.67rem; line-height: 1.4; }
 
 body.is-typing .control-surface,
-body.is-typing .control-mode { display: none; }
+body.is-typing .control-mode,
+body.is-typing .media-controls { display: none; }
 body.is-typing .remote-card { justify-content: flex-start; }
 body.is-typing .search-toggle { margin-top: auto; }
 
@@ -504,8 +543,9 @@ body.is-typing .search-toggle { margin-top: auto; }
   .remote-card { padding: 0.75rem; }
   .remote-icon-button { width: 2.8rem; height: 2.8rem; }
   .dpad,
-  .precision-pad { width: min(78vw, 38dvh, 15rem); }
+  .precision-pad { width: min(78vw, 31dvh, 15rem); }
   .control-mode { min-height: 2.4rem; margin-bottom: 0.5rem; }
+  .media-controls button { min-height: 2.55rem; }
   .search-toggle { min-height: 2.8rem; margin-top: 0.5rem; }
   .privacy-note { margin-top: 0.5rem; }
 }
@@ -583,7 +623,11 @@ export const REMOTE_JS = `(() => {
   async function jsonRequest(path, options) {
     const response = await fetch(path, options);
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "Remote request failed");
+    if (!response.ok) {
+      const error = new Error(body.error || "Remote request failed");
+      error.status = response.status;
+      throw error;
+    }
     return body;
   }
 
@@ -686,10 +730,13 @@ export const REMOTE_JS = `(() => {
         body: JSON.stringify({ action })
       });
       confirmCommand(button);
+      if (button.dataset.feedback) setState(button.dataset.feedback, "connected");
     } catch (error) {
-      controllerToken = null;
-      sessionStorage.removeItem("nhd-controller-token");
-      setEnabled(false);
+      if (error && error.status === 401) {
+        controllerToken = null;
+        sessionStorage.removeItem("nhd-controller-token");
+        setEnabled(false);
+      }
       setState(error instanceof Error ? error.message : "Remote disconnected", "error");
     }
   }

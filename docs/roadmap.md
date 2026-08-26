@@ -20,6 +20,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Geometrically centered Home/Apps navigation with Settings moved to utilities (#29; unlocked macOS 1224×768 logical-viewport pass complete, 1080p/4K target validation remains)
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
+- [x] Shared phone, keyboard, and gamepad media controls (#43; native volume-routing qualification remains)
 - [x] Xbox-style Gamepad API adapter foundation (#20; physical Windows validation remains)
 - [x] Service hosting and root-level quit overlay foundation
 - [x] In-service Back consumption and unclipped focus-overlay foundation (#18)

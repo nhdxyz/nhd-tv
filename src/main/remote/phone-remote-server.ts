@@ -24,6 +24,7 @@ import {
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 
 const MAX_JSON_BYTES = 4_096;
+const MIN_COMMAND_INTERVAL_MS = 24;
 const MIN_POINTER_INTERVAL_MS = 16;
 const REMOTE_CSP = [
   "default-src 'none'",
@@ -147,6 +148,7 @@ export class PhoneRemoteServer {
   readonly #onText: PhoneRemoteServerOptions["onText"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
+  #lastCommandAt = 0;
   #lastPointerAt = 0;
   #networkAddress: string | null = null;
   #qrDataUrl: string | null = null;
@@ -390,6 +392,13 @@ export class PhoneRemoteServer {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
+
+      const now = Date.now();
+      if (now - this.#lastCommandAt < MIN_COMMAND_INTERVAL_MS) {
+        writeJson(response, 429, { error: "Commands are arriving too quickly" });
+        return;
+      }
+      this.#lastCommandAt = now;
 
       const body = await readJsonBody(request);
       const action = parseRemoteAction(body?.action);

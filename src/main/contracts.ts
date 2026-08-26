@@ -35,15 +35,32 @@ export const IPC_CHANNELS = {
   updateProfilePreferences: "nhd:profile:preferences:update"
 } as const;
 
+export const MEDIA_ACTIONS = [
+  "fast-forward",
+  "mute",
+  "play-pause",
+  "rewind",
+  "volume-down",
+  "volume-up"
+] as const;
+
+export type MediaAction = (typeof MEDIA_ACTIONS)[number];
+
 export const REMOTE_ACTIONS = [
   "back",
   "down",
+  "fast-forward",
   "force-home",
   "home",
   "left",
+  "mute",
+  "play-pause",
+  "rewind",
   "right",
   "select",
-  "up"
+  "up",
+  "volume-down",
+  "volume-up"
 ] as const;
 
 export type RemoteAction = (typeof REMOTE_ACTIONS)[number];

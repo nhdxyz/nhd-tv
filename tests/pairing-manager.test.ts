@@ -69,6 +69,12 @@ describe("phone remote pairing", () => {
   it("accepts only the fixed remote action vocabulary", () => {
     expect(parseRemoteAction("left")).toBe("left");
     expect(parseRemoteAction("select")).toBe("select");
+    expect(parseRemoteAction("play-pause")).toBe("play-pause");
+    expect(parseRemoteAction("rewind")).toBe("rewind");
+    expect(parseRemoteAction("fast-forward")).toBe("fast-forward");
+    expect(parseRemoteAction("volume-down")).toBe("volume-down");
+    expect(parseRemoteAction("volume-up")).toBe("volume-up");
+    expect(parseRemoteAction("mute")).toBe("mute");
     expect(parseRemoteAction("launch-shell-command")).toBeNull();
     expect(parseRemoteAction({ action: "left" })).toBeNull();
   });

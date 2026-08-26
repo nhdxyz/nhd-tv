@@ -16,12 +16,18 @@ import {
   type ServiceDefinition
 } from "./security/navigation-policy";
 import {
+  isMediaAction,
+  mediaActionForKeyInput,
+  nativeMediaKeyCode
+} from "./media-actions";
+import {
   buildPlaybackActivationTrackerScript,
   buildPlaybackSnapshotScript,
   qualifyPlaybackSnapshot
 } from "./playback-observer";
 import type {
   NavigationDiagnostic,
+  MediaAction,
   RemoteAction,
   RemotePointerInput,
   RemotePointerResult,
@@ -62,7 +68,8 @@ export interface PlaybackObservation {
 }
 export type PlaybackListener = (observation: PlaybackObservation) => void | Promise<void>;
 
-type ServiceSpatialAction = Exclude<RemoteAction, "back" | "force-home" | "home">;
+type ServiceSpatialAction = "down" | "left" | "right" | "select" | "up";
+type ServiceKeyAction = "back" | ServiceSpatialAction;
 
 interface ServiceRecoveryTarget {
   definition: ServiceDefinition;
@@ -599,6 +606,19 @@ export class ServiceHost {
 
       if (input.type !== "keyDown") return;
 
+      const mediaAction = mediaActionForKeyInput({
+        alt: input.alt,
+        control: input.control,
+        key: input.key,
+        meta: input.meta,
+        shift: input.shift
+      });
+      if (mediaAction !== null) {
+        event.preventDefault();
+        this.#sendMediaKey(mediaAction);
+        return;
+      }
+
       if (input.key === "Escape") {
         if (this.#htmlFullscreen) {
           return;
@@ -1022,6 +1042,11 @@ export class ServiceHost {
 
     if (action === "force-home") {
       await this.forceReturnHome();
+      return true;
+    }
+
+    if (isMediaAction(action)) {
+      this.#sendMediaKey(action);
       return true;
     }
 
@@ -1491,14 +1516,14 @@ export class ServiceHost {
     this.#onRecoveryRequested(serviceRecoveryRequest(kind, definition.id, definition.name));
   }
 
-  #sendKey(action: Exclude<RemoteAction, "force-home" | "home">): void {
+  #sendKey(action: ServiceKeyAction): void {
     const view = this.#view;
 
     if (view === null || view.webContents.isDestroyed()) {
       return;
     }
 
-    const keyCode: Record<Exclude<RemoteAction, "force-home" | "home">, string> = {
+    const keyCode: Record<ServiceKeyAction, string> = {
       back: "Escape",
       down: "Down",
       left: "Left",
@@ -1514,6 +1539,26 @@ export class ServiceHost {
     try {
       view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyDown" });
       view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyUp" });
+    } finally {
+      this.#replayingInput = false;
+    }
+  }
+
+  #sendMediaKey(action: MediaAction): void {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed()) {
+      return;
+    }
+
+    const keyCode = nativeMediaKeyCode(action);
+    this.#window.focus();
+    view.webContents.focus();
+    this.#replayingInput = true;
+
+    try {
+      view.webContents.sendInputEvent({ keyCode, type: "keyDown" });
+      view.webContents.sendInputEvent({ keyCode, type: "keyUp" });
     } finally {
       this.#replayingInput = false;
     }

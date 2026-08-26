@@ -63,9 +63,14 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
       const sampleY = Math.max(0, Math.min(innerHeight - 1, requestedY + offsetY));
       for (const element of document.elementsFromPoint(sampleX, sampleY)) {
         const card = youtube ? element.closest(cardSelector) : null;
-        const target = card?.querySelector(
-          'a#thumbnail[href], a[href^="/watch"], a[href^="/shorts/"]'
-        ) || element.closest(selectors);
+        const cardTarget = card === null
+          ? null
+          : [...card.querySelectorAll('a[href^="/watch"], a[href^="/shorts/"]')]
+            .find((candidate) =>
+              candidate instanceof HTMLElement &&
+              candidate.closest('[aria-hidden="true"],[inert]') === null
+            );
+        const target = cardTarget || element.closest(selectors);
         if (target instanceof HTMLElement) nearby.add(target);
       }
     }
@@ -127,11 +132,14 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
     }
     element.dataset.nhdTvFocus = 'true';
     element.focus({ preventScroll: true });
+    const overlayRect = youtube
+      ? element.closest(cardSelector)?.getBoundingClientRect() || rect
+      : rect;
     document.documentElement.dataset.nhdTvHasFocus = 'true';
-    document.documentElement.style.setProperty('--nhd-tv-focus-top', rect.top + 'px');
-    document.documentElement.style.setProperty('--nhd-tv-focus-left', rect.left + 'px');
-    document.documentElement.style.setProperty('--nhd-tv-focus-width', rect.width + 'px');
-    document.documentElement.style.setProperty('--nhd-tv-focus-height', rect.height + 'px');
+    document.documentElement.style.setProperty('--nhd-tv-focus-top', overlayRect.top + 'px');
+    document.documentElement.style.setProperty('--nhd-tv-focus-left', overlayRect.left + 'px');
+    document.documentElement.style.setProperty('--nhd-tv-focus-width', overlayRect.width + 'px');
+    document.documentElement.style.setProperty('--nhd-tv-focus-height', overlayRect.height + 'px');
     return {
       key,
       snapped: true,

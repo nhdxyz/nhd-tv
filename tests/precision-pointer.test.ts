@@ -8,7 +8,8 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("Math.max(0, Math.min(1, 0.25)) * innerWidth");
     expect(script).toContain("Math.max(0, Math.min(1, 0.75)) * innerHeight");
     expect(script).toContain("distance <= snapRadius");
-    expect(script).toContain("a#thumbnail[href]");
+    expect(script).toContain('a[href^="/watch"]');
+    expect(script).toContain("candidate.closest('[aria-hidden=\"true\"],[inert]') === null");
     expect(script).not.toContain(".click()");
   });
 

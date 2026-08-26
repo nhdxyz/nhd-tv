@@ -194,9 +194,7 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         rect.right >= -24 &&
         rect.left <= innerWidth + 24
       );
-    }).filter((element, index, all) => !all.some((other, otherIndex) =>
-      otherIndex < index && other.contains(element) && other.getBoundingClientRect().width === element.getBoundingClientRect().width
-    ));
+    });
 
     const youtubeCardTargets = new Set();
     if (location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com')) {
@@ -208,9 +206,9 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         'yt-lockup-view-model'
       ].join(',');
       for (const card of document.querySelectorAll(cardSelector)) {
-        const target = card.querySelector(
-          'a#thumbnail[href], a[href^="/watch"], a[href^="/shorts/"]'
-        );
+        const target = [...card.querySelectorAll(
+          'a[href^="/watch"], a[href^="/shorts/"]'
+        )].find((element) => candidates.includes(element));
         if (target instanceof HTMLElement) youtubeCardTargets.add(target);
       }
       candidates = candidates.filter((element) => {
@@ -218,6 +216,13 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         return card === null || youtubeCardTargets.has(element);
       });
     }
+
+    candidates = candidates.filter((element, index, all) =>
+      youtubeCardTargets.has(element) || !all.some((other, otherIndex) =>
+        otherIndex < index && other.contains(element) &&
+          other.getBoundingClientRect().width === element.getBoundingClientRect().width
+      )
+    );
 
     if (candidates.length === 0) {
       clearFocus();
@@ -234,9 +239,12 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       });
       element.dataset.nhdTvFocus = 'true';
       element.focus({ preventScroll: true });
-      element.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+      const focusFrame = youtubeCardTargets.has(element)
+        ? element.closest('ytd-rich-item-renderer,ytd-video-renderer,ytd-grid-video-renderer,ytd-compact-video-renderer,yt-lockup-view-model') || element
+        : element;
+      focusFrame.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
       const updateOverlay = () => {
-        const rect = element.getBoundingClientRect();
+        const rect = focusFrame.getBoundingClientRect();
         document.documentElement.dataset.nhdTvHasFocus = 'true';
         document.documentElement.style.setProperty('--nhd-tv-focus-top', rect.top + 'px');
         document.documentElement.style.setProperty('--nhd-tv-focus-left', rect.left + 'px');
@@ -683,6 +691,7 @@ export class ServiceHost {
     this.#activeDefinition = definition;
     this.#window.contentView.addChildView(view);
     this.#resize();
+    view.webContents.focus();
     this.#onStateChanged(definition.id);
     this.#playbackTimer = setInterval(() => {
       void this.#checkpointPlayback();
@@ -690,6 +699,9 @@ export class ServiceHost {
 
     try {
       await view.webContents.loadURL(initialUrl);
+      if (this.#view === view && !view.webContents.isDestroyed()) {
+        view.webContents.focus();
+      }
     } catch (error) {
       if (
         isExpectedAllowedNavigationAbort(
@@ -698,6 +710,9 @@ export class ServiceHost {
           definition.allowedOrigins
         )
       ) {
+        if (this.#view === view && !view.webContents.isDestroyed()) {
+          view.webContents.focus();
+        }
         return;
       }
 

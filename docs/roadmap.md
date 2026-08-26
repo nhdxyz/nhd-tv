@@ -49,6 +49,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Revocable in-memory device tokens
 - [x] Directional, Select, Back, and Home controls
 - [x] Bounded phone search with native keyboard dictation
+- [x] Active-service contextual search routing
 - [ ] Trackpad controls
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session
@@ -58,6 +59,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] TV search overlay and enabled-service launcher
 - [x] Declarative Netflix and YouTube query routes
 - [x] Disney+ browse-search fallback
+- [x] Contextual Netflix and YouTube search from the phone remote
 - [ ] Licensed cross-service metadata and regional availability (#19)
 - [ ] Trusted local HTTPS and opt-in direct microphone capture (#21)
 - [ ] Watchlist, favorites, and recommendation controls

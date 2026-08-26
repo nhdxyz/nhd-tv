@@ -39,7 +39,7 @@ The first home experience contains:
 - Store access
 - Settings
 
-The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. Integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
+The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. From Home, integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination and its adapter opens the supported search route directly. Search routing never types into arbitrary focused fields. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
 
 ## Store
 
@@ -85,7 +85,7 @@ The current foundation recognizes declared Netflix, YouTube, and Disney+ watch r
 
 The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
 
-The first remote slice provides directional navigation, Select, Back, Home, and a single bounded Search field. It is session-only and requires television approval. Search text is delivered only to the trusted NHD-TV shell; it cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback only after an action is accepted when the browser supports vibration.
+The first remote slice provides directional navigation, Select, Back, Home, and a single bounded Search field. It is session-only and requires television approval. Search text is delivered only to trusted main-process routing; it opens the active service's declared search destination or returns to the Home chooser. It cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback only after an action is accepted when the browser supports vibration.
 
 Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. Trackpad control remains a later capability.
 

@@ -30,6 +30,12 @@ describe("local profile state", () => {
     const { store } = await testStore();
     expect(store.snapshot()).toEqual({
       activeProfileId: "default",
+      devicePreferences: {
+        fullscreen: true,
+        reducedMotion: false,
+        safeArea: "standard",
+        selectedDisplayId: null
+      },
       preferences: {
         enabledServiceIds: ["netflix", "youtube", "disney-plus"],
         favoriteServiceIds: [],
@@ -66,7 +72,28 @@ describe("local profile state", () => {
       },
       profiles: expect.arrayContaining([{ id: childId, name: "Kids Room" }])
     });
-    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(1);
+    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(2);
+  });
+
+  it("persists device-wide television preferences across profiles", async () => {
+    const { filePath, store } = await testStore();
+    await store.createProfile("Guest");
+    await store.updateDevicePreferences({
+      fullscreen: false,
+      reducedMotion: true,
+      safeArea: "compact",
+      selectedDisplayId: "42"
+    });
+    await store.selectProfile("default");
+
+    const restored = new LocalStateStore(filePath, ["youtube"], ["youtube"]);
+    await restored.initialize();
+    expect(restored.snapshot().devicePreferences).toEqual({
+      fullscreen: false,
+      reducedMotion: true,
+      safeArea: "compact",
+      selectedDisplayId: "42"
+    });
   });
 
   it("sanitizes malformed disk state and rejects unknown profiles", async () => {

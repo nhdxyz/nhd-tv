@@ -49,6 +49,8 @@ An Xbox-style controller uses the D-pad or left stick for navigation, A for Sele
 
 Store choices belong to the active local profile. Services can be favorited and reordered for Home. Removing a service from Home keeps its login; **Clear data** is a separate confirmed action that clears only that service's isolated local session.
 
+Device-wide television settings persist the selected display, launch-fullscreen behavior, safe-area margin, and reduced-motion preference. The display card cycles NHD-TV across connected screens; audio routing and startup-at-login remain platform milestones.
+
 ### Production Widevine signing
 
 The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but commercial production license services require a production signature. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password. The current macOS development runtime has been EVS-signed and passes both Castlabs' production VMP endpoint and Netflix Test Patterns playback.

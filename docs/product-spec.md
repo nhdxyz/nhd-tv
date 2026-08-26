@@ -99,3 +99,5 @@ Voice search initially uses the phone keyboard's native dictation button. Direct
 - Restore focus predictably when returning home.
 - Handle sleep, wake, offline state, service crashes, and application updates.
 - Avoid preventing system sleep unless active playback requires it.
+
+The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, and reduced motion. Audio output, startup-at-login, pointer inactivity, sleep/wake recovery, and updater behavior still require platform-specific qualification.

@@ -30,6 +30,23 @@ body {
   background: #050608;
 }
 
+body[data-safe-area="compact"] {
+  --safe-x: clamp(1rem, 2vw, 2.5rem);
+}
+
+body[data-safe-area="wide"] {
+  --safe-x: clamp(3.5rem, 7vw, 9rem);
+}
+
+body[data-reduced-motion="true"] *,
+body[data-reduced-motion="true"] *::before,
+body[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+
 button,
 summary {
   -webkit-tap-highlight-color: transparent;
@@ -1031,6 +1048,14 @@ h2 {
 
 .settings-row {
   margin-top: 3.5rem;
+}
+
+.settings-row-secondary {
+  margin-top: 1rem;
+}
+
+.settings-card[aria-pressed="true"] {
+  border-color: rgb(96 165 250 / 38%);
 }
 
 .settings-card {

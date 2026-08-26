@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   ContinueWatchingItem,
+  DevicePreferences,
   HostStatus,
   LocalAppState,
   ProfilePreferences,
@@ -17,6 +18,7 @@ const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
+  cycleDisplay: "nhd:display:cycle",
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
@@ -39,6 +41,7 @@ const IPC_CHANNELS = {
   selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start",
+  updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update"
 } as const;
 
@@ -49,6 +52,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.cancelServiceQuit),
   clearServiceData: (serviceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.clearServiceData, serviceId),
+  cycleDisplay: (): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.cycleDisplay),
   closeService: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.closeService),
   confirmServiceQuit: (): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.confirmServiceQuit),
@@ -113,5 +118,7 @@ contextBridge.exposeInMainWorld("nhd", {
   startRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.startRemotePairing),
   updateProfilePreferences: (preferences: ProfilePreferences): Promise<LocalAppState> =>
-    ipcRenderer.invoke(IPC_CHANNELS.updateProfilePreferences, preferences)
+    ipcRenderer.invoke(IPC_CHANNELS.updateProfilePreferences, preferences),
+  updateDevicePreferences: (preferences: DevicePreferences): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.updateDevicePreferences, preferences)
 });

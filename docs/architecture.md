@@ -72,6 +72,8 @@ Lineup removal and service-data clearing are deliberately separate. The first ch
 
 Application-owned secrets must use operating-system-backed encryption where available. Linux must expose degraded-security states rather than silently treating weak storage as secure.
 
+Device preferences share the versioned local-state document but are not profile-scoped. The host owns display enumeration, window movement, and fullscreen state; the shell receives only display labels/counts and submits a narrow preference object. Safe-area and reduced-motion choices are expressed as fixed enums rather than arbitrary CSS.
+
 ## Search boundary
 
 Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.

@@ -2,6 +2,7 @@ export const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
+  cycleDisplay: "nhd:display:cycle",
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
@@ -24,6 +25,7 @@ export const IPC_CHANNELS = {
   selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start",
+  updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update"
 } as const;
 
@@ -83,8 +85,16 @@ export interface ProfilePreferences {
   serviceOrder: string[];
 }
 
+export interface DevicePreferences {
+  fullscreen: boolean;
+  reducedMotion: boolean;
+  safeArea: "compact" | "standard" | "wide";
+  selectedDisplayId: string | null;
+}
+
 export interface LocalAppState {
   activeProfileId: string;
+  devicePreferences: DevicePreferences;
   preferences: ProfilePreferences;
   profiles: LocalProfile[];
 }
@@ -98,6 +108,11 @@ export type WidevineState = "checking" | "ready" | "timed-out" | "unavailable";
 
 export interface HostStatus {
   activeServiceId: string | null;
+  display: {
+    count: number;
+    id: string | null;
+    label: string;
+  };
   diagnostics: {
     gpuProcess: ProcessDiagnostics | null;
     hardwareAcceleration: boolean | null;

@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { LocalAppState, LocalProfile, ProfilePreferences } from "./contracts";
+import type {
+  DevicePreferences,
+  LocalAppState,
+  LocalProfile,
+  ProfilePreferences
+} from "./contracts";
 
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 const DEFAULT_PROFILE_ID = "default";
 const MAX_PROFILES = 8;
 const MAX_PROFILE_NAME_LENGTH = 32;
@@ -14,9 +19,26 @@ interface StoredProfile extends LocalProfile {
 
 interface StoredLocalState {
   activeProfileId: string;
+  devicePreferences: DevicePreferences;
   preferences: Record<string, ProfilePreferences>;
   profiles: StoredProfile[];
   version: number;
+}
+
+function devicePreferences(value: unknown): DevicePreferences {
+  const candidate = typeof value === "object" && value !== null
+    ? value as Partial<DevicePreferences>
+    : {};
+  return {
+    fullscreen: candidate.fullscreen !== false,
+    reducedMotion: candidate.reducedMotion === true,
+    safeArea: candidate.safeArea === "compact" || candidate.safeArea === "wide"
+      ? candidate.safeArea
+      : "standard",
+    selectedDisplayId: typeof candidate.selectedDisplayId === "string"
+      ? candidate.selectedDisplayId
+      : null
+  };
 }
 
 function normalizedProfileName(value: unknown): string | null {
@@ -97,7 +119,10 @@ export class LocalStateStore {
       }
 
       const document = parsed as Partial<StoredLocalState>;
-      if (document.version !== STORE_VERSION || !Array.isArray(document.profiles)) {
+      if (
+        (document.version !== 1 && document.version !== STORE_VERSION) ||
+        !Array.isArray(document.profiles)
+      ) {
         return;
       }
 
@@ -147,7 +172,13 @@ export class LocalStateStore {
         ? document.activeProfileId
         : profiles[0]?.id ?? DEFAULT_PROFILE_ID;
 
-      this.#state = { activeProfileId, preferences, profiles, version: STORE_VERSION };
+      this.#state = {
+        activeProfileId,
+        devicePreferences: devicePreferences(document.devicePreferences),
+        preferences,
+        profiles,
+        version: STORE_VERSION
+      };
     } catch {
       this.#state = this.#defaultState();
     }
@@ -159,6 +190,7 @@ export class LocalStateStore {
 
     return {
       activeProfileId: this.#state.activeProfileId,
+      devicePreferences: { ...this.#state.devicePreferences },
       preferences: {
         enabledServiceIds: [...preferences.enabledServiceIds],
         favoriteServiceIds: [...preferences.favoriteServiceIds],
@@ -214,6 +246,12 @@ export class LocalStateStore {
     return this.snapshot();
   }
 
+  async updateDevicePreferences(value: unknown): Promise<LocalAppState> {
+    this.#state.devicePreferences = devicePreferences(value);
+    await this.#persist();
+    return this.snapshot();
+  }
+
   #defaultState(): StoredLocalState {
     const profile: StoredProfile = {
       createdAt: Date.now(),
@@ -223,6 +261,7 @@ export class LocalStateStore {
 
     return {
       activeProfileId: profile.id,
+      devicePreferences: devicePreferences(null),
       preferences: {
         [profile.id]: profilePreferences(
           null,

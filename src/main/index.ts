@@ -10,6 +10,7 @@ import {
   nativeImage,
   net,
   protocol,
+  screen,
   session
 } from "electron";
 import {
@@ -139,8 +140,17 @@ function runtimeDiagnostics(): HostStatus["diagnostics"] {
 }
 
 function hostStatus(): HostStatus {
+  const displays = screen.getAllDisplays();
+  const activeDisplay = mainWindow === null || mainWindow.isDestroyed()
+    ? null
+    : screen.getDisplayMatching(mainWindow.getBounds());
   return {
     activeServiceId: serviceHost?.activeServiceId ?? null,
+    display: {
+      count: displays.length,
+      id: activeDisplay === null ? null : String(activeDisplay.id),
+      label: activeDisplay?.label || (activeDisplay === null ? "No display" : `Display ${activeDisplay.id}`)
+    },
     diagnostics: runtimeDiagnostics(),
     fullscreen: {
       serviceHtml: serviceHost?.isHtmlFullscreen ?? false,
@@ -391,6 +401,48 @@ function registerIpc(): void {
     }
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.updateDevicePreferences,
+    async (event, preferences: unknown) => {
+      validateShellSender(event.senderFrame?.url ?? "");
+      if (localStateStore === null) {
+        throw new Error("Local device state is not ready.");
+      }
+
+      const state = await localStateStore.updateDevicePreferences(preferences);
+      mainWindow?.setFullScreen(state.devicePreferences.fullscreen);
+      publishHostStatus();
+      return state;
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.cycleDisplay, async (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (localStateStore === null || mainWindow === null || mainWindow.isDestroyed()) {
+      throw new Error("Display settings are not ready.");
+    }
+
+    const displays = screen.getAllDisplays();
+    if (displays.length === 0) {
+      throw new Error("No displays are available.");
+    }
+
+    const current = screen.getDisplayMatching(mainWindow.getBounds());
+    const currentIndex = Math.max(0, displays.findIndex((display) => display.id === current.id));
+    const next = displays[(currentIndex + 1) % displays.length] ?? displays[0]!;
+    const preferences = localStateStore.snapshot().devicePreferences;
+    const state = await localStateStore.updateDevicePreferences({
+      ...preferences,
+      selectedDisplayId: String(next.id)
+    });
+
+    mainWindow.setFullScreen(false);
+    mainWindow.setBounds(next.bounds);
+    mainWindow.setFullScreen(state.devicePreferences.fullscreen);
+    publishHostStatus();
+    return state;
+  });
+
   ipcMain.handle(IPC_CHANNELS.getServices, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return getServiceSummaries();
@@ -580,14 +632,25 @@ async function initializeWidevine(): Promise<void> {
 async function createMainWindow(): Promise<void> {
   let windowCloseCheckpointed = false;
 
+  const devicePreferences = localStateStore?.snapshot().devicePreferences;
+  const displays = screen.getAllDisplays();
+  const selectedDisplay = displays.find(
+    (display) => String(display.id) === devicePreferences?.selectedDisplayId
+  );
+
   mainWindow = new BrowserWindow({
     backgroundColor: "#05070d",
     height: 720,
+    fullscreen: devicePreferences?.fullscreen ?? true,
     minHeight: 540,
     minWidth: 960,
     show: false,
     title: "NHD-TV Feasibility Host",
     width: 1280,
+    ...(selectedDisplay === undefined ? {} : {
+      x: selectedDisplay.bounds.x,
+      y: selectedDisplay.bounds.y
+    }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

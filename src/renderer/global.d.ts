@@ -1,5 +1,6 @@
 import type {
   ContinueWatchingItem,
+  DevicePreferences,
   HostStatus,
   LocalAppState,
   ProfilePreferences,
@@ -15,6 +16,7 @@ declare global {
       approveRemotePairing: () => Promise<RemoteStatus>;
       cancelServiceQuit: () => Promise<void>;
       clearServiceData: (serviceId: string) => Promise<void>;
+      cycleDisplay: () => Promise<LocalAppState>;
       closeService: () => Promise<void>;
       confirmServiceQuit: () => Promise<void>;
       createProfile: (name: string) => Promise<LocalAppState>;
@@ -40,6 +42,7 @@ declare global {
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;
       updateProfilePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;
+      updateDevicePreferences: (preferences: DevicePreferences) => Promise<LocalAppState>;
     };
   }
 }

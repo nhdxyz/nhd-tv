@@ -37,6 +37,8 @@ const elements = {
   continueActions: requireElement<HTMLDivElement>("#continue-actions", "continue-actions"),
   continueHint: requireElement<HTMLSpanElement>("#continue-hint", "continue-hint"),
   diagnosticsStatus: requireElement<HTMLParagraphElement>("#diagnostics-status", "diagnostics-status"),
+  displayCard: requireElement<HTMLButtonElement>("#display-card", "display-card"),
+  displayCopy: requireElement<HTMLElement>("#display-copy", "display-copy"),
   featuredBrand: requireElement<HTMLDivElement>("#featured-brand", "featured-brand"),
   featuredCopy: requireElement<HTMLParagraphElement>("#featured-copy", "featured-copy"),
   featuredIcon: requireElement<HTMLDivElement>("#featured-icon", "featured-icon"),
@@ -45,9 +47,13 @@ const elements = {
   feedback: requireElement<HTMLParagraphElement>("#feedback", "feedback"),
   gamepadCard: requireElement<HTMLButtonElement>("#gamepad-card", "gamepad-card"),
   gamepadCopy: requireElement<HTMLElement>("#gamepad-copy", "gamepad-copy"),
+  fullscreenCopy: requireElement<HTMLElement>("#fullscreen-copy", "fullscreen-copy"),
+  fullscreenToggle: requireElement<HTMLButtonElement>("#fullscreen-toggle", "fullscreen-toggle"),
   healthPill: requireElement<HTMLSpanElement>("#health-pill", "health-pill"),
   heroOpenButton: requireElement<HTMLButtonElement>("#hero-open", "hero-open"),
   lineupCount: requireElement<HTMLSpanElement>("#lineup-count", "lineup-count"),
+  motionCopy: requireElement<HTMLElement>("#motion-copy", "motion-copy"),
+  motionToggle: requireElement<HTMLButtonElement>("#motion-toggle", "motion-toggle"),
   profileAvatar: requireElement<HTMLSpanElement>("#profile-avatar", "profile-avatar"),
   profileCardCopy: requireElement<HTMLElement>("#profile-card-copy", "profile-card-copy"),
   profileClose: requireElement<HTMLButtonElement>("#profile-close", "profile-close"),
@@ -73,6 +79,8 @@ const elements = {
   remoteReadyCopy: requireElement<HTMLSpanElement>("#remote-ready-copy", "remote-ready-copy"),
   remoteStart: requireElement<HTMLButtonElement>("#remote-start", "remote-start"),
   runtimeStatus: requireElement<HTMLParagraphElement>("#runtime-status", "runtime-status"),
+  safeAreaCopy: requireElement<HTMLElement>("#safe-area-copy", "safe-area-copy"),
+  safeAreaToggle: requireElement<HTMLButtonElement>("#safe-area-toggle", "safe-area-toggle"),
   serviceActions: requireElement<HTMLDivElement>("#service-actions", "service-actions"),
   serviceStatus: requireElement<HTMLParagraphElement>("#service-status", "service-status"),
   searchClose: requireElement<HTMLButtonElement>("#search-close", "search-close"),
@@ -135,6 +143,9 @@ function renderStatus(status: HostStatus): void {
     ? "Host ready"
     : `Widevine ${status.widevine.state}`;
   elements.healthPill.dataset.state = status.widevine.state === "ready" ? "ready" : "warning";
+  elements.displayCopy.textContent = status.display.count === 1
+    ? `${status.display.label} · only display connected`
+    : `${status.display.label} · ${status.display.count} displays connected`;
   const serviceProcess = status.diagnostics.serviceRenderer;
   const gpuProcess = status.diagnostics.gpuProcess;
   const lastBlocked = status.navigation.lastBlocked;
@@ -170,6 +181,13 @@ function applyLocalAppState(state: LocalAppState): void {
   elements.profileName.textContent = name;
   elements.profileAvatar.textContent = name.slice(0, 1).toUpperCase();
   elements.profileCardCopy.textContent = `${name} · separate lineup and viewing history`;
+  document.body.dataset.safeArea = state.devicePreferences.safeArea;
+  document.body.dataset.reducedMotion = String(state.devicePreferences.reducedMotion);
+  elements.fullscreenToggle.setAttribute("aria-pressed", String(state.devicePreferences.fullscreen));
+  elements.fullscreenCopy.textContent = state.devicePreferences.fullscreen ? "On" : "Off";
+  elements.motionToggle.setAttribute("aria-pressed", String(state.devicePreferences.reducedMotion));
+  elements.motionCopy.textContent = state.devicePreferences.reducedMotion ? "On" : "Off";
+  elements.safeAreaCopy.textContent = `${state.devicePreferences.safeArea[0]?.toUpperCase() ?? "S"}${state.devicePreferences.safeArea.slice(1)}`;
 }
 
 async function saveProfilePreferences(): Promise<void> {
@@ -177,6 +195,19 @@ async function saveProfilePreferences(): Promise<void> {
     enabledServiceIds: [...enabledServiceIds],
     favoriteServiceIds: [...favoriteServiceIds],
     serviceOrder
+  }));
+}
+
+async function saveDevicePreferences(
+  changes: Partial<LocalAppState["devicePreferences"]>
+): Promise<void> {
+  if (localAppState === null) {
+    return;
+  }
+
+  applyLocalAppState(await window.nhd.updateDevicePreferences({
+    ...localAppState.devicePreferences,
+    ...changes
   }));
 }
 
@@ -943,6 +974,39 @@ elements.soundToggle.addEventListener("click", () => {
 });
 
 renderSoundPreference();
+
+elements.fullscreenToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.fullscreen ?? true);
+  void saveDevicePreferences({ fullscreen: enabled })
+    .then(() => showFeedback(`Fullscreen ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.motionToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.reducedMotion ?? false);
+  void saveDevicePreferences({ reducedMotion: enabled })
+    .then(() => showFeedback(`Reduced motion ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.safeAreaToggle.addEventListener("click", () => {
+  const values = ["compact", "standard", "wide"] as const;
+  const current = localAppState?.devicePreferences.safeArea ?? "standard";
+  const next = values[(values.indexOf(current) + 1) % values.length] ?? "standard";
+  void saveDevicePreferences({ safeArea: next })
+    .then(() => showFeedback(`Screen margins set to ${next}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.displayCard.addEventListener("click", () => {
+  void window.nhd.cycleDisplay()
+    .then((state) => {
+      applyLocalAppState(state);
+      return refreshStatus();
+    })
+    .then(() => showFeedback("Moved NHD-TV to the next connected display."))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
 
 const arrowDirections: Readonly<Record<string, SpatialDirection>> = {
   ArrowDown: "down",

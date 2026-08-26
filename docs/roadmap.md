@@ -15,7 +15,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 1: TV shell
 
-- [ ] Fullscreen display selection and persistence
+- [x] Fullscreen display selection and persistence foundation (#27)
 - [x] Controller-first home navigation foundation
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
@@ -74,3 +74,5 @@ The milestone passes only when results and limitations are documented. Unsupport
 - macOS packaging, signing, and platform validation
 - Linux packaging and documented DRM limitations
 - Startup behavior, audio output, sleep/wake, and accessibility hardening
+
+Device-settings groundwork already includes persisted fullscreen, display cycling, safe-area margins, and reduced motion (#27). Audio routing, startup-at-login, and platform validation remain here.

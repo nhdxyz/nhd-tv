@@ -50,6 +50,32 @@ summary:focus-visible {
   outline-offset: 5px;
 }
 
+[data-remote-focused="true"] {
+  position: relative;
+  z-index: 20 !important;
+  outline: 0.38rem solid #67e8f9 !important;
+  outline-offset: 0.48rem !important;
+  box-shadow:
+    0 0 0 0.18rem #07111f,
+    0 0 0 0.72rem rgb(103 232 249 / 28%),
+    0 0 2.8rem rgb(56 189 248 / 72%) !important;
+  filter: brightness(1.16) saturate(1.08);
+  scale: 1.04;
+  animation: remote-focus-arrive 220ms ease-out;
+}
+
+@keyframes remote-focus-arrive {
+  from {
+    outline-color: #fff;
+    scale: 0.98;
+  }
+
+  to {
+    outline-color: #67e8f9;
+    scale: 1.04;
+  }
+}
+
 .ambient {
   position: fixed;
   z-index: -1;
@@ -852,5 +878,9 @@ h2 {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  [data-remote-focused="true"] {
+    animation: none;
   }
 }

@@ -282,6 +282,17 @@ const arrowDirections: Readonly<Record<string, SpatialDirection>> = {
   ArrowUp: "up"
 };
 
+let remoteFocusedElement: HTMLElement | null = null;
+
+function setRemoteFocusedElement(element: HTMLElement | null): void {
+  remoteFocusedElement?.removeAttribute("data-remote-focused");
+  remoteFocusedElement = element;
+
+  if (element !== null) {
+    element.setAttribute("data-remote-focused", "true");
+  }
+}
+
 function visibleNavigationCandidates(): HTMLElement[] {
   const scope: ParentNode = elements.remoteDialog.open ? elements.remoteDialog : document;
   return Array.from(
@@ -289,7 +300,7 @@ function visibleNavigationCandidates(): HTMLElement[] {
   ).filter((candidate) => candidate.getClientRects().length > 0);
 }
 
-function moveSpatialFocus(direction: SpatialDirection): boolean {
+function moveSpatialFocus(direction: SpatialDirection, remote = false): boolean {
   const candidates = visibleNavigationCandidates();
   const current = document.activeElement;
   const currentIndex = current instanceof HTMLElement ? candidates.indexOf(current) : -1;
@@ -299,7 +310,10 @@ function moveSpatialFocus(direction: SpatialDirection): boolean {
   }
 
   if (currentIndex === -1) {
-    candidates[0]?.focus({ preventScroll: true });
+    const firstCandidate = candidates[0];
+
+    firstCandidate?.focus({ preventScroll: true });
+    setRemoteFocusedElement(remote ? firstCandidate ?? null : null);
     navigationSounds.playMove();
     return true;
   }
@@ -314,8 +328,11 @@ function moveSpatialFocus(direction: SpatialDirection): boolean {
     return false;
   }
 
-  candidates[nextIndex]?.focus({ preventScroll: true });
-  candidates[nextIndex]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  const nextCandidate = candidates[nextIndex];
+
+  nextCandidate?.focus({ preventScroll: true });
+  nextCandidate?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  setRemoteFocusedElement(remote ? nextCandidate ?? null : null);
   navigationSounds.playMove();
   return true;
 }
@@ -327,10 +344,14 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  setRemoteFocusedElement(null);
+
   if (moveSpatialFocus(direction)) {
     event.preventDefault();
   }
 });
+
+document.addEventListener("pointerdown", () => setRemoteFocusedElement(null), { capture: true });
 
 document.addEventListener("click", (event) => {
   if (event.target instanceof Element && event.target.closest("button, summary") !== null) {
@@ -340,7 +361,7 @@ document.addEventListener("click", (event) => {
 
 function handleShellRemoteAction(action: RemoteAction): void {
   if (action === "up" || action === "down" || action === "left" || action === "right") {
-    moveSpatialFocus(action);
+    moveSpatialFocus(action, true);
     return;
   }
 
@@ -350,7 +371,10 @@ function handleShellRemoteAction(action: RemoteAction): void {
     if (focused instanceof HTMLElement && visibleNavigationCandidates().includes(focused)) {
       focused.click();
     } else {
-      visibleNavigationCandidates()[0]?.focus();
+      const firstCandidate = visibleNavigationCandidates()[0];
+
+      firstCandidate?.focus();
+      setRemoteFocusedElement(firstCandidate ?? null);
     }
     return;
   }
@@ -361,6 +385,7 @@ function handleShellRemoteAction(action: RemoteAction): void {
 
   window.scrollTo({ behavior: "smooth", top: 0 });
   elements.heroOpenButton.focus({ preventScroll: true });
+  setRemoteFocusedElement(elements.heroOpenButton);
 }
 
 elements.closeServiceButton.addEventListener("click", async () => {

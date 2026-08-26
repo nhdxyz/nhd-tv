@@ -30,4 +30,13 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).not.toContain("innerHTML");
     expect(REMOTE_JS).not.toMatch(/https?:\/\//);
   });
+
+  it("confirms accepted commands with optional haptic feedback", () => {
+    const commandRequest = REMOTE_JS.indexOf('await jsonRequest("/api/command"');
+    const confirmation = REMOTE_JS.indexOf("confirmCommand(button);", commandRequest);
+
+    expect(commandRequest).toBeGreaterThan(-1);
+    expect(confirmation).toBeGreaterThan(commandRequest);
+    expect(REMOTE_JS).toContain("navigator.vibrate(10)");
+  });
 });

@@ -21,7 +21,8 @@ function center(rect: SpatialRect): { x: number; y: number } {
 export function findDirectionalTarget(
   currentIndex: number,
   rects: readonly SpatialRect[],
-  direction: SpatialDirection
+  direction: SpatialDirection,
+  groups?: readonly (string | null)[]
 ): number | null {
   const current = rects[currentIndex];
 
@@ -35,6 +36,13 @@ export function findDirectionalTarget(
 
   rects.forEach((candidate, index) => {
     if (index === currentIndex) {
+      return;
+    }
+
+    const currentGroup = groups?.[currentIndex];
+    const isHorizontal = direction === "left" || direction === "right";
+
+    if (isHorizontal && currentGroup != null && groups?.[index] !== currentGroup) {
       return;
     }
 

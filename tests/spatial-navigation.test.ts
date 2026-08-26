@@ -23,6 +23,26 @@ describe("spatial navigation", () => {
     expect(findDirectionalTarget(1, rects, "right")).toBe(2);
   });
 
+  it("keeps horizontal movement inside the current navigation group", () => {
+    const rects = [
+      rect(0, 0),
+      rect(0, 120),
+      rect(130, 120),
+      rect(145, 200)
+    ];
+    const groups = ["hero", "lineup", "lineup", "continue"];
+
+    expect(findDirectionalTarget(1, rects, "right", groups)).toBe(2);
+    expect(findDirectionalTarget(2, rects, "right", groups)).toBeNull();
+  });
+
+  it("allows vertical movement across navigation groups", () => {
+    const rects = [rect(130, 0), rect(130, 120)];
+    const groups = ["hero", "lineup"];
+
+    expect(findDirectionalTarget(0, rects, "down", groups)).toBe(1);
+  });
+
   it("prefers the closest aligned target on another row", () => {
     const rects = [rect(130, 0), rect(0, 120), rect(130, 120), rect(260, 120)];
 

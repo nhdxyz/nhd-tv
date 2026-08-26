@@ -639,7 +639,7 @@ function renderServiceViews(): void {
   elements.storeExperimentalSection.hidden = experimentalStoreServices.length === 0;
   elements.storeUtilitySection.hidden = utilityStoreServices.length === 0;
   elements.storeEmpty.hidden = availableServices.length > 0;
-  elements.lineupCount.textContent = `${enabledServices.length} of ${services.length} on Home`;
+  elements.lineupCount.textContent = `${enabledServices.length} installed`;
 
   if (enabledServices.length === 0) {
     const empty = document.createElement("div");

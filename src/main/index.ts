@@ -238,7 +238,7 @@ async function cacheArtwork(
 
   try {
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
-    const response = await serviceSession.fetch(artworkUrl, { redirect: "follow" });
+    const response = await serviceSession.fetch(artworkUrl, { redirect: "error" });
     const contentLength = Number(response.headers.get("content-length") ?? 0);
     const contentType = response.headers.get("content-type") ?? "";
 
@@ -246,7 +246,8 @@ async function cacheArtwork(
       !response.ok ||
       !contentType.toLowerCase().startsWith("image/") ||
       contentLength > MAX_ARTWORK_BYTES ||
-      !isAllowedArtworkUrl(response.url, definition.artworkHosts)
+      (response.url.length > 0 &&
+        !isAllowedArtworkUrl(response.url, definition.artworkHosts))
     ) {
       return;
     }
@@ -299,7 +300,7 @@ async function cacheCatalogImage(imageUrl: string | null): Promise<string | null
 
   try {
     const response = await net.fetch(imageUrl, {
-      redirect: "follow",
+      redirect: "error",
       signal: AbortSignal.timeout(8_000)
     });
     const contentLength = Number(response.headers.get("content-length") ?? 0);
@@ -308,7 +309,7 @@ async function cacheCatalogImage(imageUrl: string | null): Promise<string | null
       !response.ok ||
       !contentType.toLowerCase().startsWith("image/") ||
       contentLength > MAX_CATALOG_IMAGE_BYTES ||
-      !isAllowedCatalogImageUrl(response.url)
+      (response.url.length > 0 && !isAllowedCatalogImageUrl(response.url))
     ) {
       catalogImageCache.set(imageUrl, null);
       return null;

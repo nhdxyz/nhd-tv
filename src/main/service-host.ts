@@ -975,7 +975,7 @@ export class ServiceHost {
           try {
             const observation = qualifyPlaybackSnapshot(
               await view.webContents.executeJavaScript(
-                buildPlaybackSnapshotScript(playback),
+                buildPlaybackSnapshotScript(playback, definition.name),
                 true
               ) as unknown
             );
@@ -1171,7 +1171,7 @@ export class ServiceHost {
     this.#playbackCheckpoint = (async () => {
       try {
         const rawSnapshot = await webContents.executeJavaScript(
-          buildPlaybackSnapshotScript(playback),
+          buildPlaybackSnapshotScript(playback, definition.name),
           true
         ) as unknown;
         const snapshot = qualifyPlaybackSnapshot(rawSnapshot);

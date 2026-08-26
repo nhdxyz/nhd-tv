@@ -55,10 +55,11 @@ describe("passive playback observer", () => {
       queryParameters: [],
       subtitleSelectors: [".episode"],
       titleSelectors: ["h1"]
-    });
+    }, "Netflix");
     expect(script).toContain("video.played.end(index)");
     expect(script).toContain('readText(["h1"])');
     expect(script).toContain("recentActivation?.artworkUrl");
+    expect(script).toContain('=== "netflix"');
     expect(script).not.toContain("Example Show");
   });
 
@@ -69,6 +70,8 @@ describe("passive playback observer", () => {
     expect(script).toContain('document.addEventListener("pointerdown"');
     expect(script).toContain('document.addEventListener("click"');
     expect(script).toContain('document.addEventListener("keydown"');
+    expect(script).toContain("sessionStorage.setItem(storageKey");
+    expect(script).toContain("rememberVisibleDetail");
     expect(script).toContain('[class*="tracked-card"]');
     expect(script).toContain('element.querySelectorAll("picture source")');
     expect(script).toContain("candidate.area >= 80 * 45");

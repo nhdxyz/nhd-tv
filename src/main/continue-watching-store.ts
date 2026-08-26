@@ -170,6 +170,11 @@ export class ContinueWatchingStore {
     }
 
     const title = normalizedText(checkpoint.title);
+    const genericTitle = title?.toLocaleLowerCase() === checkpoint.serviceName.toLocaleLowerCase();
+    const preservedTitle = existing !== undefined &&
+      existing.title.toLocaleLowerCase() !== existing.serviceName.toLocaleLowerCase()
+      ? existing.title
+      : null;
     const item: StoredContinueWatchingItem = {
       artworkDataUrl: existing?.artworkDataUrl ?? null,
       durationSeconds,
@@ -178,7 +183,7 @@ export class ContinueWatchingStore {
       serviceId: checkpoint.serviceId,
       serviceName: checkpoint.serviceName,
       subtitle: normalizedText(checkpoint.subtitle),
-      title: title ?? checkpoint.serviceName,
+      title: genericTitle ? preservedTitle ?? checkpoint.serviceName : title ?? checkpoint.serviceName,
       updatedAt: Date.now(),
       watchUrl: checkpoint.watchUrl
     };

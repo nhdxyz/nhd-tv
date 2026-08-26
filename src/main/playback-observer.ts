@@ -96,10 +96,12 @@ export function qualifyPlaybackSnapshot(value: unknown): QualifiedPlaybackSnapsh
 }
 
 export function buildPlaybackSnapshotScript(
-  playback: NonNullable<ServiceDefinition["playback"]>
+  playback: NonNullable<ServiceDefinition["playback"]>,
+  serviceName = ""
 ): string {
   const titleSelectors = JSON.stringify(playback.titleSelectors);
   const subtitleSelectors = JSON.stringify(playback.subtitleSelectors);
+  const normalizedServiceName = JSON.stringify(serviceName.trim().toLocaleLowerCase());
 
   return `(() => {
     const visibleVideo = (video) => {
@@ -167,6 +169,13 @@ export function buildPlaybackSnapshotScript(
       if (typeof candidate !== "string" || candidate.length === 0) return false;
       try { return new URL(candidate, location.href).protocol === "https:"; } catch { return false; }
     });
+    const selectorTitle = readText(${titleSelectors});
+    const activationTitle = typeof recentActivation?.title === "string"
+      ? recentActivation.title
+      : "";
+    const title = selectorTitle.trim().toLocaleLowerCase() === ${normalizedServiceName} && activationTitle
+      ? activationTitle
+      : selectorTitle || activationTitle;
 
     return {
       artworkUrl: artworkUrl ? new URL(artworkUrl, location.href).toString() : null,
@@ -177,7 +186,7 @@ export function buildPlaybackSnapshotScript(
       playedSeconds,
       readyState: video.readyState,
       subtitle: readText(${subtitleSelectors}),
-      title: readText(${titleSelectors}) || (typeof recentActivation?.title === "string" ? recentActivation.title : ""),
+      title,
       url: location.href,
       visibleArea: candidate.area
     };
@@ -187,14 +196,28 @@ export function buildPlaybackSnapshotScript(
 export function buildPlaybackActivationTrackerScript(): string {
   return `(() => {
     const key = ${JSON.stringify(PLAYBACK_ACTIVATION_KEY)};
+    const storageKey = key + ":session";
     const current = globalThis[key];
     if (current && typeof current === "object" && current.installed === true) return true;
 
+    const restored = (() => {
+      try {
+        const parsed = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+        return parsed &&
+          typeof parsed === "object" &&
+          Number.isFinite(parsed.updatedAt) &&
+          Date.now() - parsed.updatedAt <= ${PLAYBACK_ACTIVATION_MAX_AGE_MS}
+          ? parsed
+          : null;
+      } catch {
+        return null;
+      }
+    })();
     const state = {
-      artworkUrl: null,
+      artworkUrl: typeof restored?.artworkUrl === "string" ? restored.artworkUrl : null,
       installed: true,
-      title: null,
-      updatedAt: 0
+      title: typeof restored?.title === "string" ? restored.title : null,
+      updatedAt: Number.isFinite(restored?.updatedAt) ? restored.updatedAt : 0
     };
     globalThis[key] = state;
 
@@ -291,17 +314,41 @@ export function buildPlaybackActivationTrackerScript(): string {
       const candidate = target instanceof Element ? candidateFrom(target) : null;
       if (candidate === null) return;
       state.artworkUrl = candidate.artworkUrl;
-      state.title = typeof candidate.title === "string"
-        ? candidate.title.replace(/\\s+/g, " ").trim().slice(0, ${MAX_METADATA_LENGTH}) || null
-        : null;
+      const title = typeof candidate.title === "string"
+        ? candidate.title.replace(/\\s+/g, " ").trim().slice(0, ${MAX_METADATA_LENGTH})
+        : "";
+      if (title) state.title = title;
       state.updatedAt = Date.now();
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          artworkUrl: state.artworkUrl,
+          title: state.title,
+          updatedAt: state.updatedAt
+        }));
+      } catch {}
+    };
+
+    const rememberVisibleDetail = () => {
+      const roots = [...document.querySelectorAll(
+        '[role="dialog"], [data-uia*="modal"], [class*="previewModal"], [class*="detail-modal"]'
+      )].filter((element) => visibleArea(element) >= 240 * 135);
+      const best = roots
+        .map((element) => ({ area: visibleArea(element), element }))
+        .sort((left, right) => right.area - left.area)[0];
+      if (best !== undefined) remember(best.element);
+    };
+
+    const rememberWithDetail = (target) => {
+      remember(target);
+      setTimeout(rememberVisibleDetail, 180);
+      setTimeout(rememberVisibleDetail, 600);
     };
 
     document.addEventListener("focusin", (event) => remember(event.target), true);
-    document.addEventListener("pointerdown", (event) => remember(event.target), true);
-    document.addEventListener("click", (event) => remember(event.target), true);
+    document.addEventListener("pointerdown", (event) => rememberWithDetail(event.target), true);
+    document.addEventListener("click", (event) => rememberWithDetail(event.target), true);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") remember(document.activeElement);
+      if (event.key === "Enter" || event.key === " ") rememberWithDetail(document.activeElement);
     }, true);
     return true;
   })()`;

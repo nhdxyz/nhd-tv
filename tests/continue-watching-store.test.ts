@@ -78,6 +78,17 @@ describe("Continue Watching store", () => {
     expect(store.list()).toEqual([]);
   });
 
+  it("does not replace a real title with a generic provider title", async () => {
+    const { store } = await testStore();
+    await store.upsert(checkpoint({ title: "Facing El Chapo" }));
+    await store.upsert(checkpoint({ positionSeconds: 900, title: "Netflix" }));
+
+    expect(store.list()[0]).toMatchObject({
+      positionSeconds: 900,
+      title: "Facing El Chapo"
+    });
+  });
+
   it("keeps different service URLs as separate newest-first items", async () => {
     const { store } = await testStore();
     const first = await store.upsert(checkpoint());

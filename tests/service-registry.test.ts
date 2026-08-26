@@ -70,6 +70,8 @@ describe("service registry", () => {
     );
     expect(getServiceDefinition("netflix")?.remoteTextEntrySelectors).toEqual([
       'input[data-uia="search-box-input"]',
+      'input[data-uia*="search"][data-uia*="input"]',
+      'input[name="search"]',
       'input[type="search"]',
       'input[aria-label*="search" i]',
       'input[placeholder*="search" i]'

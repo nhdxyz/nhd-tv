@@ -63,6 +63,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Adaptive pointer smoothing, snap hysteresis, proportional scrolling, and focus-safe hover (#37)
 - [x] Continuous relative trackpad with lift-to-recenter and tap-anywhere selection (#38)
 - [x] App-owned Home scrolling, idle cursor fade, and scoped provider keyboard handoff (#39)
+- [x] Active-rail edge scrolling and provider search-field keyboard reliability (#39)
+- [x] Single-layer service focus, contextual quit preview, and multi-row Store catalog (#40)
 - [ ] Remembered-phone credentials and device management (#25)
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session

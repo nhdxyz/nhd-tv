@@ -61,6 +61,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Full-height phone layout with icon system controls and explicit precision-target feedback (#35)
 - [x] Directional edge-drag scrolling, tap stabilization, free TV cursor, and scoped YouTube fullscreen (#36)
 - [x] Adaptive pointer smoothing, snap hysteresis, proportional scrolling, and focus-safe hover (#37)
+- [x] Continuous relative trackpad with lift-to-recenter and tap-anywhere selection (#38)
 - [ ] Remembered-phone credentials and device management (#25)
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session

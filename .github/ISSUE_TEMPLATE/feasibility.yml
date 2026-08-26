@@ -1,0 +1,31 @@
+name: Feasibility investigation
+description: Prove or disprove a high-risk technical assumption
+title: "[Feasibility]: "
+labels:
+  - feasibility
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: State the technical question this investigation must answer.
+    validations:
+      required: true
+  - type: textarea
+    id: matrix
+    attributes:
+      label: Test matrix
+      description: List relevant platforms, services, hardware, or scenarios.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] Results are reproducible.
+        - [ ] Limitations are documented.
+        - [ ] A recommendation is recorded.
+    validations:
+      required: true
+

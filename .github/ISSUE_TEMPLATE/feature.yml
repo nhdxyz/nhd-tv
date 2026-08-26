@@ -1,0 +1,35 @@
+name: Feature
+description: Plan a user-visible NHD-TV capability
+title: "[Feature]: "
+labels:
+  - feature
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: Describe the user-visible result.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Describe included behavior and important exclusions.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Provide a verifiable checklist.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification notes
+      description: Explain how this should be tested.
+

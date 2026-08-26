@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. It includes a Shaka Player Widevine test service, a narrow IPC bridge, strict navigation rules, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its TV-first home includes a hero, Continue Watching foundation, service rail, planned Store/Profile/Remote affordances, spatial arrow-key focus, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 

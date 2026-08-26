@@ -21,7 +21,7 @@ Never paste account identifiers, credentials, verification codes, cookies, servi
 | Widevine CDM | `4.10.3050.0` on the preliminary macOS run |
 | Service isolation | One `persist:service-*` partition per service |
 | Renderer policy | Sandbox and context isolation enabled; Node.js disabled |
-| Built-in diagnostics | GPU video-decode capability and service/GPU process CPU and working-set memory; no page URLs or content |
+| Built-in diagnostics | GPU video-decode capability, fullscreen state, blocked-navigation origin, and service/GPU process CPU and working-set memory; no page paths, query strings, account data, or content |
 
 ## Preliminary macOS run
 
@@ -29,8 +29,8 @@ Verified 2026-08-25 on Apple silicon (`darwin arm64`). These results exercise th
 
 | Service | Entry page | Login flow reached | Playback | Fullscreen | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Netflix | Pass | Pass | Pending user login | Pending | The isolated app partition correctly started signed out even though the external browser already had a session. The user-controlled flow reached email verification; no identifier or code was captured. |
-| YouTube | Pass | Pass with fallback | Pass, signed out | Retest pending | Google sign-in loaded through its explicit navigation-only origin. The passkey challenge rendered, but this unsigned macOS build could not open a native authenticator sheet; Google's `Try another way` path successfully exposed password sign-in. A public 10:34 video rendered and advanced in the embedded view. A child-view fullscreen bridge was added after the first request did not resize the host. |
+| Netflix | Pass | Pass; restart persistence confirmed | Pending profile selection | Pending | The user-controlled login survived multiple complete NHD-TV restarts and now opens Netflix's profile chooser directly. Playback is waiting for the user to choose which profile may receive test history. |
+| YouTube | Pass | Incomplete | Pass, signed out | Retest pending | Google sign-in loaded through its explicit navigation-only origin. The passkey challenge rendered, and Google's `Try another way` path exposed password sign-in. A later password plus phone one-time-verification attempt returned to signed-out YouTube without a visible error. Origin-only blocked-navigation diagnostics were added for a clean retry; supported TV device activation is tracked in Issue #11. A public 10:35 video rendered and advanced in the embedded view. |
 | Disney+ | Pass | Pass | Pending user login | Pending | The isolated service reached the MyDisney login page without a renderer error. |
 
 The initial YouTube load uncovered an expected same-origin redirect reported by Chromium as `ERR_ABORTED (-3)`. The host now tolerates that code only when the replacement URL remains on the service's exact allowlist; other load failures still close the service and surface an error.
@@ -57,7 +57,8 @@ For each service:
 
 ## Current limitations
 
-- Commercial playback and session persistence are not yet verified because the preliminary run did not receive or store user credentials.
+- Netflix authentication persistence is verified through its profile chooser; playback is pending the user's profile choice. Disney+ authentication remains pending.
+- Google password plus phone verification did not produce a durable YouTube session. The host now records only a blocked navigation's service, event type, and origin so the allowlist can be evaluated without retaining tokenized URLs or account data. Google's supported television activation investigation is tracked in Issue #11.
 - macOS platform passkeys are unavailable in the unsigned feasibility build. Electron requires app-specific WebAuthn configuration plus a matching code-signing keychain entitlement, and its Touch ID credentials are device-bound rather than inherited from an existing browser. The shell shows Google's tested password fallback; Windows Hello remains part of the Windows 11 acceptance run. Production macOS support is tracked in Issue #9.
 - NHD-TV's built-in video-decode value reports Chromium capability, not proof that a particular frame was hardware-decoded. Confirm active use with Windows Task Manager's Video Decode engine.
 - The fullscreen bridge needs a clean retest after the user-controlled Netflix verification flow is complete.

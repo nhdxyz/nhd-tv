@@ -25,8 +25,7 @@
         <button class="nav-button nav-current" data-view-target="home" type="button" aria-current="page">
           Home
         </button>
-        <button class="nav-button" data-view-target="store" type="button">Store</button>
-        <button class="nav-button" data-view-target="settings" type="button">Settings</button>
+        <button class="nav-button" data-view-target="store" type="button">Apps</button>
       </nav>
 
       <div class="topbar-actions" data-nav-group="topbar">
@@ -37,6 +36,11 @@
         <button class="remote-chip" id="top-remote-button" type="button">
           <span class="remote-chip-dot" aria-hidden="true"></span>
           <span id="top-remote-label">Pair a phone</span>
+        </button>
+        <button class="settings-chip" data-view-target="settings" type="button" aria-label="Open settings">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19.4 13a7.8 7.8 0 0 0 .05-1 7.8 7.8 0 0 0-.05-1l2.08-1.62-2-3.46-2.47 1a7.4 7.4 0 0 0-1.72-1L14.92 3h-4l-.38 2.92a7.4 7.4 0 0 0-1.72 1l-2.47-1-2 3.46L6.43 11a7.8 7.8 0 0 0-.05 1 7.8 7.8 0 0 0 .05 1l-2.08 1.62 2 3.46 2.47-1a7.4 7.4 0 0 0 1.72 1l.38 2.92h4l.38-2.92a7.4 7.4 0 0 0 1.72-1l2.47 1 2-3.46L19.4 13Zm-6.48 2.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" />
+          </svg>
         </button>
         <button class="profile-chip" id="profile-button" type="button">
           <span class="profile-copy">
@@ -105,9 +109,9 @@
 
       <section class="app-view catalog-view" id="store-view" data-view="store" hidden>
         <header class="view-heading">
-          <p class="eyebrow">Service Store</p>
+          <p class="eyebrow">App Library</p>
           <h1>Build your lineup.</h1>
-          <p>Choose the services that belong on Home. Removing one keeps its local login and data.</p>
+          <p>Choose the apps that belong on Home. Experimental apps stay off your lineup until you add them.</p>
         </header>
 
         <section class="rail" aria-labelledby="catalog-title">

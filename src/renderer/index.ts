@@ -595,9 +595,9 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
     elements.featuredBrand.replaceChildren();
     elements.featuredIcon.replaceChildren();
     elements.featuredTitle.textContent = "Build your lineup.";
-    elements.featuredCopy.textContent = "Open the Store and choose which services belong on Home.";
+    elements.featuredCopy.textContent = "Open Apps and choose which services belong on Home.";
     elements.heroOpenButton.disabled = false;
-    elements.heroOpenButton.textContent = "Open Store";
+    elements.heroOpenButton.textContent = "Open Apps";
     return;
   }
 
@@ -629,7 +629,7 @@ function renderServiceViews(): void {
   if (enabledServices.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-lineup";
-    empty.textContent = "Your lineup is empty. Add a service from the Store.";
+    empty.textContent = "Your lineup is empty. Add a service from Apps.";
     elements.serviceActions.append(empty);
   }
 
@@ -731,7 +731,7 @@ function renderSearchResults(rawQuery: string): void {
 
   elements.searchResults.replaceChildren(...buttons);
   elements.searchResultCount.textContent = buttons.length === 0
-    ? "Add a searchable service from the Store"
+    ? "Add a searchable service from Apps"
     : `${buttons.length} ${buttons.length === 1 ? "service" : "services"}`;
 }
 
@@ -811,7 +811,9 @@ function showView(view: AppView): void {
     appView.hidden = appView.dataset.view !== view;
   }
 
-  for (const navButton of document.querySelectorAll<HTMLButtonElement>(".nav-button[data-view-target]")) {
+  for (const navButton of document.querySelectorAll<HTMLButtonElement>(
+    ".nav-button[data-view-target], .settings-chip[data-view-target]"
+  )) {
     const current = navButton.dataset.viewTarget === view;
     navButton.classList.toggle("nav-current", current);
 

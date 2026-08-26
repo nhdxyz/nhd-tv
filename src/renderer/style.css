@@ -134,7 +134,7 @@ summary:focus-visible {
   z-index: 50;
   top: 0;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   min-height: 5.4rem;
   padding: 1rem var(--safe-x);
@@ -149,6 +149,7 @@ summary:focus-visible {
   font-size: 1.02rem;
   font-weight: 900;
   letter-spacing: 0.12em;
+  justify-self: start;
 }
 
 .brand-mark,
@@ -172,6 +173,11 @@ summary:focus-visible {
   align-items: center;
   justify-self: center;
   gap: 0.15rem;
+  padding: 0.22rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 999px;
+  background: rgb(8 10 15 / 58%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
 }
 
 .nav-button {
@@ -203,6 +209,7 @@ summary:focus-visible {
 
 .search-chip,
 .remote-chip,
+.settings-chip,
 .profile-chip {
   display: inline-flex;
   align-items: center;
@@ -211,6 +218,29 @@ summary:focus-visible {
   border-radius: 999px;
   background: rgb(13 15 21 / 84%);
   backdrop-filter: blur(20px);
+}
+
+.settings-chip {
+  display: grid;
+  width: 2.9rem;
+  min-width: 2.9rem;
+  padding: 0;
+  place-items: center;
+  color: #cbd5e1;
+}
+
+.settings-chip svg {
+  width: 1.22rem;
+  height: 1.22rem;
+  fill: currentColor;
+}
+
+.settings-chip:hover,
+.settings-chip:focus-visible,
+.settings-chip.nav-current {
+  border-color: rgb(147 197 253 / 42%);
+  background: rgb(30 58 102 / 75%);
+  color: #fff;
 }
 
 .search-chip {
@@ -1799,6 +1829,17 @@ h2 {
 
   .profile-chip {
     padding-left: 0.28rem;
+  }
+
+  .search-chip {
+    width: 3.1rem;
+    min-width: 3.1rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .search-chip > span:last-child {
+    display: none;
   }
 
   .featured {

@@ -23,6 +23,7 @@ import {
   serviceConsumedBack,
   type ServiceBackState
 } from "./service-navigation";
+import { scoreSpatialCandidate } from "./spatial-navigation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: {
@@ -140,6 +141,7 @@ function shouldUseDomSpatialNavigation(
 function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
   return `(() => {
     const action = ${JSON.stringify(action)};
+    const scoreCandidate = (${scoreSpatialCandidate.toString()});
     const clearFocus = () => {
       document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
         element.removeAttribute('data-nhd-tv-focus');
@@ -167,7 +169,7 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       '[role="link"]',
       '[tabindex]:not([tabindex="-1"])'
     ].join(',');
-    const candidates = [...document.querySelectorAll(selectors)].filter((element) => {
+    let candidates = [...document.querySelectorAll(selectors)].filter((element) => {
       if (
         !(element instanceof HTMLElement) ||
         element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
@@ -189,6 +191,27 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
     }).filter((element, index, all) => !all.some((other, otherIndex) =>
       otherIndex < index && other.contains(element) && other.getBoundingClientRect().width === element.getBoundingClientRect().width
     ));
+
+    if (location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com')) {
+      const cardSelector = [
+        'ytd-rich-item-renderer',
+        'ytd-video-renderer',
+        'ytd-grid-video-renderer',
+        'ytd-compact-video-renderer',
+        'yt-lockup-view-model'
+      ].join(',');
+      const primaryCardTargets = new Set();
+      for (const card of document.querySelectorAll(cardSelector)) {
+        const target = card.querySelector(
+          'a#thumbnail[href], a[href^="/watch"], a[href^="/shorts/"]'
+        );
+        if (target instanceof HTMLElement) primaryCardTargets.add(target);
+      }
+      candidates = candidates.filter((element) => {
+        const card = element.closest(cardSelector);
+        return card === null || primaryCardTargets.has(element);
+      });
+    }
 
     if (candidates.length === 0) {
       clearFocus();
@@ -235,33 +258,13 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
     }
 
     const currentRect = current.getBoundingClientRect();
-    const currentX = currentRect.left + currentRect.width / 2;
-    const currentY = currentRect.top + currentRect.height / 2;
     let best = null;
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (const candidate of candidates) {
       if (candidate === current) continue;
       const rect = candidate.getBoundingClientRect();
-      const deltaX = rect.left + rect.width / 2 - currentX;
-      const deltaY = rect.top + rect.height / 2 - currentY;
-      const horizontal = action === 'left' || action === 'right';
-      const directional =
-        (action === 'left' && deltaX < -8) ||
-        (action === 'right' && deltaX > 8) ||
-        (action === 'up' && deltaY < -8) ||
-        (action === 'down' && deltaY > 8);
-      if (!directional) continue;
-
-      if (horizontal) {
-        const overlap = Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top);
-        const requiredOverlap = Math.min(currentRect.height, rect.height) * 0.3;
-        if (overlap < requiredOverlap) continue;
-      }
-
-      const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
-      const cross = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      const score = primary * 3 + cross;
+      const score = scoreCandidate(action, currentRect, rect);
       if (score < bestScore) {
         best = candidate;
         bestScore = score;

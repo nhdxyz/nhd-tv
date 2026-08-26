@@ -41,6 +41,8 @@ The current phone-remote slice starts an HTTP server on a random port only when 
 
 The first implementation uses small authenticated HTTP requests for commands rather than a persistent WebSocket. This keeps the exposed local surface narrow while retaining adequate D-pad latency; the normalized action layer allows the transport to change later without changing shell or service routing.
 
+The remote defaults to explicit arrows and offers a local swipe surface as an alternate input adapter. The phone reduces each completed gesture to one normalized cardinal or Select action; it does not stream raw pointer coordinates to NHD-TV or a service.
+
 The LAN page is deliberately served without microphone permission. Browser media capture is a secure-context capability, while the current QR address is plain HTTP on a private-network IP. Voice input therefore uses native iOS or Android keyboard dictation in the bounded Search field until NHD-TV has a trusted local HTTPS design.
 
 ## Service adapters

@@ -89,7 +89,7 @@ The desktop app exposes a local controller page and displays a QR code containin
 
 The first remote slice provides directional navigation, Select, Back, Home, and a single bounded Search field. It is session-only and requires television approval. Search text is delivered only to trusted main-process routing; it opens the active service's declared search destination or returns to the Home chooser. It cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback only after an action is accepted when the browser supports vibration.
 
-Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. Trackpad control remains a later capability.
+Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. The current optional swipe pad converts a tap or completed cardinal swipe into the same narrow actions as the arrow buttons; free cursor control and raw coordinate forwarding remain out of scope.
 
 ## Desktop behavior
 

@@ -61,4 +61,15 @@ describe("phone remote boundary", () => {
     expect(confirmation).toBeGreaterThan(commandRequest);
     expect(REMOTE_JS).toContain("navigator.vibrate(10)");
   });
+
+  it("keeps arrows as the default and offers bounded swipe navigation", () => {
+    expect(REMOTE_HTML).toContain('class="dpad"');
+    expect(REMOTE_HTML).toContain('id="swipe-pad"');
+    expect(REMOTE_HTML).toContain('id="control-mode"');
+    expect(REMOTE_JS).toContain("useSwipeMode(false)");
+    expect(REMOTE_JS).toContain("distance < 18");
+    expect(REMOTE_JS).toContain('void sendAction(action, swipePad)');
+    expect(REMOTE_JS).not.toContain("movementX");
+    expect(REMOTE_JS).not.toContain("movementY");
+  });
 });

@@ -26,6 +26,13 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
         </div>
 
+        <div class="swipe-pad" id="swipe-pad" role="button" tabindex="0" aria-label="Swipe to navigate and tap to select" hidden>
+          <span>Swipe to move</span>
+          <small>Tap to select</small>
+        </div>
+
+        <button class="control-mode" id="control-mode" type="button" disabled>Use swipe pad</button>
+
         <div class="system-actions">
           <button data-action="back" type="button" disabled>Back</button>
           <button data-action="home" type="button" disabled>NHD Home</button>
@@ -189,6 +196,41 @@ button {
 .dpad .select:not(:disabled).is-pressed span,
 .dpad .select:not(:disabled):active span { background: #fff; }
 
+.swipe-pad {
+  display: grid;
+  width: min(76vw, 16.5rem);
+  aspect-ratio: 1;
+  margin: 0 auto 0.85rem;
+  place-content: center;
+  border: 1px solid rgb(125 187 255 / 24%);
+  border-radius: 2rem;
+  outline: 0;
+  background:
+    radial-gradient(circle at center, rgb(96 165 250 / 18%), transparent 8rem),
+    linear-gradient(145deg, #202a3b, #111722);
+  color: #eaf2ff;
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+}
+.swipe-pad[hidden] { display: none; }
+.swipe-pad span { font-size: 1rem; font-weight: 900; }
+.swipe-pad small { margin-top: 0.35rem; color: #8491a6; font-size: 0.72rem; }
+.swipe-pad.is-pressed { border-color: #7dbbff; filter: brightness(1.16); transform: scale(0.985); }
+
+.control-mode {
+  width: 100%;
+  min-height: 2.65rem;
+  margin: 0 0 0.65rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.8rem;
+  background: rgb(255 255 255 / 5%);
+  color: #b9c4d4;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
 button:disabled { opacity: 0.3; }
 
 .system-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
@@ -281,8 +323,12 @@ export const REMOTE_JS = `(() => {
   const searchPanel = document.querySelector("#search-panel");
   const searchQuery = document.querySelector("#search-query");
   const searchSubmit = document.querySelector("#search-submit");
+  const dpad = document.querySelector(".dpad");
+  const swipePad = document.querySelector("#swipe-pad");
+  const controlMode = document.querySelector("#control-mode");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
+  let swipeStart = null;
 
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
     document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
@@ -302,6 +348,7 @@ export const REMOTE_JS = `(() => {
     buttons.forEach((button) => { button.disabled = !enabled; });
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
+    controlMode.disabled = !enabled;
   }
 
   function confirmCommand(button) {
@@ -411,6 +458,45 @@ export const REMOTE_JS = `(() => {
     }
   }
 
+  function useSwipeMode(enabled) {
+    dpad.hidden = enabled;
+    swipePad.hidden = !enabled;
+    controlMode.textContent = enabled ? "Use arrow buttons" : "Use swipe pad";
+  }
+
+  controlMode.addEventListener("click", () => useSwipeMode(!dpad.hidden));
+
+  swipePad.addEventListener("pointerdown", (event) => {
+    swipeStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    swipePad.setPointerCapture(event.pointerId);
+    swipePad.classList.add("is-pressed");
+  });
+  swipePad.addEventListener("pointercancel", () => {
+    swipeStart = null;
+    swipePad.classList.remove("is-pressed");
+  });
+  swipePad.addEventListener("pointerup", (event) => {
+    if (!swipeStart || swipeStart.id !== event.pointerId) return;
+    const x = event.clientX - swipeStart.x;
+    const y = event.clientY - swipeStart.y;
+    const distance = Math.hypot(x, y);
+    const action = distance < 18
+      ? "select"
+      : Math.abs(x) > Math.abs(y)
+        ? x < 0 ? "left" : "right"
+        : y < 0 ? "up" : "down";
+    swipeStart = null;
+    swipePad.classList.remove("is-pressed");
+    void sendAction(action, swipePad);
+  });
+  swipePad.addEventListener("keydown", (event) => {
+    const actions = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "select", " ": "select" };
+    const action = actions[event.key];
+    if (!action) return;
+    event.preventDefault();
+    void sendAction(action, swipePad);
+  });
+
   searchToggle.addEventListener("click", () => {
     if (searchToggle.disabled) return;
     searchPanel.hidden = !searchPanel.hidden;
@@ -433,5 +519,6 @@ export const REMOTE_JS = `(() => {
   });
 
   setEnabled(false);
+  useSwipeMode(false);
   beginPairing();
 })();`;

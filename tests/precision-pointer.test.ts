@@ -95,12 +95,15 @@ describe("precision pointer page boundary", () => {
       0.5,
       0.5,
       "move",
-      ['input[data-uia="search-box-input"]']
+      ['input[data-uia="search-box-input"]'],
+      ['button[data-uia="search-box-launcher"]']
     );
 
     expect(script).toContain("declaredTextEntrySelectors");
+    expect(script).toContain("declaredTextEntryTriggerSelectors");
     expect(script).toContain("search-box-input");
-    expect(script).toContain("textEntry: isDeclaredTextEntry(element)");
+    expect(script).toContain("search-box-launcher");
+    expect(script).toContain("isDeclaredTextEntry(element) || isDeclaredTextEntryTrigger(element)");
     expect(script).toContain("['search', 'text'].includes(editable.type)");
     expect(script).toContain("sensitiveBoundary(editable)");
     expect(script).toContain("password|payment|checkout|billing");

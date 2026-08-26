@@ -58,13 +58,15 @@ export function buildPrecisionPointerTargetScript(
   x: number,
   y: number,
   phase: RemotePointerInput["phase"] = "move",
-  remoteTextEntrySelectors: readonly string[] = []
+  remoteTextEntrySelectors: readonly string[] = [],
+  remoteTextEntryTriggerSelectors: readonly string[] = []
 ): string {
   return `(() => {
     const requestedX = Math.max(0, Math.min(1, ${JSON.stringify(x)})) * innerWidth;
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
     const phase = ${JSON.stringify(phase)};
     const declaredTextEntrySelectors = ${JSON.stringify(remoteTextEntrySelectors)};
+    const declaredTextEntryTriggerSelectors = ${JSON.stringify(remoteTextEntryTriggerSelectors)};
     const cursorId = 'nhd-tv-precision-cursor';
     const pointerState = globalThis.__nhdTvPrecisionPointer || {
       hideTimer: null,
@@ -154,7 +156,8 @@ export function buildPrecisionPointerTargetScript(
       '[role="button"]',
       '[role="link"]',
       '[tabindex]:not([tabindex="-1"])',
-      ...declaredTextEntrySelectors
+      ...declaredTextEntrySelectors,
+      ...declaredTextEntryTriggerSelectors
     ].join(',');
     const snapRadius = Math.max(52, Math.min(108, Math.min(innerWidth, innerHeight) * 0.1));
     const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
@@ -190,6 +193,13 @@ export function buildPrecisionPointerTargetScript(
         }
       });
     };
+    const isDeclaredTextEntryTrigger = (element) => declaredTextEntryTriggerSelectors.some((selector) => {
+      try {
+        return element.matches(selector) || element.closest(selector) !== null;
+      } catch {
+        return false;
+      }
+    });
     const blocked = (element) => {
       if (sensitiveBoundary(element)) return true;
       if (element.closest('input,textarea,select,[contenteditable="true"],[role="textbox"],[role="searchbox"]') !== null) {
@@ -354,7 +364,7 @@ export function buildPrecisionPointerTargetScript(
     return {
       key,
       snapped: true,
-      textEntry: isDeclaredTextEntry(element),
+      textEntry: isDeclaredTextEntry(element) || isDeclaredTextEntryTrigger(element),
       x: Math.round(Math.max(rect.left + 1, Math.min(rect.right - 1, requestedX))),
       y: Math.round(Math.max(rect.top + 1, Math.min(rect.bottom - 1, requestedY)))
     };
@@ -407,7 +417,8 @@ export async function dispatchPrecisionPointer(
   webContents: WebContents,
   input: RemotePointerInput,
   previousSnapKey: string | null,
-  remoteTextEntrySelectors: readonly string[] = []
+  remoteTextEntrySelectors: readonly string[] = [],
+  remoteTextEntryTriggerSelectors: readonly string[] = []
 ): Promise<PrecisionPointerDispatch> {
   if (input.phase === "hide") {
     await webContents.executeJavaScript(buildPrecisionPointerHideScript(), true);
@@ -419,7 +430,8 @@ export async function dispatchPrecisionPointer(
       input.x,
       input.y,
       input.phase,
-      remoteTextEntrySelectors
+      remoteTextEntrySelectors,
+      remoteTextEntryTriggerSelectors
     ),
     true
   ) as unknown;

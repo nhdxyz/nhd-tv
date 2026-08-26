@@ -16,6 +16,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-shaka-demo",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://shaka-project.github.io/shaka-player-release/demo/"],
     search: null,
     spatialNavigation: "native",
@@ -52,6 +53,10 @@ const services: readonly ServiceDefinition[] = [
       'input[type="search"]',
       'input[aria-label*="search" i]',
       'input[placeholder*="search" i]'
+    ],
+    remoteTextEntryTriggerSelectors: [
+      '[data-uia="search-box-launcher"]',
+      'button[aria-label="Search"]'
     ],
     rootUrls: ["https://www.netflix.com/browse"],
     search: {
@@ -95,6 +100,11 @@ const services: readonly ServiceDefinition[] = [
       "input#search",
       'input[name="search_query"]'
     ],
+    remoteTextEntryTriggerSelectors: [
+      'ytd-searchbox button[aria-label*="Search" i]',
+      'button#search-icon-legacy',
+      'button[aria-label="Search"]'
+    ],
     rootUrls: ["https://www.youtube.com/"],
     search: {
       baseUrl: "https://www.youtube.com/results",
@@ -122,6 +132,7 @@ const services: readonly ServiceDefinition[] = [
       ]
     },
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.disneyplus.com/home"],
     search: {
       baseUrl: "https://www.disneyplus.com/search",
@@ -143,6 +154,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-prime-video",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.primevideo.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -161,6 +173,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-hulu",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.hulu.com/", "https://www.hulu.com/welcome"],
     search: null,
     spatialNavigation: "dom",
@@ -179,6 +192,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-hbo-max",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://play.max.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -197,6 +211,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-peacock",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.peacocktv.com/", "https://www.peacocktv.com/unavailable"],
     search: null,
     spatialNavigation: "dom",
@@ -215,6 +230,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-paramount-plus",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.paramountplus.com/", "https://www.paramountplus.com/intl/"],
     search: null,
     spatialNavigation: "dom",
@@ -233,6 +249,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-apple-tv",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://tv.apple.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -251,6 +268,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-plex",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://app.plex.tv/desktop/"],
     search: null,
     spatialNavigation: "dom",
@@ -269,6 +287,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-twitch",
     playback: null,
     remoteTextEntrySelectors: [],
+    remoteTextEntryTriggerSelectors: [],
     rootUrls: ["https://www.twitch.tv/"],
     search: null,
     spatialNavigation: "dom",
@@ -317,6 +336,7 @@ export function setCustomServiceManifests(
       partition: `persist:service-${manifest.id}`,
       playback: null,
       remoteTextEntrySelectors: [],
+      remoteTextEntryTriggerSelectors: [],
       rootUrls: [manifest.startUrl],
       search: null,
       spatialNavigation: "dom",

@@ -17,6 +17,7 @@ export interface ServiceDefinition {
     titleSelectors: readonly string[];
   } | null;
   remoteTextEntrySelectors: readonly string[];
+  remoteTextEntryTriggerSelectors: readonly string[];
   rootUrls: readonly string[];
   search: {
     baseUrl: string;
@@ -280,7 +281,7 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
   }
 
   if (
-    definition.remoteTextEntrySelectors.some(
+    [...definition.remoteTextEntrySelectors, ...definition.remoteTextEntryTriggerSelectors].some(
       (selector) => selector.trim().length === 0 || selector.length > 200
     )
   ) {

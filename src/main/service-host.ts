@@ -28,7 +28,10 @@ import type {
   ServiceQuitRequest
 } from "./contracts";
 import { dispatchPrecisionPointer } from "./precision-pointer";
-import { buildRemoteTextEntryScript } from "./remote-text-entry";
+import {
+  buildRemoteTextEntryAvailabilityScript,
+  buildRemoteTextEntryScript
+} from "./remote-text-entry";
 import {
   serviceConsumedBack,
   type ServiceBackState
@@ -80,6 +83,7 @@ const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
+const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
 const SERVICE_FOCUS_STYLE = `
   html[data-nhd-tv-has-focus="true"]::after {
     position: fixed !important;
@@ -947,13 +951,43 @@ export class ServiceHost {
         view.webContents,
         input,
         this.#pointerSnapKey,
-        definition.remoteTextEntrySelectors
+        definition.remoteTextEntrySelectors,
+        definition.remoteTextEntryTriggerSelectors
       );
       this.#pointerSnapKey = result.snapKey;
+
+      let textEntryAvailable = result.textEntryAvailable;
+      if (
+        input.phase === "tap" &&
+        result.textEntryAvailable &&
+        definition.remoteTextEntrySelectors.length > 0
+      ) {
+        for (const delayMs of REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS) {
+          if (delayMs > 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+          }
+          if (
+            this.#view !== view ||
+            view.webContents.isDestroyed() ||
+            this.#quitPromptVisible
+          ) {
+            break;
+          }
+          const ready = await view.webContents.executeJavaScript(
+            buildRemoteTextEntryAvailabilityScript(definition.remoteTextEntrySelectors),
+            true
+          ) as unknown;
+          if (ready === true) {
+            textEntryAvailable = true;
+            break;
+          }
+        }
+      }
+
       return {
         snapChanged: result.snapChanged,
         snapped: result.snapped,
-        textEntryAvailable: result.textEntryAvailable
+        textEntryAvailable
       };
     } catch {
       this.#pointerSnapKey = null;

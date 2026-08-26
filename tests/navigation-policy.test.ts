@@ -31,6 +31,7 @@ const validDefinition: ServiceDefinition = {
     titleSelectors: ["h1"]
   },
   remoteTextEntrySelectors: ['input[type="search"]'],
+  remoteTextEntryTriggerSelectors: ['button[aria-label="Search"]'],
   rootUrls: ["https://example.com"],
   search: {
     baseUrl: "https://example.com/search",
@@ -162,6 +163,10 @@ describe("service navigation policy", () => {
     expect(() => assertValidServiceDefinition({
       ...validDefinition,
       remoteTextEntrySelectors: ["x".repeat(201)]
+    })).toThrow(/remote text-entry selectors/);
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      remoteTextEntryTriggerSelectors: [" "]
     })).toThrow(/remote text-entry selectors/);
   });
 });

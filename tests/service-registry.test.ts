@@ -65,11 +65,18 @@ describe("service registry", () => {
       "input#search",
       'input[name="search_query"]'
     ]);
+    expect(youtube?.remoteTextEntryTriggerSelectors).toContain(
+      'button#search-icon-legacy'
+    );
     expect(getServiceDefinition("netflix")?.remoteTextEntrySelectors).toEqual([
       'input[data-uia="search-box-input"]',
       'input[type="search"]',
       'input[aria-label*="search" i]',
       'input[placeholder*="search" i]'
+    ]);
+    expect(getServiceDefinition("netflix")?.remoteTextEntryTriggerSelectors).toEqual([
+      '[data-uia="search-box-launcher"]',
+      'button[aria-label="Search"]'
     ]);
   });
 
@@ -97,6 +104,7 @@ describe("service registry", () => {
       kind: "custom",
       playback: null,
       remoteTextEntrySelectors: [],
+      remoteTextEntryTriggerSelectors: [],
       search: null,
       startUrl: "https://watch.example.test/home"
     });

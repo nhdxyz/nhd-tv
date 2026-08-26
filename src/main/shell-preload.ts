@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   ContinueWatchingItem,
   HostStatus,
+  LocalAppState,
+  ProfilePreferences,
   RemoteAction,
   RemoteStatus,
   ServiceQuitRequest,
@@ -17,10 +19,12 @@ const IPC_CHANNELS = {
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
+  createProfile: "nhd:profile:create",
   denyRemotePairing: "nhd:remote:pairing:deny",
   getContinueWatching: "nhd:continue-watching:list",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
+  getLocalAppState: "nhd:local-state:get",
   getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
@@ -31,8 +35,10 @@ const IPC_CHANNELS = {
   removeContinueWatching: "nhd:continue-watching:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
+  selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
-  startRemotePairing: "nhd:remote:pairing:start"
+  startRemotePairing: "nhd:remote:pairing:start",
+  updateProfilePreferences: "nhd:profile:preferences:update"
 } as const;
 
 contextBridge.exposeInMainWorld("nhd", {
@@ -43,6 +49,8 @@ contextBridge.exposeInMainWorld("nhd", {
   closeService: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.closeService),
   confirmServiceQuit: (): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.confirmServiceQuit),
+  createProfile: (name: string): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.createProfile, name),
   denyRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.denyRemotePairing),
   getServices: (): Promise<readonly ServiceSummary[]> =>
@@ -50,6 +58,8 @@ contextBridge.exposeInMainWorld("nhd", {
   getContinueWatching: (): Promise<readonly ContinueWatchingItem[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.getContinueWatching),
   getHostStatus: (): Promise<HostStatus> => ipcRenderer.invoke(IPC_CHANNELS.getHostStatus),
+  getLocalAppState: (): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getLocalAppState),
   getRemoteStatus: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.getRemoteStatus),
   sendInputAction: (action: RemoteAction): Promise<boolean> =>
@@ -95,6 +105,10 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.resumeContinueWatching, itemId),
   searchService: (serviceId: string, query: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.searchService, serviceId, query),
+  selectProfile: (profileId: string): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.selectProfile, profileId),
   startRemotePairing: (): Promise<RemoteStatus> =>
-    ipcRenderer.invoke(IPC_CHANNELS.startRemotePairing)
+    ipcRenderer.invoke(IPC_CHANNELS.startRemotePairing),
+  updateProfilePreferences: (preferences: ProfilePreferences): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.updateProfilePreferences, preferences)
 });

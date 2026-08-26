@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, Settings, passive Continue Watching with cached artwork, federated service search, branded service rails, row-aware spatial focus, configurable navigation sounds, Xbox-style Gamepad API input, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, local profiles with separate lineups and viewing history, Settings, passive Continue Watching with cached artwork, federated service search, branded service rails, row-aware spatial focus, configurable navigation sounds, Xbox-style Gamepad API input, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 

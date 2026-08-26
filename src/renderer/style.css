@@ -1076,6 +1076,107 @@ h2 {
   line-height: 1.6;
 }
 
+.profile-dialog {
+  width: min(42rem, calc(100vw - 3rem));
+  padding: 0;
+  border: 0;
+  border-radius: 1.5rem;
+  background: transparent;
+  color: #fff;
+}
+
+.profile-dialog::backdrop {
+  background: rgb(0 0 0 / 76%);
+  backdrop-filter: blur(18px);
+}
+
+.profile-dialog-shell {
+  padding: 1.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1.5rem;
+  background: #10131b;
+  box-shadow: 0 2rem 8rem rgb(0 0 0 / 65%);
+}
+
+.profile-privacy {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.profile-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.profile-option {
+  display: flex;
+  min-height: 5.2rem;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 5%);
+  color: #fff;
+  text-align: left;
+}
+
+.profile-option[aria-current="true"] {
+  border-color: rgb(96 165 250 / 55%);
+  background: rgb(30 64 175 / 24%);
+}
+
+.profile-option .avatar {
+  flex: 0 0 auto;
+}
+
+.profile-option span:last-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.profile-option small {
+  color: var(--muted);
+}
+
+.profile-create-form {
+  margin-top: 1.35rem;
+}
+
+.profile-create-form label {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: #d5dbe5;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.profile-create-form > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+}
+
+.profile-create-form input {
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0 1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 0.8rem;
+  outline: 0;
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
+  font: inherit;
+}
+
+.profile-create-form input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 0.22rem rgb(59 130 246 / 20%);
+}
+
 .developer-panel {
   overflow: hidden;
 }

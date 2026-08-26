@@ -25,7 +25,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 2: Profiles, Store, and sessions
 
-- [ ] Local profiles and per-profile viewing history (#22)
+- [x] Local profile creation, switching, lineup preferences, and per-profile viewing history foundation (#22)
 - [x] Curated service catalog foundation
 - [x] Add and remove services without clearing sessions
 - [ ] Reorder and favorite services
@@ -39,7 +39,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Periodic, pause, navigation, exit, and window-shutdown checkpoints
 - [x] Observed completion rule
 - [x] Manual local removal
-- [ ] Per-profile history and persistent hide controls (#22)
+- [x] Per-profile history foundation (#22)
+- [ ] Profile rename/removal and persistent hide controls (#22)
 - [ ] Per-service adapter qualification tests (#18)
 - [x] Automated Netflix passive-observer qualification (#24)
 - [x] Resume through service-owned watch URLs

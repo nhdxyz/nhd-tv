@@ -1,4 +1,6 @@
 import path from "node:path";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, mkdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
   app,
@@ -15,14 +17,21 @@ import {
   REMOTE_ACTIONS,
   type HostStatus,
   type ContinueWatchingItem,
+  type LocalAppState,
+  type ProfilePreferences,
   type ProcessDiagnostics,
   type RemoteAction,
   type RemoteStatus,
   type WidevineState
 } from "./contracts";
 import { ContinueWatchingStore } from "./continue-watching-store";
+import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
-import { getServiceDefinition, getServiceSummaries } from "./service-registry";
+import {
+  getServiceDefinition,
+  getServiceDefinitions,
+  getServiceSummaries
+} from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
 import { resolveRemoteSearchDestination } from "./search-routing";
@@ -52,12 +61,49 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let continueWatchingStore: ContinueWatchingStore | null = null;
+let localStateStore: LocalStateStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
 const artworkRequests = new Set<string>();
+
+async function initializeContinueWatchingForProfile(
+  profileId: string,
+  migrateLegacy = false
+): Promise<void> {
+  const userDataPath = app.getPath("userData");
+  const profileDirectory = path.join(userDataPath, "profiles", profileId);
+  const profilePath = path.join(profileDirectory, "continue-watching.json");
+  await mkdir(profileDirectory, { recursive: true });
+
+  if (migrateLegacy) {
+    try {
+      await copyFile(
+        path.join(userDataPath, "continue-watching.json"),
+        profilePath,
+        fsConstants.COPYFILE_EXCL
+      );
+    } catch {
+      // A missing legacy file or an existing profile file needs no migration.
+    }
+  }
+
+  const nextStore = new ContinueWatchingStore(profilePath);
+  await nextStore.initialize();
+  continueWatchingStore = nextStore;
+}
+
+async function activateProfile(
+  operation: () => Promise<LocalAppState>
+): Promise<LocalAppState> {
+  await serviceHost?.closeWithCheckpoint();
+  const state = await operation();
+  await initializeContinueWatchingForProfile(state.activeProfileId);
+  publishContinueWatching();
+  return state;
+}
 
 type AppMetric = ReturnType<typeof app.getAppMetrics>[number];
 
@@ -310,6 +356,41 @@ function registerIpc(): void {
     return continueWatchingStore?.list() ?? [];
   });
 
+  ipcMain.handle(IPC_CHANNELS.getLocalAppState, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (localStateStore === null) {
+      throw new Error("Local profile state is not ready.");
+    }
+    return localStateStore.snapshot();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.createProfile, async (event, name: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (localStateStore === null) {
+      throw new Error("Local profile state is not ready.");
+    }
+    return activateProfile(() => localStateStore!.createProfile(name));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.selectProfile, async (event, profileId: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (localStateStore === null) {
+      throw new Error("Local profile state is not ready.");
+    }
+    return activateProfile(() => localStateStore!.selectProfile(profileId));
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.updateProfilePreferences,
+    (event, preferences: ProfilePreferences) => {
+      validateShellSender(event.senderFrame?.url ?? "");
+      if (localStateStore === null) {
+        throw new Error("Local profile state is not ready.");
+      }
+      return localStateStore.updatePreferences(preferences);
+    }
+  );
+
   ipcMain.handle(IPC_CHANNELS.getServices, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return getServiceSummaries();
@@ -560,10 +641,19 @@ async function createMainWindow(): Promise<void> {
 app.whenReady().then(async () => {
   registerShellProtocol();
   configureShellSession();
-  continueWatchingStore = new ContinueWatchingStore(
-    path.join(app.getPath("userData"), "continue-watching.json")
+  const serviceDefinitions = getServiceDefinitions();
+  localStateStore = new LocalStateStore(
+    path.join(app.getPath("userData"), "local-state.json"),
+    serviceDefinitions.map((service) => service.id),
+    serviceDefinitions
+      .filter((service) => service.kind === "commercial")
+      .map((service) => service.id)
   );
-  await continueWatchingStore.initialize();
+  await localStateStore.initialize();
+  await initializeContinueWatchingForProfile(
+    localStateStore.snapshot().activeProfileId,
+    true
+  );
   registerIpc();
 
   // ECS requires Widevine component initialization to finish before any

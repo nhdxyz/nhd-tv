@@ -62,7 +62,7 @@ The current Store foundation saves the enabled Home lineup locally. Removing an 
 
 NHD-TV profiles have separate preferences and local viewing history. Streaming-service sessions are shared across NHD-TV profiles initially, and each service retains its own account/profile selection experience. Isolated service accounts per NHD-TV profile can be added later.
 
-All profile information is stored locally in the first version.
+All profile information is stored locally in the first version. The current foundation supports creating and switching up to eight profiles. A profile switch checkpoints and closes the active service before replacing the lineup and Continue Watching view, preventing playback from being attributed to the wrong profile.
 
 ## Continue Watching
 

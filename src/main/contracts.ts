@@ -4,10 +4,12 @@ export const IPC_CHANNELS = {
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
+  createProfile: "nhd:profile:create",
   denyRemotePairing: "nhd:remote:pairing:deny",
   getContinueWatching: "nhd:continue-watching:list",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
+  getLocalAppState: "nhd:local-state:get",
   getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
@@ -18,8 +20,10 @@ export const IPC_CHANNELS = {
   removeContinueWatching: "nhd:continue-watching:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
+  selectProfile: "nhd:profile:select",
   serviceQuitRequested: "nhd:service:quit:requested",
-  startRemotePairing: "nhd:remote:pairing:start"
+  startRemotePairing: "nhd:remote:pairing:start",
+  updateProfilePreferences: "nhd:profile:preferences:update"
 } as const;
 
 export const REMOTE_ACTIONS = [

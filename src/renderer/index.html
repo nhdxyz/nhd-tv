@@ -41,9 +41,9 @@
         <button class="profile-chip" id="profile-button" type="button">
           <span class="profile-copy">
             <span class="profile-label">Watching as</span>
-            <span>Local profile</span>
+            <span id="profile-name">Local profile</span>
           </span>
-          <span class="avatar" aria-hidden="true">N</span>
+          <span class="avatar" id="profile-avatar" aria-hidden="true">L</span>
         </button>
       </div>
     </header>
@@ -161,7 +161,7 @@
             <span class="settings-icon" aria-hidden="true">◎</span>
             <span>
               <strong>Local profile</strong>
-              <small>Profile isolation is the next data milestone</small>
+              <small id="profile-card-copy">Separate lineup and viewing history</small>
             </span>
           </button>
         </section>
@@ -253,6 +253,27 @@
         <button class="primary-action remote-start" id="remote-start" type="button">
           Create pairing code
         </button>
+      </div>
+    </dialog>
+
+    <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+      <div class="profile-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Local profiles</p>
+            <h2 id="profile-title">Who is watching?</h2>
+          </div>
+          <button class="dialog-close" id="profile-close" type="button" aria-label="Close profiles">×</button>
+        </header>
+        <p class="profile-privacy">Each profile has its own lineup and Continue Watching history. Streaming-service sign-ins remain shared on this computer.</p>
+        <div class="profile-list" id="profile-list" data-nav-group="profile-list"></div>
+        <form class="profile-create-form" id="profile-create-form">
+          <label for="profile-create-name">Add a profile</label>
+          <div>
+            <input id="profile-create-name" maxlength="32" autocomplete="off" placeholder="Profile name" required />
+            <button class="primary-action" type="submit">Create</button>
+          </div>
+        </form>
       </div>
     </dialog>
 

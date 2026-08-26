@@ -2,6 +2,7 @@ import "./style.css";
 import type {
   ContinueWatchingItem,
   HostStatus,
+  LocalAppState,
   RemoteAction,
   RemoteStatus,
   ServiceSummary
@@ -15,8 +16,6 @@ import {
 } from "./spatial-navigation";
 
 type AppView = "home" | "settings" | "store";
-
-const ENABLED_SERVICES_KEY = "nhd-enabled-services-v1";
 
 function requireElement<T>(selector: string, name: string): T {
   const element = document.querySelector(selector);
@@ -44,6 +43,14 @@ const elements = {
   healthPill: requireElement<HTMLSpanElement>("#health-pill", "health-pill"),
   heroOpenButton: requireElement<HTMLButtonElement>("#hero-open", "hero-open"),
   lineupCount: requireElement<HTMLSpanElement>("#lineup-count", "lineup-count"),
+  profileAvatar: requireElement<HTMLSpanElement>("#profile-avatar", "profile-avatar"),
+  profileCardCopy: requireElement<HTMLElement>("#profile-card-copy", "profile-card-copy"),
+  profileClose: requireElement<HTMLButtonElement>("#profile-close", "profile-close"),
+  profileCreateForm: requireElement<HTMLFormElement>("#profile-create-form", "profile-create-form"),
+  profileCreateName: requireElement<HTMLInputElement>("#profile-create-name", "profile-create-name"),
+  profileDialog: requireElement<HTMLDialogElement>("#profile-dialog", "profile-dialog"),
+  profileList: requireElement<HTMLDivElement>("#profile-list", "profile-list"),
+  profileName: requireElement<HTMLSpanElement>("#profile-name", "profile-name"),
   quitCancel: requireElement<HTMLButtonElement>("#quit-cancel", "quit-cancel"),
   quitConfirm: requireElement<HTMLButtonElement>("#quit-confirm", "quit-confirm"),
   quitCopy: requireElement<HTMLParagraphElement>("#quit-copy", "quit-copy"),
@@ -87,7 +94,10 @@ let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
 let featuredServiceId: string | null = null;
+let favoriteServiceIds = new Set<string>();
+let localAppState: LocalAppState | null = null;
 let remoteFocusedElement: HTMLElement | null = null;
+let serviceOrder: string[] = [];
 let services: readonly ServiceSummary[] = [];
 
 function showFeedback(message: string): void {
@@ -143,35 +153,25 @@ async function refreshStatus(): Promise<void> {
   renderStatus(await window.nhd.getHostStatus());
 }
 
-function loadEnabledServices(allServices: readonly ServiceSummary[]): Set<string> {
-  try {
-    const saved = window.localStorage.getItem(ENABLED_SERVICES_KEY);
+function applyLocalAppState(state: LocalAppState): void {
+  localAppState = state;
+  enabledServiceIds = new Set(state.preferences.enabledServiceIds);
+  favoriteServiceIds = new Set(state.preferences.favoriteServiceIds);
+  serviceOrder = [...state.preferences.serviceOrder];
 
-    if (saved !== null) {
-      const parsed: unknown = JSON.parse(saved);
-
-      if (Array.isArray(parsed)) {
-        const knownIds = new Set(allServices.map((service) => service.id));
-        return new Set(parsed.filter((id): id is string => typeof id === "string" && knownIds.has(id)));
-      }
-    }
-  } catch {
-    // A malformed local preference should fall back to the curated lineup.
-  }
-
-  return new Set(
-    allServices
-      .filter((service) => service.kind === "commercial")
-      .map((service) => service.id)
-  );
+  const activeProfile = state.profiles.find((profile) => profile.id === state.activeProfileId);
+  const name = activeProfile?.name ?? "Local profile";
+  elements.profileName.textContent = name;
+  elements.profileAvatar.textContent = name.slice(0, 1).toUpperCase();
+  elements.profileCardCopy.textContent = `${name} · separate lineup and viewing history`;
 }
 
-function saveEnabledServices(): void {
-  try {
-    window.localStorage.setItem(ENABLED_SERVICES_KEY, JSON.stringify([...enabledServiceIds]));
-  } catch {
-    showFeedback("NHD-TV could not save the lineup on this computer.");
-  }
+async function saveProfilePreferences(): Promise<void> {
+  applyLocalAppState(await window.nhd.updateProfilePreferences({
+    enabledServiceIds: [...enabledServiceIds],
+    favoriteServiceIds: [...favoriteServiceIds],
+    serviceOrder
+  }));
 }
 
 function playbackTime(seconds: number): string {
@@ -384,17 +384,28 @@ function storeCard(service: ServiceSummary): HTMLButtonElement {
   footer.append(action);
 
   button.append(top, copy, footer);
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     if (enabledServiceIds.has(service.id)) {
       enabledServiceIds.delete(service.id);
+      favoriteServiceIds.delete(service.id);
+      serviceOrder = serviceOrder.filter((id) => id !== service.id);
       showFeedback(`${service.name} removed from Home. Its local session was kept.`);
     } else {
       enabledServiceIds.add(service.id);
+      serviceOrder.push(service.id);
       showFeedback(`${service.name} added to Home.`);
     }
 
-    saveEnabledServices();
-    renderServiceViews();
+    try {
+      await saveProfilePreferences();
+      renderServiceViews();
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : String(error));
+      if (localAppState !== null) {
+        applyLocalAppState(localAppState);
+      }
+      renderServiceViews();
+    }
   });
   return button;
 }
@@ -425,7 +436,16 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
 }
 
 function renderServiceViews(): void {
-  const enabledServices = services.filter((service) => enabledServiceIds.has(service.id));
+  const orderIndex = new Map(serviceOrder.map((id, index) => [id, index]));
+  const enabledServices = services
+    .filter((service) => enabledServiceIds.has(service.id))
+    .sort((left, right) => {
+      const favoriteDifference = Number(favoriteServiceIds.has(right.id)) -
+        Number(favoriteServiceIds.has(left.id));
+      return favoriteDifference ||
+        (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+          (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
+    });
   elements.serviceActions.replaceChildren(...enabledServices.map(serviceTile));
   elements.storeActions.replaceChildren(...services.map(storeCard));
   elements.lineupCount.textContent = `${enabledServices.length} of ${services.length} on Home`;
@@ -525,8 +545,12 @@ elements.searchDialog.addEventListener("cancel", (event) => {
 });
 
 async function initializeServices(): Promise<void> {
-  services = await window.nhd.getServices();
-  enabledServiceIds = loadEnabledServices(services);
+  const [availableServices, state] = await Promise.all([
+    window.nhd.getServices(),
+    window.nhd.getLocalAppState()
+  ]);
+  services = availableServices;
+  applyLocalAppState(state);
   renderServiceViews();
 }
 
@@ -575,11 +599,90 @@ elements.heroOpenButton.addEventListener("click", () => {
   }
 });
 
-for (const selector of ["#profile-button", "#profile-card"]) {
-  requireElement<HTMLButtonElement>(selector, selector).addEventListener("click", () => {
-    showFeedback("Separate local profiles and service partitions are the next data milestone.");
+function renderProfileDialog(): void {
+  if (localAppState === null) {
+    return;
+  }
+
+  const buttons = localAppState.profiles.map((profile) => {
+    const button = document.createElement("button");
+    button.className = "profile-option";
+    button.type = "button";
+    button.setAttribute("aria-current", String(profile.id === localAppState?.activeProfileId));
+
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.textContent = profile.name.slice(0, 1).toUpperCase();
+    avatar.setAttribute("aria-hidden", "true");
+    const copy = document.createElement("span");
+    const name = document.createElement("strong");
+    name.textContent = profile.name;
+    const detail = document.createElement("small");
+    detail.textContent = profile.id === localAppState?.activeProfileId ? "Currently watching" : "Switch profile";
+    copy.append(name, detail);
+    button.append(avatar, copy);
+    button.addEventListener("click", async () => {
+      if (profile.id === localAppState?.activeProfileId) {
+        elements.profileDialog.close();
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        applyLocalAppState(await window.nhd.selectProfile(profile.id));
+        continueWatchingItems = await window.nhd.getContinueWatching();
+        renderServiceViews();
+        renderProfileDialog();
+        showFeedback(`Switched to ${profile.name}.`);
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : String(error));
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return button;
   });
+  elements.profileList.replaceChildren(...buttons);
 }
+
+function openProfileDialog(): void {
+  renderProfileDialog();
+  elements.profileDialog.showModal();
+  elements.profileList.querySelector<HTMLButtonElement>('[aria-current="true"]')?.focus();
+}
+
+for (const selector of ["#profile-button", "#profile-card"]) {
+  requireElement<HTMLButtonElement>(selector, selector).addEventListener("click", openProfileDialog);
+}
+
+elements.profileClose.addEventListener("click", () => elements.profileDialog.close());
+elements.profileDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  elements.profileDialog.close();
+});
+elements.profileCreateForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = elements.profileCreateForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit !== null) {
+    submit.disabled = true;
+  }
+
+  try {
+    const state = await window.nhd.createProfile(elements.profileCreateName.value);
+    applyLocalAppState(state);
+    continueWatchingItems = await window.nhd.getContinueWatching();
+    elements.profileCreateName.value = "";
+    renderServiceViews();
+    renderProfileDialog();
+    showFeedback(`Created ${state.profiles.find((profile) => profile.id === state.activeProfileId)?.name ?? "profile"}.`);
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (submit !== null) {
+      submit.disabled = false;
+    }
+  }
+});
 
 function remoteExpiryCopy(expiresAt: number | null): string {
   if (expiresAt === null) {
@@ -711,6 +814,10 @@ function activeNavigationScope(): ParentNode {
     return elements.remoteDialog;
   }
 
+  if (elements.profileDialog.open) {
+    return elements.profileDialog;
+  }
+
   if (elements.searchDialog.open) {
     return elements.searchDialog;
   }
@@ -771,6 +878,10 @@ function returnHome(remote = false): void {
     elements.remoteDialog.close();
   }
 
+  if (elements.profileDialog.open) {
+    elements.profileDialog.close();
+  }
+
   if (elements.searchDialog.open) {
     elements.searchDialog.close();
   }
@@ -807,6 +918,9 @@ document.addEventListener("keydown", (event) => {
 
   if (elements.remoteDialog.open) {
     elements.remoteDialog.close();
+    event.preventDefault();
+  } else if (elements.profileDialog.open) {
+    elements.profileDialog.close();
     event.preventDefault();
   } else if (elements.quitDialog.open) {
     elements.quitCancel.click();
@@ -850,6 +964,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
   if (action === "back") {
     if (elements.remoteDialog.open) {
       elements.remoteDialog.close();
+      return;
+    }
+
+    if (elements.profileDialog.open) {
+      elements.profileDialog.close();
       return;
     }
 

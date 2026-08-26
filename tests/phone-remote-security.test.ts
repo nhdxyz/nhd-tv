@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { remotePostHeadersAreAllowed } from "../src/main/remote/phone-remote-server";
 import {
+  precisionEdgeScroll,
   REMOTE_CSS,
   REMOTE_HTML,
-  REMOTE_JS
+  REMOTE_JS,
+  smoothPrecisionCoordinate
 } from "../src/main/remote/remote-assets";
 
 describe("phone remote boundary", () => {
@@ -89,17 +91,36 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('id="control-mode"');
     expect(REMOTE_CSS).toContain('.dpad[hidden] { display: none; }');
     expect(REMOTE_JS).toContain("usePrecisionMode(false)");
-    expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 40");
+    expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 32");
     expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');
-    expect(REMOTE_JS).toContain('queuePointer(pointerInput(event, "move", 0), true)');
+    expect(REMOTE_JS).toContain('queuePointer(pointerInput(point, "move", 0), true)');
     expect(REMOTE_JS).toContain("distance < 24 && elapsed < 650");
-    expect(REMOTE_JS).toContain("normalizedY < 0.12 && verticalDelta < 0");
-    expect(REMOTE_JS).toContain("normalizedY > 0.88 && verticalDelta > 0");
+    expect(REMOTE_JS).toContain("edgeScroll(rawPoint.y, verticalDelta)");
+    expect(REMOTE_JS).toContain("smoothCoordinate(pointerGesture.point.x, rawPoint.x)");
+    expect(REMOTE_JS).toContain("event.getCoalescedEvents");
+    expect(REMOTE_JS).toContain("clearTimeout(pointerFlushTimer)");
+    expect(REMOTE_JS).toContain("event.isPrimary === false");
     expect(REMOTE_JS).toContain('queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true)');
     expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
-    expect(REMOTE_JS).toContain('precisionGuideX.style.top = (y * 100) + "%"');
+    expect(REMOTE_JS).toContain('precisionGuideX.style.top = (point.y * 100) + "%"');
     expect(REMOTE_JS).not.toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
     expect(REMOTE_JS).not.toContain("movementY");
+  });
+
+  it("smooths small pointer jitter while keeping large movement responsive", () => {
+    expect(smoothPrecisionCoordinate(0.5, 0.5005)).toBe(0.5);
+    expect(smoothPrecisionCoordinate(0.5, 0.52)).toBeCloseTo(0.5092);
+    expect(smoothPrecisionCoordinate(0.1, 0.3)).toBeCloseTo(0.264);
+    expect(smoothPrecisionCoordinate(0.98, 1.4)).toBe(1);
+  });
+
+  it("scales edge scrolling with deliberate movement and preserves direction", () => {
+    expect(precisionEdgeScroll(0.5, 12)).toBe(0);
+    expect(precisionEdgeScroll(0.05, 8)).toBe(0);
+    expect(precisionEdgeScroll(0.05, -1)).toBe(0);
+    expect(precisionEdgeScroll(0.05, -3)).toBe(-0.17);
+    expect(precisionEdgeScroll(0.95, 9)).toBe(0.5);
+    expect(precisionEdgeScroll(0.95, 30)).toBe(1);
   });
 });

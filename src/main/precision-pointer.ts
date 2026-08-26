@@ -36,36 +36,40 @@ export function buildPrecisionPointerTargetScript(
       cursor.id = cursorId;
       cursor.dataset.nhdTvOwned = 'true';
       cursor.setAttribute('aria-hidden', 'true');
+      cursor.style.cssText = [
+        'position:fixed !important',
+        'z-index:2147483647 !important',
+        'width:18px !important',
+        'height:18px !important',
+        'margin:0 !important',
+        'padding:0 !important',
+        'border:2px solid rgba(255,255,255,.96) !important',
+        'border-radius:999px !important',
+        'background:radial-gradient(circle at center,#fff 0 15%,#7dd3fc 18%,#1685ff 68%) !important',
+        'box-shadow:0 0 0 6px rgba(22,133,255,.22),0 0 24px 9px rgba(37,99,235,.62) !important',
+        'pointer-events:none !important',
+        'transform:translate(-50%,-50%) !important',
+        'transition:left 48ms linear,top 48ms linear,width 80ms ease,height 80ms ease,box-shadow 80ms ease !important',
+        'will-change:left,top !important'
+      ].join(';');
     }
-    cursor.style.cssText = [
-      'position:fixed !important',
-      'z-index:2147483647 !important',
-      'width:18px !important',
-      'height:18px !important',
-      'margin:0 !important',
-      'padding:0 !important',
-      'border:2px solid rgba(255,255,255,.96) !important',
-      'border-radius:999px !important',
-      'background:radial-gradient(circle at center,#fff 0 15%,#7dd3fc 18%,#1685ff 68%) !important',
-      'box-shadow:0 0 0 6px rgba(22,133,255,.22),0 0 24px 9px rgba(37,99,235,.62) !important',
-      'pointer-events:none !important',
-      'transform:translate(-50%,-50%) !important',
-      'transition:width 80ms ease,height 80ms ease,box-shadow 80ms ease !important'
-    ].join(';');
     cursor.style.setProperty('left', requestedX + 'px', 'important');
     cursor.style.setProperty('top', requestedY + 'px', 'important');
     const cursorHost = document.fullscreenElement instanceof HTMLElement
       ? document.fullscreenElement
       : document.documentElement;
-    cursorHost.append(cursor);
+    if (cursor.parentElement !== cursorHost) {
+      cursorHost.append(cursor);
+    }
     const setCursorSnapped = (snapped) => {
       cursor.dataset.nhdTvSnapped = String(snapped);
-      if (!snapped) return;
-      cursor.style.setProperty('width', '22px', 'important');
-      cursor.style.setProperty('height', '22px', 'important');
+      cursor.style.setProperty('width', snapped ? '22px' : '18px', 'important');
+      cursor.style.setProperty('height', snapped ? '22px' : '18px', 'important');
       cursor.style.setProperty(
         'box-shadow',
-        '0 0 0 7px rgba(34,211,238,.26),0 0 30px 11px rgba(14,165,233,.76)',
+        snapped
+          ? '0 0 0 7px rgba(34,211,238,.26),0 0 30px 11px rgba(14,165,233,.76)'
+          : '0 0 0 6px rgba(22,133,255,.22),0 0 24px 9px rgba(37,99,235,.62)',
         'important'
       );
     };
@@ -157,16 +161,31 @@ export function buildPrecisionPointerTargetScript(
       .filter((candidate) => candidate.distance <= snapRadius)
       .sort((left, right) => left.score - right.score)[0];
 
-    if (
-      nearest === undefined &&
-      phase === 'tap' &&
-      previousTarget instanceof HTMLElement &&
-      isCandidate(previousTarget)
-    ) {
+    if (previousTarget instanceof HTMLElement && isCandidate(previousTarget)) {
       const rect = previousTarget.getBoundingClientRect();
       const distance = distanceTo(rect);
-      if (distance <= snapRadius * 1.4) {
-        nearest = { distance, element: previousTarget, rect, score: distance };
+      const centerDistance = Math.hypot(
+        rect.left + rect.width / 2 - requestedX,
+        rect.top + rect.height / 2 - requestedY
+      );
+      const previous = {
+        distance,
+        element: previousTarget,
+        rect,
+        score: distance + centerDistance * 0.025
+      };
+      const retainForTap = phase === 'tap' && distance <= snapRadius * 1.4 && (
+        nearest === undefined ||
+        nearest.element === previousTarget ||
+        (distance <= 28 && nearest.distance > 0)
+      );
+      const retainForMove = phase === 'move' && distance <= 28 && (
+        nearest === undefined ||
+        nearest.element === previousTarget ||
+        (nearest.distance > 0 && previous.score <= nearest.score + 18)
+      );
+      if (retainForTap || retainForMove) {
+        nearest = previous;
       }
     }
 
@@ -200,7 +219,6 @@ export function buildPrecisionPointerTargetScript(
     }
     element.dataset.nhdTvFocus = 'true';
     element.dataset.remoteFocused = 'true';
-    element.focus({ preventScroll: true });
     const overlayRect = youtube
       ? element.closest(cardSelector)?.getBoundingClientRect() || rect
       : rect;

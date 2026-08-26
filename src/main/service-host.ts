@@ -100,6 +100,7 @@ const SERVICE_FOCUS_STYLE = `
     pointer-events: none !important;
     transform: scale(1.025) !important;
     transform-origin: center !important;
+    transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out !important;
   }
 `;
 

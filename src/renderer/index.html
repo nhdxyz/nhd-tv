@@ -25,7 +25,8 @@
         <button class="nav-button nav-current" data-view-target="home" type="button" aria-current="page">
           Home
         </button>
-        <button class="nav-button" data-view-target="store" type="button">Apps</button>
+        <button class="nav-button" data-view-target="apps" type="button">Apps</button>
+        <button class="nav-button" data-view-target="store" type="button">Store</button>
       </nav>
 
       <div class="topbar-actions" data-nav-group="topbar">
@@ -67,7 +68,7 @@
               <button class="primary-action" id="hero-open" type="button" disabled>
                 Loading services…
               </button>
-              <button class="secondary-action" data-view-target="store" type="button">
+              <button class="secondary-action" data-view-target="apps" type="button">
                 Edit lineup
               </button>
             </div>
@@ -101,28 +102,48 @@
         <section class="rail services-rail" aria-labelledby="services-title">
           <div class="section-heading">
             <h2 id="services-title">Your Apps</h2>
-            <button class="text-action" data-view-target="store" type="button">Manage</button>
+            <button class="text-action" data-view-target="apps" type="button">Manage</button>
           </div>
           <div class="service-row horizontal-row" id="service-actions" data-nav-group="home-services"></div>
         </section>
       </section>
 
-      <section class="app-view catalog-view" id="store-view" data-view="store" hidden>
+      <section class="app-view catalog-view" id="apps-view" data-view="apps" hidden>
         <header class="view-heading">
-          <p class="eyebrow">App Library</p>
-          <h1>Build your lineup.</h1>
-          <p>Choose the apps that belong on Home. Experimental apps stay off your lineup until you add them.</p>
+          <p class="eyebrow">Your Apps</p>
+          <h1>Everything you added.</h1>
+          <p>Open an app or use its Manage button to change favorites, order, or local sign-in data.</p>
         </header>
 
-        <section class="rail" aria-labelledby="catalog-title">
+        <section class="rail" aria-labelledby="apps-title">
           <div class="section-heading">
-            <h2 id="catalog-title">Core apps</h2>
-            <span class="section-hint" id="lineup-count">Loading catalog…</span>
+            <h2 id="apps-title">Installed apps</h2>
+            <span class="section-hint" id="lineup-count">Loading apps…</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="apps-actions" data-nav-group="installed-apps"></div>
+        </section>
+      </section>
+
+      <section class="app-view catalog-view" id="store-view" data-view="store" hidden>
+        <header class="view-heading">
+          <p class="eyebrow">App Store</p>
+          <h1>Find your services.</h1>
+          <p>Search apps you have not added yet, then add only the ones you use.</p>
+          <label class="store-search" for="store-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="store-search" type="search" maxlength="60" autocomplete="off" placeholder="Search available apps" />
+          </label>
+        </header>
+
+        <section class="rail" id="store-core-section" aria-labelledby="catalog-title">
+          <div class="section-heading">
+            <h2 id="catalog-title">Available apps</h2>
+            <span class="section-hint">Ready to add</span>
           </div>
           <div class="catalog-row horizontal-row" id="store-actions" data-nav-group="store-services"></div>
         </section>
 
-        <section class="rail catalog-tier" aria-labelledby="experimental-catalog-title">
+        <section class="rail catalog-tier" id="store-experimental-section" aria-labelledby="experimental-catalog-title">
           <div class="section-heading">
             <h2 id="experimental-catalog-title">More apps to try</h2>
             <span class="section-hint">Experimental · login and playback testing remains</span>
@@ -130,13 +151,18 @@
           <div class="catalog-row horizontal-row" id="experimental-store-actions" data-nav-group="experimental-store-services"></div>
         </section>
 
-        <section class="rail catalog-tier" aria-labelledby="utility-catalog-title">
+        <section class="rail catalog-tier" id="store-utility-section" aria-labelledby="utility-catalog-title">
           <div class="section-heading">
             <h2 id="utility-catalog-title">Custom & diagnostics</h2>
             <span class="section-hint">Advanced tools</span>
           </div>
           <div class="catalog-row horizontal-row" id="utility-store-actions" data-nav-group="utility-store-services"></div>
         </section>
+
+        <div class="store-empty" id="store-empty" hidden>
+          <strong>No available apps match that search.</strong>
+          <span>Try another name, or add a trusted custom app below.</span>
+        </div>
 
         <section class="store-note" aria-label="Custom services">
           <div class="store-note-icon" aria-hidden="true">＋</div>
@@ -309,6 +335,34 @@
         <button class="primary-action remote-start" id="remote-start" type="button">
           Create pairing code
         </button>
+      </div>
+    </dialog>
+
+    <dialog class="app-manage-dialog" id="app-manage-dialog" aria-labelledby="app-manage-title">
+      <div class="app-manage-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Manage app</p>
+            <h2 id="app-manage-title">App settings</h2>
+          </div>
+          <button class="dialog-close" id="app-manage-close" type="button" aria-label="Close app settings">×</button>
+        </header>
+        <div class="app-manage-summary">
+          <div class="app-manage-brand" id="app-manage-brand" aria-hidden="true"></div>
+          <div>
+            <strong id="app-manage-name"></strong>
+            <span id="app-manage-status"></span>
+          </div>
+        </div>
+        <div class="app-manage-actions" data-nav-group="app-manage-actions">
+          <button class="primary-action" id="app-manage-open" type="button">Open app</button>
+          <button class="secondary-action" id="app-manage-favorite" type="button">Favorite</button>
+          <button class="secondary-action" id="app-manage-earlier" type="button">Move earlier</button>
+          <button class="secondary-action" id="app-manage-later" type="button">Move later</button>
+          <button class="secondary-action" id="app-manage-remove" type="button">Remove from Apps</button>
+          <button class="danger-secondary-action" id="app-manage-clear" type="button">Clear sign-in data</button>
+          <button class="danger-action" id="app-manage-delete" type="button" hidden>Delete custom app</button>
+        </div>
       </div>
     </dialog>
 

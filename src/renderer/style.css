@@ -560,6 +560,38 @@ summary:focus-visible {
   margin-bottom: 1rem;
 }
 
+.rail-scroll-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.rail-scroll-button {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 50%;
+  background: rgb(17 21 30 / 92%);
+  color: #fff;
+  box-shadow: 0 0.7rem 1.8rem rgb(0 0 0 / 24%);
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.rail-scroll-button:hover,
+.rail-scroll-button:focus-visible {
+  border-color: rgb(147 197 253 / 52%);
+  background: rgb(30 58 102 / 90%);
+}
+
+.rail-scroll-button:disabled {
+  cursor: default;
+  opacity: 0.26;
+}
+
 h2 {
   margin: 0;
   font-size: clamp(1.35rem, 2vw, 1.9rem);
@@ -1074,6 +1106,43 @@ h2 {
   line-height: 1.6;
 }
 
+.store-search {
+  display: grid;
+  width: min(100%, 42rem);
+  min-height: 4.4rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.7rem;
+  padding: 0 1.2rem;
+  border: 1px solid rgb(147 197 253 / 24%);
+  border-radius: 1.15rem;
+  background: rgb(10 14 22 / 88%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
+  color: #93c5fd;
+  font-size: 1.45rem;
+}
+
+.store-search:focus-within {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 0.24rem rgb(59 130 246 / 18%);
+}
+
+.store-search input {
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 1.1rem;
+}
+
+.store-search input::placeholder {
+  color: #788396;
+}
+
 .catalog-view .rail {
   margin-top: 3.5rem;
 }
@@ -1093,9 +1162,33 @@ h2 {
 }
 
 .catalog-card-shell {
+  position: relative;
   width: clamp(19rem, 25vw, 27rem);
   min-width: clamp(19rem, 25vw, 27rem);
   scroll-snap-align: start;
+}
+
+.app-manage-button {
+  position: absolute;
+  z-index: 6;
+  top: 0.9rem;
+  left: 0.9rem;
+  min-height: 2.3rem;
+  padding: 0 0.75rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(4 7 12 / 74%);
+  color: #e2e8f0;
+  backdrop-filter: blur(10px);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.app-manage-button:hover,
+.app-manage-button:focus-visible {
+  border-color: rgb(147 197 253 / 62%);
+  background: rgb(30 58 102 / 92%);
+  color: #fff;
 }
 
 .catalog-card-controls {
@@ -1228,6 +1321,21 @@ h2 {
   border: 1px solid var(--stroke);
   border-radius: 1.2rem;
   background: var(--panel);
+}
+
+.store-empty {
+  display: grid;
+  max-width: 42rem;
+  gap: 0.35rem;
+  margin-top: 3rem;
+  padding: 1.4rem;
+  border: 1px dashed rgb(255 255 255 / 18%);
+  border-radius: 1.1rem;
+  background: rgb(255 255 255 / 3%);
+}
+
+.store-empty span {
+  color: var(--muted);
 }
 
 .store-note-icon,
@@ -1575,6 +1683,7 @@ h2 {
 
 .remote-dialog,
 .search-dialog,
+.app-manage-dialog,
 .quit-dialog {
   max-height: 92vh;
   overflow: auto;
@@ -1590,6 +1699,11 @@ h2 {
   border-radius: 1.6rem;
 }
 
+.app-manage-dialog {
+  width: min(92vw, 42rem);
+  border-radius: 1.5rem;
+}
+
 .search-dialog {
   width: min(94vw, 78rem);
   border-radius: 1.6rem;
@@ -1602,9 +1716,83 @@ h2 {
 
 .remote-dialog::backdrop,
 .search-dialog::backdrop,
+.app-manage-dialog::backdrop,
 .quit-dialog::backdrop {
   background: rgb(1 3 8 / 78%);
   backdrop-filter: blur(16px);
+}
+
+.app-manage-shell {
+  padding: 1.6rem;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(37 99 235 / 22%), transparent 22rem),
+    #0d1119;
+}
+
+.app-manage-summary {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.35rem;
+  padding: 1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1.1rem;
+  background: rgb(255 255 255 / 5%);
+}
+
+.app-manage-brand {
+  display: grid;
+  width: 4.2rem;
+  height: 4.2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgb(0 0 0 / 22%);
+}
+
+.app-manage-brand .service-logo,
+.app-manage-brand .service-monogram {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.app-manage-brand .service-wordmark {
+  font-size: 1rem;
+}
+
+.app-manage-summary > div:last-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.app-manage-summary strong {
+  font-size: 1.25rem;
+}
+
+.app-manage-summary span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.app-manage-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.app-manage-actions button {
+  min-width: 0;
+}
+
+.danger-secondary-action {
+  min-height: 3.25rem;
+  padding: 0 1.1rem;
+  border: 1px solid rgb(251 113 133 / 34%);
+  border-radius: 0.8rem;
+  background: rgb(127 29 29 / 24%);
+  color: #fecdd3;
+  font-weight: 850;
 }
 
 .search-dialog-shell {

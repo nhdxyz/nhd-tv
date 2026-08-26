@@ -16,7 +16,7 @@ import {
   type SpatialDirection
 } from "./spatial-navigation";
 
-type AppView = "home" | "settings" | "store";
+type AppView = "apps" | "home" | "settings" | "store";
 
 function requireElement<T>(selector: string, name: string): T {
   const element = document.querySelector(selector);
@@ -29,6 +29,19 @@ function requireElement<T>(selector: string, name: string): T {
 }
 
 const elements = {
+  appManageBrand: requireElement<HTMLDivElement>("#app-manage-brand", "app-manage-brand"),
+  appManageClear: requireElement<HTMLButtonElement>("#app-manage-clear", "app-manage-clear"),
+  appManageClose: requireElement<HTMLButtonElement>("#app-manage-close", "app-manage-close"),
+  appManageDelete: requireElement<HTMLButtonElement>("#app-manage-delete", "app-manage-delete"),
+  appManageDialog: requireElement<HTMLDialogElement>("#app-manage-dialog", "app-manage-dialog"),
+  appManageEarlier: requireElement<HTMLButtonElement>("#app-manage-earlier", "app-manage-earlier"),
+  appManageFavorite: requireElement<HTMLButtonElement>("#app-manage-favorite", "app-manage-favorite"),
+  appManageLater: requireElement<HTMLButtonElement>("#app-manage-later", "app-manage-later"),
+  appManageName: requireElement<HTMLElement>("#app-manage-name", "app-manage-name"),
+  appManageOpen: requireElement<HTMLButtonElement>("#app-manage-open", "app-manage-open"),
+  appManageRemove: requireElement<HTMLButtonElement>("#app-manage-remove", "app-manage-remove"),
+  appManageStatus: requireElement<HTMLElement>("#app-manage-status", "app-manage-status"),
+  appsActions: requireElement<HTMLDivElement>("#apps-actions", "apps-actions"),
   clearDataCancel: requireElement<HTMLButtonElement>("#clear-data-cancel", "clear-data-cancel"),
   clearDataConfirm: requireElement<HTMLButtonElement>("#clear-data-confirm", "clear-data-confirm"),
   clearDataCopy: requireElement<HTMLParagraphElement>("#clear-data-copy", "clear-data-copy"),
@@ -106,7 +119,12 @@ const elements = {
   settingsRemoteCopy: requireElement<HTMLElement>("#settings-remote-copy", "settings-remote-copy"),
   soundToggle: requireElement<HTMLButtonElement>("#sound-toggle", "sound-toggle"),
   soundToggleCopy: requireElement<HTMLElement>("#sound-toggle-copy", "sound-toggle-copy"),
+  storeCoreSection: requireElement<HTMLElement>("#store-core-section", "store-core-section"),
+  storeEmpty: requireElement<HTMLDivElement>("#store-empty", "store-empty"),
+  storeExperimentalSection: requireElement<HTMLElement>("#store-experimental-section", "store-experimental-section"),
+  storeSearch: requireElement<HTMLInputElement>("#store-search", "store-search"),
   storeActions: requireElement<HTMLDivElement>("#store-actions", "store-actions"),
+  storeUtilitySection: requireElement<HTMLElement>("#store-utility-section", "store-utility-section"),
   topRemoteButton: requireElement<HTMLButtonElement>("#top-remote-button", "top-remote-button"),
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
   topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
@@ -124,6 +142,7 @@ let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
 let localAppState: LocalAppState | null = null;
 let pendingClearService: ServiceSummary | null = null;
+let pendingManageService: ServiceSummary | null = null;
 let pendingServiceAction: "clear" | "remove-custom" = "clear";
 let remoteFocusedElement: HTMLElement | null = null;
 let serviceOrder: string[] = [];
@@ -476,7 +495,7 @@ function storeCard(service: ServiceSummary): HTMLElement {
   footer.className = "catalog-card-footer";
   const action = document.createElement("span");
   action.className = "catalog-action";
-  action.textContent = enabled ? "Remove" : "Add to Home";
+  action.textContent = enabled ? "Remove" : "Add to Apps";
   footer.append(action);
 
   button.append(top, copy, footer);
@@ -489,7 +508,7 @@ function storeCard(service: ServiceSummary): HTMLElement {
     } else {
       enabledServiceIds.add(service.id);
       serviceOrder.push(service.id);
-      showFeedback(`${service.name} added to Home.`);
+      showFeedback(`${service.name} added to Apps and Home.`);
     }
 
     try {
@@ -589,7 +608,61 @@ function storeCard(service: ServiceSummary): HTMLElement {
     removeButton.addEventListener("click", () => openRemoveCustomDialog(service));
     controls.append(removeButton);
   }
-  shell.append(button, controls);
+  shell.append(button);
+  return shell;
+}
+
+function installedAppCard(service: ServiceSummary): HTMLElement {
+  const shell = document.createElement("article");
+  shell.className = "catalog-card-shell installed-app-shell";
+  shell.dataset.serviceId = service.id;
+
+  const button = document.createElement("button");
+  button.className = "catalog-card installed-app-card";
+  button.dataset.enabled = "true";
+  button.dataset.serviceId = service.id;
+  button.type = "button";
+  button.setAttribute("aria-label", "Open " + service.name);
+
+  const top = document.createElement("span");
+  top.className = "catalog-card-top";
+  top.append(createServiceMark(service.id, service.name));
+  const status = document.createElement("span");
+  status.className = "catalog-status";
+  status.textContent = favoriteServiceIds.has(service.id)
+    ? "Favorite"
+    : service.kind === "experimental"
+      ? "Experimental"
+      : service.kind === "custom"
+        ? "Custom"
+        : "Installed";
+  top.append(status);
+
+  const copy = document.createElement("span");
+  copy.className = "catalog-card-copy";
+  const name = document.createElement("strong");
+  name.textContent = service.name;
+  const detail = document.createElement("small");
+  detail.textContent = service.authenticationNote ?? "Uses its own isolated local sign-in session.";
+  copy.append(name, detail);
+
+  const footer = document.createElement("span");
+  footer.className = "catalog-card-footer";
+  const action = document.createElement("span");
+  action.className = "catalog-action";
+  action.textContent = "Open";
+  footer.append(action);
+  button.append(top, copy, footer);
+  button.addEventListener("click", () => void openService(service.id, service.name));
+
+  const manage = document.createElement("button");
+  manage.className = "app-manage-button";
+  manage.type = "button";
+  manage.textContent = "Manage";
+  manage.setAttribute("aria-label", "Manage " + service.name);
+  manage.addEventListener("click", () => openAppManageDialog(service));
+
+  shell.append(button, manage);
   return shell;
 }
 
@@ -602,9 +675,9 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
     elements.featuredBrand.replaceChildren();
     elements.featuredIcon.replaceChildren();
     elements.featuredTitle.textContent = "Build your lineup.";
-    elements.featuredCopy.textContent = "Open Apps and choose which services belong on Home.";
+    elements.featuredCopy.textContent = "Open the Store and choose which services belong on Home.";
     elements.heroOpenButton.disabled = false;
-    elements.heroOpenButton.textContent = "Open Apps";
+    elements.heroOpenButton.textContent = "Open Store";
     return;
   }
 
@@ -630,24 +703,46 @@ function renderServiceViews(): void {
           (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
     });
   elements.serviceActions.replaceChildren(...enabledServices.map(serviceTile));
+  elements.appsActions.replaceChildren(...enabledServices.map(installedAppCard));
+  const storeQuery = elements.storeSearch.value.replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  const availableServices = services.filter((service) =>
+    !enabledServiceIds.has(service.id) &&
+    (storeQuery.length === 0 || service.name.toLocaleLowerCase().includes(storeQuery))
+  );
+  const coreStoreServices = availableServices.filter((service) => service.kind === "commercial");
+  const experimentalStoreServices = availableServices.filter(
+    (service) => service.kind === "experimental"
+  );
+  const utilityStoreServices = availableServices.filter(
+    (service) => service.kind === "custom" || service.kind === "test"
+  );
   elements.storeActions.replaceChildren(
-    ...services.filter((service) => service.kind === "commercial").map(storeCard)
+    ...coreStoreServices.map(storeCard)
   );
   elements.experimentalStoreActions.replaceChildren(
-    ...services.filter((service) => service.kind === "experimental").map(storeCard)
+    ...experimentalStoreServices.map(storeCard)
   );
   elements.utilityStoreActions.replaceChildren(
-    ...services
-      .filter((service) => service.kind === "custom" || service.kind === "test")
-      .map(storeCard)
+    ...utilityStoreServices.map(storeCard)
   );
+  elements.storeCoreSection.hidden = coreStoreServices.length === 0;
+  elements.storeExperimentalSection.hidden = experimentalStoreServices.length === 0;
+  elements.storeUtilitySection.hidden = utilityStoreServices.length === 0;
+  elements.storeEmpty.hidden = availableServices.length > 0;
   elements.lineupCount.textContent = `${enabledServices.length} of ${services.length} on Home`;
 
   if (enabledServices.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-lineup";
-    empty.textContent = "Your lineup is empty. Add a service from Apps.";
+    empty.textContent = "Your lineup is empty. Add a service from the Store.";
     elements.serviceActions.append(empty);
+
+    const browse = document.createElement("button");
+    browse.className = "empty-lineup empty-lineup-action";
+    browse.type = "button";
+    browse.textContent = "Your Apps are empty. Browse the Store";
+    browse.addEventListener("click", () => showView("store"));
+    elements.appsActions.append(browse);
   }
 
   renderFeatured(enabledServices);
@@ -801,6 +896,8 @@ async function initializeServices(): Promise<void> {
   renderServiceViews();
 }
 
+elements.storeSearch.addEventListener("input", renderServiceViews);
+
 elements.customServiceForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submit = elements.customServiceForm.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -849,13 +946,83 @@ function showView(view: AppView): void {
   }
 
   window.scrollTo({ behavior: "smooth", top: 0 });
+  window.requestAnimationFrame(updateHorizontalRailControls);
+}
+
+function updateHorizontalRailControls(): void {
+  for (const controls of document.querySelectorAll<HTMLElement>(".rail-scroll-controls")) {
+    const rowId = controls.dataset.railTarget;
+    const row = rowId === undefined ? null : document.getElementById(rowId);
+    const previous = controls.querySelector<HTMLButtonElement>('[data-rail-direction="-1"]');
+    const next = controls.querySelector<HTMLButtonElement>('[data-rail-direction="1"]');
+    if (!(row instanceof HTMLElement) || previous === null || next === null) {
+      continue;
+    }
+    const maximum = Math.max(0, row.scrollWidth - row.clientWidth);
+    controls.hidden = maximum <= 2;
+    previous.disabled = row.scrollLeft <= 2;
+    next.disabled = row.scrollLeft >= maximum - 2;
+  }
+}
+
+function initializeHorizontalRails(): void {
+  for (const row of document.querySelectorAll<HTMLElement>(".rail > .horizontal-row")) {
+    if (row.id.length === 0) {
+      continue;
+    }
+    const rail = row.closest<HTMLElement>(".rail");
+    const heading = rail?.querySelector<HTMLElement>(":scope > .section-heading");
+    if (heading === null || heading === undefined) {
+      continue;
+    }
+
+    const controls = document.createElement("span");
+    controls.className = "rail-scroll-controls";
+    controls.dataset.railTarget = row.id;
+    controls.dataset.navGroup = row.dataset.navGroup === undefined
+      ? "rail-scroll"
+      : row.dataset.navGroup + "-scroll";
+
+    for (const direction of [-1, 1] as const) {
+      const button = document.createElement("button");
+      button.className = "rail-scroll-button";
+      button.type = "button";
+      button.dataset.railDirection = String(direction);
+      button.textContent = direction < 0 ? "‹" : "›";
+      button.setAttribute(
+        "aria-label",
+        (direction < 0 ? "Scroll " : "Show more ") + (heading.querySelector("h2")?.textContent ?? "items")
+      );
+      button.addEventListener("click", () => {
+        row.scrollBy({
+          behavior: "smooth",
+          left: direction * Math.max(320, row.clientWidth * 0.78)
+        });
+      });
+      controls.append(button);
+    }
+    heading.append(controls);
+    row.addEventListener("scroll", updateHorizontalRailControls, { passive: true });
+    row.addEventListener("wheel", (event) => {
+      if (
+        row.scrollWidth <= row.clientWidth + 2 ||
+        Math.abs(event.deltaY) <= Math.abs(event.deltaX)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      row.scrollLeft += event.deltaY;
+    }, { passive: false });
+  }
+  new ResizeObserver(updateHorizontalRailControls).observe(document.body);
+  updateHorizontalRailControls();
 }
 
 for (const target of document.querySelectorAll<HTMLButtonElement>("[data-view-target]")) {
   target.addEventListener("click", () => {
     const view = target.dataset.viewTarget;
 
-    if (view === "home" || view === "settings" || view === "store") {
+    if (view === "apps" || view === "home" || view === "settings" || view === "store") {
       showView(view);
     }
   });
@@ -957,6 +1124,139 @@ elements.profileCreateForm.addEventListener("submit", async (event) => {
       submit.disabled = false;
     }
   }
+});
+
+function closeAppManageDialog(): void {
+  pendingManageService = null;
+  if (elements.appManageDialog.open) {
+    elements.appManageDialog.close();
+  }
+}
+
+function renderAppManageDialog(): void {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+
+  const enabledOrder = serviceOrder.filter((id) => enabledServiceIds.has(id));
+  const index = enabledOrder.indexOf(service.id);
+  const favorite = favoriteServiceIds.has(service.id);
+  elements.appManageBrand.replaceChildren(createServiceMark(service.id, service.name));
+  elements.appManageName.textContent = service.name;
+  elements.appManageStatus.textContent = [
+    favorite ? "Favorite" : "Installed",
+    service.kind === "experimental" ? "Experimental integration" : null,
+    "sign-in data stays local"
+  ].filter((value) => value !== null).join(" · ");
+  elements.appManageFavorite.textContent = favorite ? "Remove favorite" : "Add to favorites";
+  elements.appManageFavorite.setAttribute("aria-pressed", String(favorite));
+  elements.appManageEarlier.disabled = index <= 0;
+  elements.appManageLater.disabled = index < 0 || index >= enabledOrder.length - 1;
+  elements.appManageDelete.hidden = service.kind !== "custom";
+}
+
+function openAppManageDialog(service: ServiceSummary): void {
+  pendingManageService = service;
+  renderAppManageDialog();
+  elements.appManageDialog.showModal();
+  elements.appManageOpen.focus();
+}
+
+async function persistManagedChange(
+  previousState: LocalAppState | null,
+  message: string
+): Promise<void> {
+  try {
+    await saveProfilePreferences();
+    renderServiceViews();
+    renderAppManageDialog();
+    showFeedback(message);
+  } catch (error) {
+    if (previousState !== null) {
+      applyLocalAppState(previousState);
+    }
+    renderServiceViews();
+    renderAppManageDialog();
+    showFeedback(error instanceof Error ? error.message : String(error));
+  }
+}
+
+elements.appManageClose.addEventListener("click", closeAppManageDialog);
+elements.appManageDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeAppManageDialog();
+});
+elements.appManageOpen.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  closeAppManageDialog();
+  void openService(service.id, service.name);
+});
+elements.appManageFavorite.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  const previousState = localAppState;
+  const wasFavorite = favoriteServiceIds.has(service.id);
+  if (wasFavorite) {
+    favoriteServiceIds.delete(service.id);
+  } else {
+    favoriteServiceIds.add(service.id);
+  }
+  void persistManagedChange(
+    previousState,
+    service.name + (wasFavorite ? " removed from favorites." : " added to favorites.")
+  );
+});
+elements.appManageEarlier.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  const previousState = localAppState;
+  moveService(service.id, -1);
+  void persistManagedChange(previousState, service.name + " moved earlier.");
+});
+elements.appManageLater.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  const previousState = localAppState;
+  moveService(service.id, 1);
+  void persistManagedChange(previousState, service.name + " moved later.");
+});
+elements.appManageRemove.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  const previousState = localAppState;
+  enabledServiceIds.delete(service.id);
+  favoriteServiceIds.delete(service.id);
+  serviceOrder = serviceOrder.filter((id) => id !== service.id);
+  closeAppManageDialog();
+  void persistManagedChange(previousState, service.name + " removed from Apps. Its local session was kept.");
+});
+elements.appManageClear.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  closeAppManageDialog();
+  openClearDataDialog(service);
+});
+elements.appManageDelete.addEventListener("click", () => {
+  const service = pendingManageService;
+  if (service === null) {
+    return;
+  }
+  closeAppManageDialog();
+  openRemoveCustomDialog(service);
 });
 
 function openClearDataDialog(service: ServiceSummary): void {
@@ -1173,6 +1473,10 @@ function setRemoteFocusedElement(element: HTMLElement | null): void {
 }
 
 function activeNavigationScope(): ParentNode {
+  if (elements.appManageDialog.open) {
+    return elements.appManageDialog;
+  }
+
   if (elements.clearDataDialog.open) {
     return elements.clearDataDialog;
   }
@@ -1245,6 +1549,10 @@ function moveSpatialFocus(direction: SpatialDirection, remote = false): boolean 
 }
 
 function returnHome(remote = false): void {
+  if (elements.appManageDialog.open) {
+    closeAppManageDialog();
+  }
+
   if (elements.clearDataDialog.open) {
     cancelClearData();
   }
@@ -1294,6 +1602,9 @@ document.addEventListener("keydown", (event) => {
   if (elements.remoteDialog.open) {
     elements.remoteDialog.close();
     event.preventDefault();
+  } else if (elements.appManageDialog.open) {
+    closeAppManageDialog();
+    event.preventDefault();
   } else if (elements.profileDialog.open) {
     elements.profileDialog.close();
     event.preventDefault();
@@ -1340,6 +1651,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
   }
 
   if (action === "back") {
+    if (elements.appManageDialog.open) {
+      closeAppManageDialog();
+      return;
+    }
+
     if (elements.clearDataDialog.open) {
       cancelClearData();
       return;
@@ -1462,6 +1778,7 @@ window.nhd.onServiceQuitRequested((request) => {
   elements.quitCancel.focus();
 });
 gamepadInput.start();
+initializeHorizontalRails();
 void refreshStatus();
 void initializeContinueWatching();
 void initializeServices();

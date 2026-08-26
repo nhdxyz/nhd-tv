@@ -104,11 +104,11 @@ export const REMOTE_HTML = `<!doctype html>
 
         <div class="control-surface">
           <div class="dpad" aria-label="Directional pad">
-            <button class="up" data-action="up" type="button" disabled aria-label="Up"><span>↑</span></button>
-            <button class="left" data-action="left" type="button" disabled aria-label="Left"><span>←</span></button>
+            <button class="up" data-action="up" type="button" disabled aria-label="Up"><span aria-hidden="true"></span></button>
+            <button class="left" data-action="left" type="button" disabled aria-label="Left"><span aria-hidden="true"></span></button>
             <button class="select" data-action="select" type="button" disabled aria-label="Select"><span aria-hidden="true"></span></button>
-            <button class="right" data-action="right" type="button" disabled aria-label="Right"><span>→</span></button>
-            <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
+            <button class="right" data-action="right" type="button" disabled aria-label="Right"><span aria-hidden="true"></span></button>
+            <button class="down" data-action="down" type="button" disabled aria-label="Down"><span aria-hidden="true"></span></button>
           </div>
 
           <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
@@ -117,20 +117,39 @@ export const REMOTE_HTML = `<!doctype html>
         </div>
 
         <div class="playback-controls" aria-label="Playback controls">
-          <button data-action="rewind" data-feedback="Playback control sent" type="button" disabled aria-label="Rewind"><span aria-hidden="true">↶<small>10</small></span></button>
+          <button data-action="rewind" data-feedback="Playback control sent" type="button" disabled aria-label="Rewind">
+            <svg class="transport-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 6-7 6 7 6zm9 0-7 6 7 6z" /></svg>
+          </button>
           <button class="media-primary" data-action="play-pause" data-feedback="Playback control sent" type="button" disabled aria-label="Play or pause">
             <svg class="play-pause-icon" viewBox="0 0 28 20" aria-hidden="true">
               <path class="play-shape" d="M2 2.5v15l10-7.5z" />
               <path class="pause-shape" d="M17 2.5h3.5v15H17zm7.5 0H28v15h-3.5z" />
             </svg>
           </button>
-          <button data-action="fast-forward" data-feedback="Playback control sent" type="button" disabled aria-label="Fast forward"><span aria-hidden="true">↷<small>10</small></span></button>
+          <button data-action="fast-forward" data-feedback="Playback control sent" type="button" disabled aria-label="Fast forward">
+            <svg class="transport-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m13 6 7 6-7 6zM4 6l7 6-7 6z" /></svg>
+          </button>
         </div>
 
-        <div class="remote-utilities">
-          <button class="control-mode" id="control-mode" type="button" disabled>Pointer</button>
-          <button class="quick-launch-toggle" id="quick-launch-toggle" type="button" disabled>Apps</button>
-          <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
+        <div class="volume-controls" aria-label="Volume controls">
+          <button data-action="volume-down" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume down"><span aria-hidden="true">−</span></button>
+          <button data-action="mute" data-feedback="Mute sent · TV support varies" type="button" disabled aria-label="Mute">
+            <svg class="mute-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4zM18 9l4 6m0-6-4 6" /></svg>
+          </button>
+          <button data-action="volume-up" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume up"><span aria-hidden="true">+</span></button>
+        </div>
+
+        <div class="remote-utilities" aria-label="Remote tools">
+          <button class="control-mode utility-button" id="control-mode" type="button" disabled aria-label="Use precision pointer">
+            <svg class="pointer-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 6.7 16 2.2-6.1 6.1-2.2z" /></svg>
+            <svg class="arrows-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18m-4-4 4 4-4 4M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4" /></svg>
+          </button>
+          <button class="quick-launch-toggle utility-button" id="quick-launch-toggle" type="button" disabled aria-label="Recent apps">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>
+          </button>
+          <button class="search-toggle utility-button" id="search-toggle" type="button" disabled aria-label="Search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4 4" /></svg>
+          </button>
         </div>
 
         <section class="quick-launch-panel" id="quick-launch-panel" aria-labelledby="quick-launch-title" hidden>
@@ -144,12 +163,6 @@ export const REMOTE_HTML = `<!doctype html>
           <div class="quick-launch-list" id="quick-launch-list"></div>
           <p id="quick-launch-empty">Open an app on NHD-TV and it will appear here.</p>
         </section>
-
-        <div class="volume-controls" aria-label="Volume controls">
-          <button data-action="volume-down" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume down"><span aria-hidden="true">−</span></button>
-          <button data-action="mute" data-feedback="Mute sent · TV support varies" type="button" disabled aria-label="Mute"><span aria-hidden="true">×</span></button>
-          <button data-action="volume-up" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume up"><span aria-hidden="true">+</span></button>
-        </div>
 
         <form class="search-panel" id="search-panel" hidden>
           <label id="search-label" for="search-query">Search your services</label>
@@ -167,7 +180,7 @@ export const REMOTE_HTML = `<!doctype html>
           <p>Use the microphone on your phone keyboard for voice dictation.</p>
         </form>
 
-        <p class="privacy-note"><span aria-hidden="true">●</span> Local, session-only connection</p>
+        <p class="privacy-note"><span aria-hidden="true"></span> Private local connection</p>
       </section>
 
       <p class="footnote">Rescan the QR code after NHD-TV restarts</p>
@@ -189,12 +202,11 @@ body {
   height: 100dvh;
   min-height: 100dvh;
   margin: 0;
-  padding: max(0.65rem, env(safe-area-inset-top)) 0.7rem max(0.75rem, env(safe-area-inset-bottom));
+  padding: max(0.65rem, env(safe-area-inset-top)) 0.8rem max(0.7rem, env(safe-area-inset-bottom));
   overflow: hidden;
   background:
-    radial-gradient(circle at 78% -8%, rgb(22 107 255 / 38%), transparent 23rem),
-    radial-gradient(circle at -12% 76%, rgb(126 34 206 / 24%), transparent 22rem),
-    linear-gradient(180deg, #0a0e17 0%, #05070b 72%);
+    radial-gradient(circle at 50% -18%, rgb(69 93 145 / 18%), transparent 24rem),
+    #07090d;
 }
 
 html,
@@ -229,25 +241,26 @@ input {
 
 .remote-header {
   display: flex;
-  min-height: 2.25rem;
+  min-height: 2rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.brand { display: flex; align-items: center; gap: 0.5rem; }
+.brand { display: flex; align-items: center; gap: 0.4rem; color: #aab2c0; }
 .brand-mark {
   display: grid;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.55rem;
+  height: 1.55rem;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 0.58rem;
-  background: linear-gradient(145deg, #1685ff, #6d28d9);
-  box-shadow: inset 0 1px rgb(255 255 255 / 28%), 0 0.6rem 1.8rem rgb(26 92 255 / 25%);
-  font-weight: 900;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 0.48rem;
+  background: #171b23;
+  color: #e7ebf2;
+  font-size: 0.67rem;
+  font-weight: 850;
 }
-.brand strong { font-size: 0.8rem; letter-spacing: 0.02em; }
+.brand strong { font-size: 0.7rem; font-weight: 750; letter-spacing: 0.01em; }
 
 #connection-state {
   display: flex;
@@ -256,38 +269,35 @@ input {
   margin: 0;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.4rem;
-  color: #fcd34d;
-  font-size: 0.66rem;
-  font-weight: 800;
+  gap: 0.38rem;
+  color: #d6b978;
+  font-size: 0.62rem;
+  font-weight: 700;
   line-height: 1.2;
   text-align: right;
 }
 #connection-state span {
-  width: 0.47rem;
-  height: 0.47rem;
+  width: 0.38rem;
+  height: 0.38rem;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 0.25rem rgb(252 211 77 / 10%);
 }
-#connection-state.connected { color: #86efac; }
-#connection-state.connected span { box-shadow: 0 0 0 0.25rem rgb(134 239 172 / 10%); }
+#connection-state.connected { color: #9dd6ad; }
 #connection-state.error { color: #fda4af; }
 
 .remote-card {
   display: flex;
   min-height: 0;
-  margin-top: 0.65rem;
-  padding: 1rem;
+  margin-top: 0.45rem;
+  padding: 0.8rem;
   flex: 1;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 1.45rem;
-  background: linear-gradient(155deg, rgb(25 31 45 / 92%), rgb(10 13 20 / 92%));
-  box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 2rem 5rem rgb(0 0 0 / 42%);
-  backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 1.8rem;
+  background: #0e1117;
+  box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 28%);
 }
 
 .remote-top-actions {
@@ -297,26 +307,25 @@ input {
   justify-content: space-between;
 }
 .remote-top-actions > span {
-  color: #75839a;
-  font-size: 0.62rem;
-  font-weight: 850;
-  letter-spacing: 0.12em;
+  color: #707986;
+  font-size: 0.56rem;
+  font-weight: 750;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 .remote-icon-button {
   display: grid;
-  width: 3.15rem;
-  height: 3.15rem;
+  width: 2.85rem;
+  height: 2.85rem;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 1rem;
-  background: linear-gradient(145deg, #222b3b, #141a25);
-  color: #f8fafc;
-  box-shadow: inset 0 1px rgb(255 255 255 / 11%), 0 0.65rem 1.3rem rgb(0 0 0 / 19%);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #c5cbd5;
 }
 .remote-icon-button svg {
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.25rem;
+  height: 1.25rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -324,12 +333,12 @@ input {
   stroke-width: 1.9;
 }
 .remote-icon-button:not(:disabled).is-pressed,
-.remote-icon-button:not(:disabled):active { transform: scale(0.93); filter: brightness(1.3); }
+.remote-icon-button:not(:disabled):active { background: #1a1f28; transform: scale(0.94); }
 
 .control-surface {
   display: grid;
   min-height: 0;
-  padding: 0.45rem 0;
+  padding: 0.35rem 0 0.55rem;
   flex: 1 1 auto;
   place-items: center;
 }
@@ -337,24 +346,26 @@ input {
 
 .dpad {
   display: grid;
-  width: min(78vw, 41dvh, 20rem);
+  width: min(81vw, 39dvh, 19rem);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
-  gap: 0.42rem;
+  gap: 0;
   margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 50%;
+  background: #171b22;
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%), 0 1rem 2.8rem rgb(0 0 0 / 20%);
 }
 .dpad[hidden] { display: none; }
 
 .dpad button {
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 1.2rem;
-  background: linear-gradient(145deg, #252e3f, #151b27);
-  color: #e7edf7;
-  box-shadow: inset 0 1px rgb(255 255 255 / 11%), 0 0.55rem 1rem rgb(0 0 0 / 20%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #9ea7b5;
   font: inherit;
-  font-size: 1.75rem;
-  font-weight: 900;
 }
 .dpad button span { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; }
 .dpad .up { grid-area: up; }
@@ -362,43 +373,51 @@ input {
 .dpad .select { grid-area: select; }
 .dpad .right { grid-area: right; }
 .dpad .down { grid-area: down; }
+.dpad .up span::before,
+.dpad .left span::before,
+.dpad .right span::before,
+.dpad .down span::before {
+  width: 0.68rem;
+  height: 0.68rem;
+  border-top: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  content: "";
+}
+.dpad .up span::before { transform: translateY(0.15rem) rotate(45deg); }
+.dpad .left span::before { transform: translateX(0.15rem) rotate(-45deg); }
+.dpad .right span::before { transform: translateX(-0.15rem) rotate(135deg); }
+.dpad .down span::before { transform: translateY(-0.15rem) rotate(225deg); }
 .dpad .select span {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 4.1rem;
+  height: 4.1rem;
   margin: auto;
-  border: 0.18rem solid #dbeafe;
-  border-radius: 0.38rem;
-  background: #93c5fd;
-  box-shadow: 0 0 1rem rgb(96 165 250 / 55%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 50%;
+  background: #20252e;
+  box-shadow: inset 0 1px rgb(255 255 255 / 6%);
 }
 
 .dpad button:not(:disabled).is-pressed span,
 .dpad button:not(:disabled):active span {
-  transform: scale(0.9);
-  background-color: rgb(255 255 255 / 10%);
-  filter: brightness(1.25);
+  background-color: rgb(255 255 255 / 5%);
+  color: #fff;
 }
-.dpad button:not(:disabled):active { transform: scale(0.94); }
+.dpad button:not(:disabled):active { transform: scale(0.96); }
 .dpad .select:not(:disabled).is-pressed span,
-.dpad .select:not(:disabled):active span { background: #fff; }
+.dpad .select:not(:disabled):active span { background: #e8ebf0; }
 
 .precision-pad {
   position: relative;
   display: grid;
-  width: min(78vw, 41dvh, 20rem);
+  width: min(81vw, 39dvh, 19rem);
   aspect-ratio: 1;
   margin: 0 auto;
   place-content: center;
   overflow: hidden;
-  border: 1px solid rgb(125 187 255 / 24%);
-  border-radius: 2rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 50%;
   outline: 0;
-  background:
-    radial-gradient(circle at center, rgb(37 99 235 / 19%), transparent 8rem),
-    linear-gradient(rgb(125 187 255 / 5%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(125 187 255 / 5%) 1px, transparent 1px),
-    linear-gradient(145deg, #202a3b, #111722);
-  background-size: auto, 2rem 2rem, 2rem 2rem, auto;
+  background: radial-gradient(circle, #1c2129, #151920 72%);
   color: #eaf2ff;
   text-align: center;
   touch-action: none;
@@ -414,9 +433,9 @@ input {
 .precision-pad[hidden] { display: none; }
 .precision-pad::after {
   position: absolute;
-  inset: 0.55rem;
-  border: 1px solid rgb(125 187 255 / 8%);
-  border-radius: 1.5rem;
+  inset: 18%;
+  border: 1px solid rgb(255 255 255 / 5%);
+  border-radius: 50%;
   content: "";
   pointer-events: none;
 }
@@ -425,19 +444,19 @@ input {
   width: 68%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(37 99 235 / 22%), transparent 68%);
+  background: radial-gradient(circle, rgb(148 163 184 / 12%), transparent 68%);
   content: "";
   opacity: 0.55;
   pointer-events: none;
   transition: opacity 140ms ease, transform 180ms ease;
 }
-.precision-pad.is-tracking { border-color: #7dbbff; }
+.precision-pad.is-tracking { border-color: rgb(167 191 229 / 48%); }
 .precision-pad.is-tracking::before { opacity: 0.88; transform: scale(1.16); }
 .precision-pad.has-snap {
-  border-color: #7dd3fc;
-  box-shadow: inset 0 0 0 1px rgb(125 211 252 / 20%), 0 0 2rem rgb(14 165 233 / 16%);
+  border-color: rgb(175 204 226 / 48%);
+  box-shadow: inset 0 0 0 1px rgb(175 204 226 / 8%);
 }
-.precision-pad.has-snap::before { background: radial-gradient(circle, rgb(34 211 238 / 26%), transparent 68%); }
+.precision-pad.has-snap::before { background: radial-gradient(circle, rgb(148 184 216 / 18%), transparent 68%); }
 .precision-status {
   position: absolute;
   z-index: 3;
@@ -448,7 +467,7 @@ input {
   height: 0.9rem;
   padding: 0;
   place-items: center;
-  border: 1px solid rgb(125 211 252 / 25%);
+  border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
   background: rgb(4 17 30 / 82%);
   opacity: 0;
@@ -460,83 +479,95 @@ input {
   width: 0.38rem;
   height: 0.38rem;
   border-radius: 50%;
-  background: #67e8f9;
-  box-shadow: 0 0 0.65rem #22d3ee;
+  background: #dbe5ef;
 }
 .precision-pad.has-snap .precision-status { opacity: 1; transform: translate(-50%, 0); }
 
 .playback-controls,
 .volume-controls {
   display: grid;
+  overflow: hidden;
   flex: 0 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.42rem;
+  gap: 1px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
 }
-.playback-controls { margin-bottom: 0.5rem; }
+.playback-controls { margin-bottom: 0.45rem; }
+.volume-controls { margin-bottom: 0.55rem; }
 .playback-controls button,
 .volume-controls button {
   display: grid;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 11%);
-  border-radius: 0.82rem;
-  background: linear-gradient(145deg, #202939, #141a25);
-  color: #dbe7f7;
+  border: 0;
+  border-radius: 0;
+  background: #171b22;
+  color: #b9c1cd;
   font: inherit;
-  font-size: 1.05rem;
-  font-weight: 900;
-  box-shadow: inset 0 1px rgb(255 255 255 / 8%);
+  font-size: 1rem;
+  font-weight: 750;
 }
-.playback-controls button { min-height: 3rem; }
-.volume-controls button { min-height: 2.5rem; }
+.playback-controls button { min-height: 2.85rem; }
+.volume-controls button { min-height: 2.35rem; }
 .playback-controls button.media-primary {
-  border-color: rgb(125 187 255 / 32%);
-  background: linear-gradient(145deg, #1d477a, #162943);
-  color: #fff;
+  background: #e8ebef;
+  color: #11141a;
 }
 .playback-controls button:not(:disabled).is-pressed,
 .playback-controls button:not(:disabled):active,
 .volume-controls button:not(:disabled).is-pressed,
-.volume-controls button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
+.volume-controls button:not(:disabled):active { background: #262c35; }
+.playback-controls button.media-primary:not(:disabled).is-pressed,
+.playback-controls button.media-primary:not(:disabled):active { background: #fff; }
 .playback-controls span,
 .volume-controls span { display: inline-flex; align-items: center; gap: 0.08rem; }
-.playback-controls small { font-size: 0.48rem; line-height: 1; }
+.transport-icon { width: 1.2rem; height: 1.2rem; fill: currentColor; }
+.mute-icon { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; }
 .play-pause-icon { width: 1.65rem; height: 1.2rem; fill: currentColor; }
 .play-shape { opacity: 1; }
 .pause-shape { opacity: 0.88; }
 
 .remote-utilities {
+  display: flex;
+  min-height: 2.85rem;
+  margin-bottom: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+}
+.utility-button {
   display: grid;
-  margin-bottom: 0.5rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.42rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8f98a6;
 }
-.control-mode,
-.quick-launch-toggle,
-.search-toggle {
-  width: 100%;
-  min-height: 2.65rem;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 0.8rem;
-  background: rgb(255 255 255 / 5%);
-  color: #b9c4d4;
-  font: inherit;
-  font-size: 0.7rem;
-  font-weight: 850;
+.utility-button svg {
+  width: 1.18rem;
+  height: 1.18rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
-.quick-launch-toggle {
-  border-color: rgb(167 139 250 / 24%);
-  background: linear-gradient(145deg, #292544, #19182a);
-  color: #ede9fe;
-}
+.utility-button:not(:disabled):active { background: #1c2129; color: #fff; transform: scale(0.94); }
+.control-mode .arrows-icon { display: none; }
+.control-mode.is-precision .pointer-icon { display: none; }
+.control-mode.is-precision .arrows-icon { display: block; }
 
 .quick-launch-panel {
   min-height: 0;
-  padding: 0.8rem;
+  padding: 0.75rem;
   flex: 1 1 auto;
   overflow-y: auto;
-  border: 1px solid rgb(167 139 250 / 24%);
-  border-radius: 1rem;
-  background: linear-gradient(145deg, rgb(31 26 52 / 94%), rgb(13 15 24 / 94%));
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 1.15rem;
+  background: #141820;
 }
 .quick-launch-panel[hidden] { display: none; }
 .quick-launch-heading {
@@ -548,7 +579,7 @@ input {
 }
 .quick-launch-heading div { display: grid; gap: 0.08rem; }
 .quick-launch-heading small {
-  color: #a78bfa;
+  color: #7f8998;
   font-size: 0.56rem;
   font-weight: 900;
   letter-spacing: 0.11em;
@@ -558,9 +589,9 @@ input {
 .quick-launch-heading button {
   width: 2.35rem;
   height: 2.35rem;
-  border: 1px solid rgb(255 255 255 / 11%);
-  border-radius: 0.75rem;
-  background: rgb(255 255 255 / 6%);
+  border: 0;
+  border-radius: 50%;
+  background: #1d222b;
   color: #d8d5e5;
   font: inherit;
   font-size: 1.15rem;
@@ -573,9 +604,9 @@ input {
   grid-template-columns: 2.25rem 1fr auto;
   align-items: center;
   gap: 0.65rem;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 7%);
   border-radius: 0.85rem;
-  background: linear-gradient(145deg, #262b3b, #171b26);
+  background: #1a1f27;
   color: #f8fafc;
   font: inherit;
   text-align: left;
@@ -586,7 +617,7 @@ input {
   height: 2.25rem;
   place-items: center;
   border-radius: 0.7rem;
-  background: linear-gradient(145deg, #2563eb, #7c3aed);
+  background: #2a303b;
   font-size: 0.8rem;
   font-weight: 950;
 }
@@ -597,43 +628,35 @@ input {
 
 button:disabled { opacity: 0.3; }
 
-.search-toggle {
-  border: 1px solid rgb(125 187 255 / 30%);
-  background: linear-gradient(145deg, #18345e, #15223a);
-  color: #eff6ff;
-}
-.search-toggle:not(:disabled).is-pressed,
-.search-toggle:not(:disabled):active { transform: scale(0.97); filter: brightness(1.2); }
-
 .search-panel {
-  margin-top: 0.8rem;
-  padding: 0.9rem;
-  border: 1px solid rgb(125 187 255 / 28%);
-  border-radius: 1rem;
-  background: rgb(5 9 16 / 72%);
+  margin-top: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 1.15rem;
+  background: #141820;
 }
 .search-panel[hidden] { display: none; }
-.search-panel label { display: block; margin-bottom: 0.55rem; color: #dbeafe; font-size: 0.76rem; font-weight: 850; }
+.search-panel label { display: block; margin-bottom: 0.55rem; color: #d9dde5; font-size: 0.74rem; font-weight: 750; }
 .search-panel > div { display: grid; grid-template-columns: 1fr auto; gap: 0.55rem; }
 .search-panel input {
   min-width: 0;
   min-height: 3rem;
   padding: 0 0.85rem;
-  border: 1px solid rgb(255 255 255 / 16%);
+  border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 0.8rem;
   outline: none;
-  background: #101622;
+  background: #0d1016;
   color: #fff;
   font: inherit;
   font-size: 1rem;
 }
-.search-panel input:focus { border-color: #7dbbff; box-shadow: 0 0 0 0.2rem rgb(125 187 255 / 18%); }
+.search-panel input:focus { border-color: #8996aa; box-shadow: 0 0 0 0.16rem rgb(148 163 184 / 10%); }
 .search-panel button {
   min-width: 4rem;
   border: 0;
   border-radius: 0.8rem;
-  background: #f8fafc;
-  color: #101521;
+  background: #e8ebef;
+  color: #11141a;
   font: inherit;
   font-weight: 900;
 }
@@ -645,7 +668,7 @@ body.is-typing .quick-launch-toggle,
 body.is-typing .playback-controls,
 body.is-typing .volume-controls { display: none; }
 body.is-typing .remote-card { justify-content: flex-start; }
-body.is-typing .remote-utilities { display: block; margin-top: auto; }
+body.is-typing .remote-utilities { display: none; }
 body.is-launching .control-surface,
 body.is-launching .playback-controls,
 body.is-launching .control-mode,
@@ -656,18 +679,19 @@ body.is-launching .remote-utilities { display: none; }
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
 
-.privacy-note { margin: 0.65rem 0 0; flex: 0 0 auto; color: #7d899d; font-size: 0.64rem; text-align: center; }
-.privacy-note span { margin-right: 0.25rem; color: #4ade80; font-size: 0.48rem; vertical-align: 0.08rem; }
-.footnote { margin: 0.6rem 0 0; color: #677287; font-size: 0.63rem; text-align: center; }
+.privacy-note { display: flex; margin: 0.45rem 0 0; flex: 0 0 auto; align-items: center; justify-content: center; gap: 0.32rem; color: #6f7784; font-size: 0.58rem; text-align: center; }
+.privacy-note span { width: 0.32rem; height: 0.32rem; border-radius: 50%; background: #75b486; }
+body:not(.is-connected) .privacy-note { display: none; }
+.footnote { margin: 0.5rem 0 0; color: #616a77; font-size: 0.58rem; text-align: center; }
+body.is-connected .footnote { display: none; }
 
 @media (max-height: 700px) {
   .remote-card { padding: 0.75rem; }
   .remote-icon-button { width: 2.8rem; height: 2.8rem; }
   .dpad,
   .precision-pad { width: min(78vw, 31dvh, 15rem); }
-  .control-mode,
-  .quick-launch-toggle,
-  .search-toggle { min-height: 2.4rem; }
+  .remote-utilities { min-height: 2.5rem; }
+  .utility-button { width: 2.45rem; height: 2.45rem; }
   .playback-controls button { min-height: 2.65rem; }
   .volume-controls button { min-height: 2.35rem; }
   .privacy-note { margin-top: 0.5rem; }
@@ -738,6 +762,7 @@ export const REMOTE_JS = `(() => {
   }
 
   function setEnabled(enabled) {
+    document.body.classList.toggle("is-connected", enabled);
     buttons.forEach((button) => { button.disabled = !enabled; });
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
@@ -836,6 +861,10 @@ export const REMOTE_JS = `(() => {
     });
   }
 
+  function showNavigationMode() {
+    remoteModeLabel.textContent = dpad.hidden ? "Pointer" : "Navigate";
+  }
+
   function resetTextEntry() {
     directTextEntry = false;
     directTextEntryReady = false;
@@ -850,13 +879,13 @@ export const REMOTE_JS = `(() => {
     searchQuery.placeholder = "Title, person, or topic";
     searchPanel.hidden = true;
     document.body.classList.remove("is-typing");
-    remoteModeLabel.textContent = "Navigate";
+    showNavigationMode();
   }
 
   function closeQuickLaunch() {
     quickLaunchPanel.hidden = true;
     document.body.classList.remove("is-launching");
-    remoteModeLabel.textContent = "Navigate";
+    showNavigationMode();
   }
 
   function renderRecentApps(services) {
@@ -934,7 +963,13 @@ export const REMOTE_JS = `(() => {
   }
 
   async function sendAction(action, button) {
-    if (document.body.classList.contains("is-typing")) resetTextEntry();
+    if (document.body.classList.contains("is-typing")) {
+      resetTextEntry();
+      if (action === "back") {
+        confirmCommand(button);
+        return;
+      }
+    }
     if (document.body.classList.contains("is-launching")) {
       closeQuickLaunch();
       if (action === "back") {
@@ -1052,7 +1087,9 @@ export const REMOTE_JS = `(() => {
         queuePointer({ phase: "hide", scroll: 0, scrollX: 0, x: 0.5, y: 0.5 }, true);
       }
     }
-    controlMode.textContent = enabled ? "Arrows" : "Pointer";
+    controlMode.classList.toggle("is-precision", enabled);
+    controlMode.setAttribute("aria-label", enabled ? "Use arrow buttons" : "Use precision pointer");
+    showNavigationMode();
   }
 
   async function flushPointer() {

@@ -68,11 +68,14 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
   });
 
-  it("uses the compact arrow layout without decorative system glyphs or room copy", () => {
-    expect(REMOTE_HTML).toContain('<span>↑</span>');
-    expect(REMOTE_HTML).toContain('<span>←</span>');
-    expect(REMOTE_HTML).toContain('<span>→</span>');
-    expect(REMOTE_HTML).toContain('<span>↓</span>');
+  it("uses a minimalist circular directional surface without selectable arrow copy", () => {
+    expect(REMOTE_HTML).toContain('class="up" data-action="up"');
+    expect(REMOTE_HTML).toContain('class="left" data-action="left"');
+    expect(REMOTE_HTML).toContain('class="right" data-action="right"');
+    expect(REMOTE_HTML).toContain('class="down" data-action="down"');
+    expect(REMOTE_HTML).not.toMatch(/[↑←→↓]/);
+    expect(REMOTE_CSS).toContain(".dpad {");
+    expect(REMOTE_CSS).toContain("border-radius: 50%;");
     expect(REMOTE_HTML).not.toContain("Living room");
     expect(REMOTE_HTML).not.toContain(">OK<");
     expect(REMOTE_HTML).not.toContain("↩");
@@ -88,7 +91,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="remote-top-actions"');
     expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back. Hold to force return Home"');
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
-    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(3);
+    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(10);
     expect(REMOTE_HTML).not.toContain(">Back<");
     expect(REMOTE_HTML).not.toContain(">NHD Home<");
   });
@@ -127,7 +130,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).not.toContain("⏯");
     expect(REMOTE_HTML).toContain("TV support varies");
     expect(REMOTE_CSS).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
-    expect(REMOTE_CSS).toContain(".playback-controls button { min-height: 3rem; }");
+    expect(REMOTE_CSS).toContain(".playback-controls button { min-height: 2.85rem; }");
+    expect(REMOTE_CSS).toContain("border-radius: 999px;");
     expect(REMOTE_JS).toContain("error.status = response.status");
     expect(serverSource).toContain("MIN_COMMAND_INTERVAL_MS");
     expect(serverSource).toContain("writeJson(response, 429");
@@ -152,6 +156,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('id="quick-launch-toggle"');
     expect(REMOTE_HTML).toContain('id="quick-launch-panel"');
     expect(REMOTE_HTML).toContain('id="quick-launch-list"');
+    expect(REMOTE_HTML).not.toContain(">Apps<");
+    expect(REMOTE_HTML).not.toContain(">Pointer<");
+    expect(REMOTE_HTML).not.toContain(">Search<");
     expect(REMOTE_JS).toContain('jsonRequest("/api/apps"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/launch"');
     expect(REMOTE_JS).toContain("body: JSON.stringify({ serviceId: service.id })");
@@ -244,8 +251,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("rejectProviderKeyboard()");
     expect(REMOTE_JS).toContain("TEXT_ENTRY_DEBOUNCE_MS = 120");
     expect(REMOTE_JS).toContain("function resetTextEntry() {");
-    expect(REMOTE_JS).toContain('if (document.body.classList.contains("is-typing")) resetTextEntry()');
-    expect(REMOTE_JS).toContain('remoteModeLabel.textContent = "Navigate"');
+    expect(REMOTE_JS).toContain('if (document.body.classList.contains("is-typing")) {');
+    expect(REMOTE_JS).toContain('if (action === "back")');
+    expect(REMOTE_JS).toContain("function showNavigationMode() {");
+    expect(REMOTE_JS).toContain('remoteModeLabel.textContent = dpad.hidden ? "Pointer" : "Navigate"');
   });
 
   it("waits for committed phone keyboard composition before sending text", () => {

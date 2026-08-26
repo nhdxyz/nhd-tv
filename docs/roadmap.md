@@ -17,7 +17,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 - [x] Fullscreen display selection and persistence foundation (#27)
 - [x] Controller-first home navigation foundation
-- [x] Geometrically centered Home/Apps navigation with Settings moved to utilities (#29; multi-resolution visual qualification remains)
+- [x] Geometrically centered Home/Apps navigation with Settings moved to utilities (#29; unlocked macOS 1224×768 logical-viewport pass complete, 1080p/4K target validation remains)
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
 - [x] Xbox-style Gamepad API adapter foundation (#20; physical Windows validation remains)

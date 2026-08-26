@@ -55,6 +55,16 @@ describe("spatial navigation", () => {
     expect(findDirectionalTarget(0, rects, "down")).toBe(2);
   });
 
+  it("does not treat a taller overlapping card as the next vertical row", () => {
+    const rects = [
+      rect(0, 100, 260, 220),
+      rect(280, 100, 260, 260),
+      rect(0, 390, 260, 220)
+    ];
+
+    expect(findDirectionalTarget(0, rects, "down")).toBe(2);
+  });
+
   it("prefers the next row over a farther aligned row", () => {
     const rects = [rect(500, 0), rect(0, 400), rect(500, 800)];
 

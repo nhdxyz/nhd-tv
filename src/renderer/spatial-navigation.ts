@@ -49,11 +49,14 @@ export function findDirectionalTarget(
     const candidateCenter = center(candidate);
     const deltaX = candidateCenter.x - currentCenter.x;
     const deltaY = candidateCenter.y - currentCenter.y;
+    // Center deltas alone make a taller card look "below" a shorter card in
+    // the same visual row. Require directional edge separation so uneven
+    // copy, badges, and focus scaling cannot pull navigation sideways.
     const isCandidate =
-      (direction === "left" && deltaX < -DIRECTIONAL_EPSILON) ||
-      (direction === "right" && deltaX > DIRECTIONAL_EPSILON) ||
-      (direction === "up" && deltaY < -DIRECTIONAL_EPSILON) ||
-      (direction === "down" && deltaY > DIRECTIONAL_EPSILON);
+      (direction === "left" && candidate.right <= current.left + DIRECTIONAL_EPSILON) ||
+      (direction === "right" && candidate.left >= current.right - DIRECTIONAL_EPSILON) ||
+      (direction === "up" && candidate.bottom <= current.top + DIRECTIONAL_EPSILON) ||
+      (direction === "down" && candidate.top >= current.bottom - DIRECTIONAL_EPSILON);
 
     if (!isCandidate) {
       return;

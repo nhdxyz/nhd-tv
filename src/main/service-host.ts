@@ -198,6 +198,7 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       otherIndex < index && other.contains(element) && other.getBoundingClientRect().width === element.getBoundingClientRect().width
     ));
 
+    const youtubeCardTargets = new Set();
     if (location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com')) {
       const cardSelector = [
         'ytd-rich-item-renderer',
@@ -206,16 +207,15 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         'ytd-compact-video-renderer',
         'yt-lockup-view-model'
       ].join(',');
-      const primaryCardTargets = new Set();
       for (const card of document.querySelectorAll(cardSelector)) {
         const target = card.querySelector(
           'a#thumbnail[href], a[href^="/watch"], a[href^="/shorts/"]'
         );
-        if (target instanceof HTMLElement) primaryCardTargets.add(target);
+        if (target instanceof HTMLElement) youtubeCardTargets.add(target);
       }
       candidates = candidates.filter((element) => {
         const card = element.closest(cardSelector);
-        return card === null || primaryCardTargets.has(element);
+        return card === null || youtubeCardTargets.has(element);
       });
     }
 
@@ -248,7 +248,11 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
     };
 
     if (!(current instanceof HTMLElement)) {
-      current = candidates.sort((left, right) => {
+      const initialTargets = [...youtubeCardTargets]
+        .filter((element) =>
+          candidates.includes(element) && element.closest('ytd-ad-slot-renderer') === null
+        );
+      current = (initialTargets.length > 0 ? initialTargets : candidates).sort((left, right) => {
         const leftRect = left.getBoundingClientRect();
         const rightRect = right.getBoundingClientRect();
         return leftRect.top - rightRect.top || leftRect.left - rightRect.left;

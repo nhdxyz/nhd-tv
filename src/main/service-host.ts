@@ -993,15 +993,19 @@ export class ServiceHost {
     if (
       view === null ||
       definition === null ||
-      definition.playback === null ||
-      view.webContents.isDestroyed()
+      definition.playback === null
     ) {
+      return;
+    }
+
+    const webContents = view.webContents;
+    if (webContents === undefined || webContents.isDestroyed()) {
       return;
     }
 
     this.#playbackCheckpoint = (async () => {
       try {
-        const snapshot = await view.webContents.executeJavaScript(
+        const snapshot = await webContents.executeJavaScript(
           playbackSnapshotScript,
           true
         ) as PlaybackSnapshot | null;

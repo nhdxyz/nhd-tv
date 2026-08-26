@@ -251,13 +251,25 @@ function renderContinueWatching(): void {
   const placeholder = document.createElement("button");
   placeholder.className = "continue-card continue-placeholder";
   placeholder.type = "button";
-  placeholder.innerHTML = `
-    <span class="continue-art" aria-hidden="true"><span class="continue-play">▶</span></span>
-    <span class="continue-meta">
-      <strong>Start watching in one of your apps</strong>
-      <small>Long-form playback will appear here automatically</small>
-      <span class="placeholder-progress" aria-hidden="true"><span></span></span>
-    </span>`;
+  const art = document.createElement("span");
+  art.className = "continue-art";
+  art.setAttribute("aria-hidden", "true");
+  const play = document.createElement("span");
+  play.className = "continue-play";
+  play.textContent = "▶";
+  art.append(play);
+  const meta = document.createElement("span");
+  meta.className = "continue-meta";
+  const title = document.createElement("strong");
+  title.textContent = "Start watching in one of your apps";
+  const detail = document.createElement("small");
+  detail.textContent = "Long-form playback will appear here automatically";
+  const progress = document.createElement("span");
+  progress.className = "placeholder-progress";
+  progress.setAttribute("aria-hidden", "true");
+  progress.append(document.createElement("span"));
+  meta.append(title, detail, progress);
+  placeholder.append(art, meta);
   placeholder.addEventListener("click", () => {
     const firstService = services.find((service) => enabledServiceIds.has(service.id));
     if (firstService === undefined) {

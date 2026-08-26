@@ -445,6 +445,8 @@ async function initializeWidevine(): Promise<void> {
 }
 
 async function createMainWindow(): Promise<void> {
+  let windowCloseCheckpointed = false;
+
   mainWindow = new BrowserWindow({
     backgroundColor: "#05070d",
     height: 720,
@@ -483,6 +485,25 @@ async function createMainWindow(): Promise<void> {
     onAction: handleRemoteAction,
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus
+  });
+
+  mainWindow.on("close", (event) => {
+    if (
+      windowCloseCheckpointed ||
+      serviceHost === null ||
+      serviceHost.activeServiceId === null
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    windowCloseCheckpointed = true;
+    const windowToClose = mainWindow;
+    void serviceHost.closeWithCheckpoint().finally(() => {
+      if (windowToClose !== null && !windowToClose.isDestroyed()) {
+        windowToClose.close();
+      }
+    });
   });
 
   mainWindow.on("closed", () => {

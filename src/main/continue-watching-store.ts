@@ -164,7 +164,7 @@ export class ContinueWatchingStore {
       version: STORE_VERSION
     };
 
-    this.#writeSequence = this.#writeSequence.then(async () => {
+    this.#writeSequence = this.#writeSequence.catch(() => undefined).then(async () => {
       const directory = path.dirname(this.#filePath);
       const temporaryPath = `${this.#filePath}.tmp`;
       await mkdir(directory, { recursive: true });

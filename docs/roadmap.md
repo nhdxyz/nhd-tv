@@ -19,6 +19,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Controller-first home navigation foundation
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
+- [ ] Xbox-style Gamepad API adapter (#20)
 - [x] Service hosting and root-level quit overlay foundation
 - Crash, reload, offline, and emergency-return behavior
 
@@ -35,9 +36,9 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 - [x] Basic playback qualification and preview filtering
 - [x] Title and allowlisted artwork capture foundation
-- [x] Periodic, pause, navigation, and exit checkpoints
+- [x] Periodic, pause, navigation, exit, and window-shutdown checkpoints
 - [x] Observed completion rule
-- [ ] Manual removal and per-service adapter qualification tests
+- [ ] Manual removal and per-service adapter qualification tests (#18)
 - [x] Resume through service-owned watch URLs
 
 ## Milestone 4: Phone remote
@@ -56,8 +57,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] TV search overlay and enabled-service launcher
 - [x] Declarative Netflix and YouTube query routes
 - [x] Disney+ browse-search fallback
-- [ ] Licensed cross-service metadata and regional availability
-- [ ] Trusted local HTTPS and opt-in direct microphone capture
+- [ ] Licensed cross-service metadata and regional availability (#19)
+- [ ] Trusted local HTTPS and opt-in direct microphone capture (#21)
 - [ ] Watchlist, favorites, and recommendation controls
 
 ## Milestone 6: Packaging and platform expansion

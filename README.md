@@ -62,6 +62,7 @@ Run signup yourself in a private terminal; do not share the account password or 
 
 - [Product specification](docs/product-spec.md)
 - [Architecture](docs/architecture.md)
+- [Continue Watching adapter notes](docs/continue-watching.md)
 - [Roadmap](docs/roadmap.md)
 - [DRM host feasibility result](docs/feasibility/drm-host.md)
 - [Commercial-service compatibility matrix](docs/feasibility/service-matrix.md)

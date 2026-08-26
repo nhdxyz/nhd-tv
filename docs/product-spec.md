@@ -79,7 +79,7 @@ For recognized playback, store:
 
 The listener checkpoints active playback periodically and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful playback from previews and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position.
 
-The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a long-form media element and at least five seconds of engagement, strips undeclared URL parameters, and checkpoints every ten seconds plus pause, navigation, and exit. It removes items observed at 95% completion. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
+The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a long-form media element and at least five seconds of engagement, strips undeclared URL parameters, and checkpoints every ten seconds plus pause, navigation, service exit, and window shutdown. It removes items observed at 95% completion. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
 
 ## Phone remote
 

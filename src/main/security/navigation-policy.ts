@@ -35,6 +35,18 @@ export function isAllowedServiceUrl(
   return allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === candidateOrigin);
 }
 
+export function isExpectedAllowedNavigationAbort(
+  error: unknown,
+  currentUrl: string,
+  allowedOrigins: readonly string[]
+): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("ERR_ABORTED (-3)") &&
+    isAllowedServiceUrl(currentUrl, allowedOrigins)
+  );
+}
+
 export function assertValidServiceDefinition(definition: ServiceDefinition): void {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(definition.id)) {
     throw new Error(`Invalid service id: ${definition.id}`);

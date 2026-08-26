@@ -4,7 +4,11 @@ import {
   type Session,
   WebContentsView
 } from "electron";
-import { isAllowedServiceUrl, type ServiceDefinition } from "./security/navigation-policy";
+import {
+  isAllowedServiceUrl,
+  isExpectedAllowedNavigationAbort,
+  type ServiceDefinition
+} from "./security/navigation-policy";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 
@@ -35,7 +39,9 @@ export class ServiceHost {
   readonly #window: BrowserWindow;
   readonly #onStateChanged: ServiceStateListener;
   #activeDefinition: ServiceDefinition | null = null;
+  #htmlFullscreen = false;
   #view: WebContentsView | null = null;
+  #windowWasFullScreenOnOpen = false;
 
   constructor(window: BrowserWindow, onStateChanged: ServiceStateListener) {
     this.#window = window;
@@ -49,6 +55,7 @@ export class ServiceHost {
 
   async open(definition: ServiceDefinition): Promise<void> {
     this.close();
+    this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
 
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
     configureServiceSession(serviceSession, definition);
@@ -72,8 +79,26 @@ export class ServiceHost {
     // service-aware nested Back stack and root-level quit confirmation.
     view.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyDown" && input.key === "Escape") {
+        if (this.#htmlFullscreen) {
+          return;
+        }
+
         event.preventDefault();
         this.close();
+      }
+    });
+
+    view.webContents.on("enter-html-full-screen", () => {
+      if (this.#view === view) {
+        this.#htmlFullscreen = true;
+        this.#window.setFullScreen(true);
+      }
+    });
+
+    view.webContents.on("leave-html-full-screen", () => {
+      if (this.#view === view) {
+        this.#htmlFullscreen = false;
+        this.#window.setFullScreen(this.#windowWasFullScreenOnOpen);
       }
     });
 
@@ -104,6 +129,16 @@ export class ServiceHost {
     try {
       await view.webContents.loadURL(definition.startUrl);
     } catch (error) {
+      if (
+        isExpectedAllowedNavigationAbort(
+          error,
+          view.webContents.getURL(),
+          definition.allowedOrigins
+        )
+      ) {
+        return;
+      }
+
       this.close();
       throw error;
     }
@@ -114,6 +149,11 @@ export class ServiceHost {
 
     this.#view = null;
     this.#activeDefinition = null;
+
+    if (this.#htmlFullscreen) {
+      this.#htmlFullscreen = false;
+      this.#window.setFullScreen(this.#windowWasFullScreenOnOpen);
+    }
 
     if (view !== null) {
       this.#window.contentView.removeChildView(view);

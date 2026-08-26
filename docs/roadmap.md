@@ -62,6 +62,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 ## Milestone 5: Search and discovery
 
 - [x] TV search overlay and enabled-service launcher
+- [x] Dynamic active-profile Continue Watching matches
 - [x] Declarative Netflix and YouTube query routes
 - [x] Disney+ browse-search fallback
 - [x] Contextual Netflix and YouTube search from the phone remote

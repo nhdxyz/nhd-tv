@@ -41,7 +41,7 @@ The first home experience contains:
 - Store access
 - Settings
 
-The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. From Home, integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination and its adapter opens the supported search route directly. Search routing never types into arbitrary focused fields. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
+The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. While typing, it also matches renderer-safe metadata from the active profile's local Continue Watching history. From Home, integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination and its adapter opens the supported search route directly. Search routing never types into arbitrary focused fields. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
 
 ## Store
 

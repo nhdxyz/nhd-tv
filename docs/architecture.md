@@ -80,7 +80,9 @@ Device preferences share the versioned local-state document but are not profile-
 
 Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.
 
-This is federated launching, not a metadata index: NHD-TV does not scrape provider catalogs or claim that a result is available in a subscription. A later metadata provider must have explicit attribution, regional availability semantics, caching limits, and commercial-use terms before its results appear in the shell.
+The shell can match the normalized query against renderer-safe title, subtitle, and service fields already present in the active profile's Continue Watching view. These local results update while typing and resume through item-ID IPC; they do not expose stored watch URLs.
+
+Provider search remains federated launching, not a metadata index: NHD-TV does not scrape provider catalogs or claim that a result is available in a subscription. A later metadata provider must have explicit attribution, regional availability semantics, caching limits, and commercial-use terms before its results appear in the shell.
 
 ## Performance strategy
 

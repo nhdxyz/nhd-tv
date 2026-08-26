@@ -9,6 +9,7 @@ import type {
 } from "../main/contracts";
 import { GamepadInput, type GamepadLike } from "./gamepad-input";
 import { NavigationSounds } from "./navigation-sounds";
+import { matchContinueWatching } from "./search-history";
 import { createServiceLockup, createServiceMark } from "./service-branding";
 import {
   findDirectionalTarget,
@@ -89,6 +90,9 @@ const elements = {
   searchClose: requireElement<HTMLButtonElement>("#search-close", "search-close"),
   searchDialog: requireElement<HTMLDialogElement>("#search-dialog", "search-dialog"),
   searchForm: requireElement<HTMLFormElement>("#search-form", "search-form"),
+  searchHistoryCount: requireElement<HTMLSpanElement>("#search-history-count", "search-history-count"),
+  searchHistoryResults: requireElement<HTMLDivElement>("#search-history-results", "search-history-results"),
+  searchHistorySection: requireElement<HTMLElement>("#search-history-section", "search-history-section"),
   searchInput: requireElement<HTMLInputElement>("#search-input", "search-input"),
   searchResultCount: requireElement<HTMLSpanElement>("#search-result-count", "search-result-count"),
   searchResults: requireElement<HTMLDivElement>("#search-results", "search-results"),
@@ -631,10 +635,53 @@ function renderSearchResults(rawQuery: string): void {
   );
 
   if (query.length === 0) {
+    elements.searchHistoryResults.replaceChildren();
+    elements.searchHistorySection.hidden = true;
     elements.searchResults.replaceChildren();
     elements.searchResultCount.textContent = "Enter a search above";
     return;
   }
+
+  const historyMatches = matchContinueWatching(
+    continueWatchingItems,
+    enabledServiceIds,
+    query
+  );
+  const historyButtons = historyMatches.map((item) => {
+    const button = document.createElement("button");
+    button.className = "search-result-card search-history-card";
+    button.type = "button";
+    button.setAttribute("aria-label", `Resume ${item.title} in ${item.serviceName}`);
+    const art = document.createElement("span");
+    art.className = "search-history-art";
+    if (item.artworkDataUrl !== null) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = item.artworkDataUrl;
+      art.append(image);
+    } else {
+      art.append(createServiceMark(item.serviceId, item.serviceName));
+    }
+    const copy = document.createElement("span");
+    const title = document.createElement("strong");
+    title.textContent = item.title;
+    const detail = document.createElement("small");
+    detail.textContent = `Resume in ${item.serviceName}`;
+    copy.append(title, detail);
+    button.append(art, copy);
+    button.addEventListener("click", async () => {
+      elements.searchDialog.close();
+      try {
+        await window.nhd.resumeContinueWatching(item.id);
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : String(error));
+      }
+    });
+    return button;
+  });
+  elements.searchHistoryResults.replaceChildren(...historyButtons);
+  elements.searchHistorySection.hidden = historyButtons.length === 0;
+  elements.searchHistoryCount.textContent = `${historyButtons.length} ${historyButtons.length === 1 ? "match" : "matches"}`;
 
   const buttons = searchable.map((service) => {
     const button = document.createElement("button");
@@ -683,7 +730,8 @@ function openSearchDialog(query = "", remote = false): void {
   elements.searchInput.value = query;
   renderSearchResults(query);
   if (remote && query.length > 0) {
-    const firstResult = elements.searchResults.querySelector<HTMLButtonElement>("button");
+    const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+      ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
     firstResult?.focus({ preventScroll: true });
     setRemoteFocusedElement(firstResult ?? null);
   } else {
@@ -696,8 +744,11 @@ elements.searchClose.addEventListener("click", () => elements.searchDialog.close
 elements.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   renderSearchResults(elements.searchInput.value);
-  elements.searchResults.querySelector<HTMLButtonElement>("button")?.focus();
+  const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+    ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
+  firstResult?.focus();
 });
+elements.searchInput.addEventListener("input", () => renderSearchResults(elements.searchInput.value));
 elements.searchDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   elements.searchDialog.close();

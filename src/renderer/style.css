@@ -1500,6 +1500,18 @@ h2 {
 .search-result-card[data-service-id="disney-plus"] { background: linear-gradient(145deg, #081b3e, #111722); }
 .search-result-card .service-logo,
 .search-result-card .service-monogram { width: 2.8rem; height: 2.8rem; }
+.search-history-art {
+  display: grid;
+  width: 6.4rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: rgb(255 255 255 / 7%);
+}
+.search-history-art img { width: 100%; height: 100%; object-fit: cover; }
+.search-history-art .service-logo,
+.search-history-art .service-monogram { width: 2.4rem; height: 2.4rem; }
 .search-result-card > span:last-child { display: grid; min-width: 0; gap: 0.25rem; }
 .search-result-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-result-card small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }

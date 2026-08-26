@@ -50,6 +50,20 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).not.toContain("⌂");
   });
 
+  it("fills the phone viewport and keeps icon-only system actions in the top corners", () => {
+    expect(REMOTE_CSS).toContain("height: 100dvh");
+    expect(REMOTE_CSS).toContain(".remote-shell {");
+    expect(REMOTE_CSS).toContain("height: 100%;");
+    expect(REMOTE_CSS).toContain(".remote-card {");
+    expect(REMOTE_CSS).toContain("flex: 1;");
+    expect(REMOTE_HTML).toContain('class="remote-top-actions"');
+    expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back"');
+    expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
+    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(2);
+    expect(REMOTE_HTML).not.toContain(">Back<");
+    expect(REMOTE_HTML).not.toContain(">NHD Home<");
+  });
+
   it("prevents accidental viewport and trackpad zoom on the appliance remote", () => {
     expect(REMOTE_HTML).toContain("maximum-scale=1");
     expect(REMOTE_HTML).toContain("user-scalable=no");
@@ -70,12 +84,16 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="dpad"');
     expect(REMOTE_HTML).toContain('id="precision-pad"');
     expect(REMOTE_HTML).toContain('class="precision-dot"');
+    expect(REMOTE_HTML).toContain('class="precision-guide precision-guide-x"');
+    expect(REMOTE_HTML).toContain('class="precision-status"');
     expect(REMOTE_HTML).toContain('id="control-mode"');
     expect(REMOTE_CSS).toContain('.dpad[hidden] { display: none; }');
     expect(REMOTE_JS).toContain("usePrecisionMode(false)");
     expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 40");
     expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');
     expect(REMOTE_JS).toContain("distance < 14");
+    expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
+    expect(REMOTE_JS).toContain('precisionGuideX.style.top = (y * 100) + "%"');
     expect(REMOTE_JS).toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
     expect(REMOTE_JS).not.toContain("movementY");

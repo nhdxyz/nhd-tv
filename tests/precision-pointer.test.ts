@@ -10,6 +10,8 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("distance <= snapRadius");
     expect(script).toContain('a[href^="/watch"]');
     expect(script).toContain("candidate.closest('[aria-hidden=\"true\"],[inert]') === null");
+    expect(script).toContain("element.dataset.remoteFocused = 'true'");
+    expect(script).toContain("element.removeAttribute('data-remote-focused')");
     expect(script).not.toContain(".click()");
   });
 

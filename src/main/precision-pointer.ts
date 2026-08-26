@@ -105,8 +105,9 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
       .filter((candidate) => candidate.distance <= snapRadius)
       .sort((left, right) => left.score - right.score)[0];
 
-    document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
+    document.querySelectorAll('[data-nhd-tv-focus="true"],[data-remote-focused="true"]').forEach((element) => {
       element.removeAttribute('data-nhd-tv-focus');
+      element.removeAttribute('data-remote-focused');
     });
     if (nearest === undefined) {
       document.documentElement.removeAttribute('data-nhd-tv-has-focus');
@@ -131,6 +132,7 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
       pointerState.keys.set(element, key);
     }
     element.dataset.nhdTvFocus = 'true';
+    element.dataset.remoteFocused = 'true';
     element.focus({ preventScroll: true });
     const overlayRect = youtube
       ? element.closest(cardSelector)?.getBoundingClientRect() || rect

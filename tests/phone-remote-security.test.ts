@@ -86,8 +86,8 @@ describe("phone remote boundary", () => {
   it("keeps arrows as the default and offers a bounded relative precision pad", () => {
     expect(REMOTE_HTML).toContain('class="dpad"');
     expect(REMOTE_HTML).toContain('id="precision-pad"');
-    expect(REMOTE_HTML).toContain('class="precision-dot"');
-    expect(REMOTE_HTML).toContain('class="precision-guide precision-guide-x"');
+    expect(REMOTE_HTML).not.toContain('class="precision-dot"');
+    expect(REMOTE_HTML).not.toContain('class="precision-guide');
     expect(REMOTE_HTML).toContain('class="precision-status"');
     expect(REMOTE_HTML).toContain('id="control-mode"');
     expect(REMOTE_CSS).toContain('.dpad[hidden] { display: none; }');
@@ -103,7 +103,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("event.isPrimary === false");
     expect(REMOTE_JS).toContain('queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true)');
     expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
-    expect(REMOTE_JS).toContain('precisionGuideX.style.top = (point.y * 100) + "%"');
+    expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
+    expect(REMOTE_JS).not.toContain("renderPointerPoint");
     expect(REMOTE_JS).not.toContain("event.clientX - rect.left");
     expect(REMOTE_JS).not.toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
@@ -138,7 +139,7 @@ describe("phone remote boundary", () => {
     expect(pointerDownHandler).not.toContain("moveVirtualPointer");
     expect(pointerDownHandler).not.toContain("queuePointer");
     expect(REMOTE_JS).toContain('? virtualPointer\n      : moveVirtualPointer');
-    expect(REMOTE_HTML).toContain("Lift and continue · Tap anywhere");
+    expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
   });
 
   it("scales edge scrolling with deliberate movement and preserves direction", () => {

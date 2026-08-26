@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPrecisionPointerHideScript,
+  buildShellPrecisionScrollScript,
   buildPrecisionPointerTargetScript,
+  PRECISION_POINTER_IDLE_MS,
+  precisionShellScrollDelta,
   precisionScrollDelta
 } from "../src/main/precision-pointer";
 
@@ -21,10 +24,24 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("transition:left 48ms linear,top 48ms linear");
     expect(script).toContain("retainForMove");
     expect(script).toContain("cursor.parentElement !== cursorHost");
+    expect(script).toContain("cursor.style.setProperty('opacity', '1'");
+    expect(script).toContain(`}, ${PRECISION_POINTER_IDLE_MS});`);
+    expect(script).toContain("clearFocus();");
     expect(script).toContain("distance <= 28 && nearest.distance > 0");
     expect(script).toContain("nearest.distance > 0");
     expect(script).not.toContain("element.focus(");
     expect(script).not.toContain(".click()");
+  });
+
+  it("scrolls the app-owned shell directly without changing provider wheel direction", () => {
+    const script = buildShellPrecisionScrollScript(0.5);
+
+    expect(precisionShellScrollDelta(1)).toBe(90);
+    expect(precisionShellScrollDelta(-1)).toBe(-90);
+    expect(script).toContain("const delta = 45");
+    expect(script).toContain("window.scrollBy");
+    expect(script).toContain("top: delta");
+    expect(precisionScrollDelta(1)).toBe(-90);
   });
 
   it("keeps small tap drift on the prior safe target and reverses native macOS wheel deltas", () => {
@@ -41,6 +58,7 @@ describe("precision pointer page boundary", () => {
 
     expect(script).toContain("nhd-tv-precision-cursor");
     expect(script).toContain("?.remove()");
+    expect(script).toContain("clearTimeout(pointerState.hideTimer)");
     expect(script).toContain("removeAttribute('data-nhd-tv-has-focus')");
   });
 

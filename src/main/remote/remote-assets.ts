@@ -89,10 +89,7 @@ export const REMOTE_HTML = `<!doctype html>
           </div>
 
           <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
-            <span class="precision-guide precision-guide-x" aria-hidden="true"></span>
-            <span class="precision-guide precision-guide-y" aria-hidden="true"></span>
-            <span class="precision-dot" aria-hidden="true"></span>
-            <span class="precision-copy">Swipe to move<small>Lift and continue · Tap anywhere</small></span>
+            <span class="precision-copy">Swipe to move<small>Follow the cursor on your TV · Tap anywhere</small></span>
             <span class="precision-status" aria-hidden="true"><i></i> Target locked</span>
           </div>
         </div>
@@ -351,28 +348,16 @@ button {
   content: "";
   pointer-events: none;
 }
-.precision-guide {
+.precision-pad::before {
   position: absolute;
-  z-index: 1;
-  background: linear-gradient(90deg, transparent, rgb(125 211 252 / 48%), transparent);
-  opacity: 0.48;
+  width: 68%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(37 99 235 / 22%), transparent 68%);
+  content: "";
+  opacity: 0.55;
   pointer-events: none;
-  transition: opacity 100ms ease, top 24ms linear, left 24ms linear;
-}
-.precision-guide-x {
-  top: 50%;
-  right: 0.7rem;
-  left: 0.7rem;
-  height: 1px;
-  transform: translateY(-50%);
-}
-.precision-guide-y {
-  top: 0.7rem;
-  bottom: 0.7rem;
-  left: 50%;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, rgb(125 211 252 / 48%), transparent);
-  transform: translateX(-50%);
+  transition: opacity 140ms ease, transform 180ms ease;
 }
 .precision-copy {
   display: grid;
@@ -385,44 +370,15 @@ button {
   transition: opacity 120ms ease;
 }
 .precision-copy small { margin-top: 0.35rem; color: #75839a; font-size: 0.65rem; }
-.precision-dot {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  width: 1.45rem;
-  height: 1.45rem;
-  border: 2px solid rgb(239 246 255 / 94%);
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 34%, #fff 0 13%, #7dd3fc 16%, #1685ff 64%);
-  box-shadow:
-    0 0 0 0.48rem rgb(22 133 255 / 20%),
-    0 0 2.1rem 0.8rem rgb(37 99 235 / 62%);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  transition: left 24ms linear, top 24ms linear, box-shadow 100ms ease, transform 100ms ease;
-}
 .precision-pad.is-tracking { border-color: #7dbbff; }
 .precision-pad.is-tracking .precision-copy,
 .precision-pad.has-snap .precision-copy { opacity: 0.16; }
-.precision-pad.is-tracking .precision-dot {
-  box-shadow:
-    0 0 0 0.52rem rgb(22 133 255 / 22%),
-    0 0 2.2rem 0.85rem rgb(37 99 235 / 64%);
-  transform: translate(-50%, -50%) scale(1.12);
-}
+.precision-pad.is-tracking::before { opacity: 0.88; transform: scale(1.16); }
 .precision-pad.has-snap {
   border-color: #7dd3fc;
   box-shadow: inset 0 0 0 1px rgb(125 211 252 / 20%), 0 0 2rem rgb(14 165 233 / 16%);
 }
-.precision-pad.has-snap .precision-guide { opacity: 0.88; }
-.precision-pad.has-snap .precision-dot {
-  background: radial-gradient(circle at 38% 34%, #fff 0 18%, #a5f3fc 20%, #06b6d4 65%);
-  box-shadow:
-    0 0 0 0.55rem rgb(34 211 238 / 24%),
-    0 0 2.5rem 0.95rem rgb(14 165 233 / 72%);
-  transform: translate(-50%, -50%) scale(1.16);
-}
+.precision-pad.has-snap::before { background: radial-gradient(circle, rgb(34 211 238 / 26%), transparent 68%); }
 .precision-status {
   position: absolute;
   z-index: 3;
@@ -551,9 +507,6 @@ export const REMOTE_JS = `(() => {
   const searchSubmit = document.querySelector("#search-submit");
   const dpad = document.querySelector(".dpad");
   const precisionPad = document.querySelector("#precision-pad");
-  const precisionDot = document.querySelector(".precision-dot");
-  const precisionGuideX = document.querySelector(".precision-guide-x");
-  const precisionGuideY = document.querySelector(".precision-guide-y");
   const controlMode = document.querySelector("#control-mode");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
@@ -700,7 +653,6 @@ export const REMOTE_JS = `(() => {
     dpad.hidden = enabled;
     precisionPad.hidden = !enabled;
     if (enabled) {
-      renderPointerPoint(virtualPointer);
       if (controllerToken) {
         queuePointer(pointerInput(virtualPointer, "move", 0), true);
       }
@@ -769,15 +721,7 @@ export const REMOTE_JS = `(() => {
     return virtualPointer;
   }
 
-  function renderPointerPoint(point) {
-    precisionDot.style.left = (point.x * 100) + "%";
-    precisionDot.style.top = (point.y * 100) + "%";
-    precisionGuideX.style.top = (point.y * 100) + "%";
-    precisionGuideY.style.left = (point.x * 100) + "%";
-  }
-
   function pointerInput(point, phase, scroll) {
-    renderPointerPoint(point);
     return { phase, scroll: scroll || 0, x: point.x, y: point.y };
   }
 

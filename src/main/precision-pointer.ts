@@ -15,8 +15,23 @@ export interface PrecisionPointerDispatch extends RemotePointerResult {
   snapKey: string | null;
 }
 
+export const PRECISION_POINTER_IDLE_MS = 3_500;
+
 export function precisionScrollDelta(scroll: number): number {
   return scroll * -90;
+}
+
+export function precisionShellScrollDelta(scroll: number): number {
+  return scroll * 90;
+}
+
+export function buildShellPrecisionScrollScript(scroll: number): string {
+  return `(() => {
+    const delta = ${JSON.stringify(precisionShellScrollDelta(scroll))};
+    if (!Number.isFinite(delta) || delta === 0) return false;
+    window.scrollBy({ behavior: 'auto', left: 0, top: delta });
+    return true;
+  })()`;
 }
 
 export function buildPrecisionPointerTargetScript(
@@ -29,6 +44,28 @@ export function buildPrecisionPointerTargetScript(
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
     const phase = ${JSON.stringify(phase)};
     const cursorId = 'nhd-tv-precision-cursor';
+    const pointerState = globalThis.__nhdTvPrecisionPointer || {
+      hideTimer: null,
+      keys: new WeakMap(),
+      nextKey: 1,
+      removeTimer: null
+    };
+    globalThis.__nhdTvPrecisionPointer = pointerState;
+    if (pointerState.hideTimer !== null) clearTimeout(pointerState.hideTimer);
+    if (pointerState.removeTimer !== null) clearTimeout(pointerState.removeTimer);
+    pointerState.hideTimer = null;
+    pointerState.removeTimer = null;
+    const clearFocus = () => {
+      document.querySelectorAll('[data-nhd-tv-focus="true"],[data-remote-focused="true"]').forEach((element) => {
+        element.removeAttribute('data-nhd-tv-focus');
+        element.removeAttribute('data-remote-focused');
+      });
+      document.documentElement.removeAttribute('data-nhd-tv-has-focus');
+      document.documentElement.style.removeProperty('--nhd-tv-focus-top');
+      document.documentElement.style.removeProperty('--nhd-tv-focus-left');
+      document.documentElement.style.removeProperty('--nhd-tv-focus-width');
+      document.documentElement.style.removeProperty('--nhd-tv-focus-height');
+    };
     let cursor = document.getElementById(cursorId);
     if (!(cursor instanceof HTMLElement) || cursor.dataset.nhdTvOwned !== 'true') {
       cursor?.remove();
@@ -49,10 +86,12 @@ export function buildPrecisionPointerTargetScript(
         'box-shadow:0 0 0 6px rgba(22,133,255,.22),0 0 24px 9px rgba(37,99,235,.62) !important',
         'pointer-events:none !important',
         'transform:translate(-50%,-50%) !important',
-        'transition:left 48ms linear,top 48ms linear,width 80ms ease,height 80ms ease,box-shadow 80ms ease !important',
-        'will-change:left,top !important'
+        'opacity:1 !important',
+        'transition:left 48ms linear,top 48ms linear,width 80ms ease,height 80ms ease,box-shadow 80ms ease,opacity 160ms ease !important',
+        'will-change:left,top,opacity !important'
       ].join(';');
     }
+    cursor.style.setProperty('opacity', '1', 'important');
     cursor.style.setProperty('left', requestedX + 'px', 'important');
     cursor.style.setProperty('top', requestedY + 'px', 'important');
     const cursorHost = document.fullscreenElement instanceof HTMLElement
@@ -61,6 +100,15 @@ export function buildPrecisionPointerTargetScript(
     if (cursor.parentElement !== cursorHost) {
       cursorHost.append(cursor);
     }
+    pointerState.hideTimer = setTimeout(() => {
+      pointerState.hideTimer = null;
+      clearFocus();
+      if (cursor.isConnected) cursor.style.setProperty('opacity', '0', 'important');
+      pointerState.removeTimer = setTimeout(() => {
+        pointerState.removeTimer = null;
+        cursor.remove();
+      }, 180);
+    }, ${PRECISION_POINTER_IDLE_MS});
     const setCursorSnapped = (snapped) => {
       cursor.dataset.nhdTvSnapped = String(snapped);
       cursor.style.setProperty('width', snapped ? '22px' : '18px', 'important');
@@ -207,11 +255,6 @@ export function buildPrecisionPointerTargetScript(
     const element = nearest.element;
     const rect = nearest.rect;
     setCursorSnapped(true);
-    const pointerState = globalThis.__nhdTvPrecisionPointer || {
-      keys: new WeakMap(),
-      nextKey: 1
-    };
-    globalThis.__nhdTvPrecisionPointer = pointerState;
     let key = pointerState.keys.get(element);
     if (typeof key !== 'string') {
       key = 'target-' + pointerState.nextKey++;
@@ -238,6 +281,15 @@ export function buildPrecisionPointerTargetScript(
 
 export function buildPrecisionPointerHideScript(): string {
   return `(() => {
+    const pointerState = globalThis.__nhdTvPrecisionPointer;
+    if (pointerState?.hideTimer !== null && pointerState?.hideTimer !== undefined) {
+      clearTimeout(pointerState.hideTimer);
+      pointerState.hideTimer = null;
+    }
+    if (pointerState?.removeTimer !== null && pointerState?.removeTimer !== undefined) {
+      clearTimeout(pointerState.removeTimer);
+      pointerState.removeTimer = null;
+    }
     document.getElementById('nhd-tv-precision-cursor')?.remove();
     document.querySelectorAll('[data-nhd-tv-focus="true"],[data-remote-focused="true"]').forEach((element) => {
       element.removeAttribute('data-nhd-tv-focus');
@@ -297,15 +349,22 @@ export async function dispatchPrecisionPointer(
   });
 
   if (input.scroll !== 0) {
-    webContents.sendInputEvent({
-      canScroll: true,
-      deltaX: 0,
-      deltaY: precisionScrollDelta(input.scroll),
-      hasPreciseScrollingDeltas: true,
-      type: "mouseWheel",
-      x: target.x,
-      y: target.y
-    });
+    if (webContents.getURL().startsWith("app://shell/")) {
+      await webContents.executeJavaScript(
+        buildShellPrecisionScrollScript(input.scroll),
+        true
+      );
+    } else {
+      webContents.sendInputEvent({
+        canScroll: true,
+        deltaX: 0,
+        deltaY: precisionScrollDelta(input.scroll),
+        hasPreciseScrollingDeltas: true,
+        type: "mouseWheel",
+        x: target.x,
+        y: target.y
+      });
+    }
   }
 
   if (input.phase === "tap" && target.snapped) {

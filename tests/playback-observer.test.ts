@@ -55,16 +55,18 @@ describe("passive playback observer", () => {
       queryParameters: [],
       subtitleSelectors: [".episode"],
       titleSelectors: ["h1"]
-    }, "Netflix");
+    }, "Netflix", ["nflximg.net"]);
     expect(script).toContain("video.played.end(index)");
     expect(script).toContain('readText(["h1"])');
     expect(script).toContain("recentActivation?.artworkUrl");
+    expect(script).toContain('url.hostname.endsWith("." + host)');
+    expect(script).toContain('["nflximg.net"].some');
     expect(script).toContain('=== "netflix"');
     expect(script).not.toContain("Example Show");
   });
 
   it("tracks the most recently activated visible tile without sending page data", () => {
-    const script = buildPlaybackActivationTrackerScript();
+    const script = buildPlaybackActivationTrackerScript(["/watch/"]);
 
     expect(script).toContain('document.addEventListener("focusin"');
     expect(script).toContain('document.addEventListener("pointerdown"');
@@ -77,6 +79,7 @@ describe("passive playback observer", () => {
     expect(script).toContain('[class*="tracked-card"]');
     expect(script).toContain('element.querySelectorAll("picture source")');
     expect(script).toContain("candidate.area >= 80 * 45");
+    expect(script).toContain('["/watch/"].some((prefix) => location.pathname.startsWith(prefix))');
     expect(script).not.toContain("ipcRenderer");
     expect(script).not.toContain("fetch(");
   });

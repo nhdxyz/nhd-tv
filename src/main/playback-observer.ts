@@ -97,11 +97,13 @@ export function qualifyPlaybackSnapshot(value: unknown): QualifiedPlaybackSnapsh
 
 export function buildPlaybackSnapshotScript(
   playback: NonNullable<ServiceDefinition["playback"]>,
-  serviceName = ""
+  serviceName = "",
+  artworkHosts: readonly string[] = []
 ): string {
   const titleSelectors = JSON.stringify(playback.titleSelectors);
   const subtitleSelectors = JSON.stringify(playback.subtitleSelectors);
   const normalizedServiceName = JSON.stringify(serviceName.trim().toLocaleLowerCase());
+  const allowedArtworkHosts = JSON.stringify(artworkHosts);
 
   return `(() => {
     const visibleVideo = (video) => {
@@ -167,7 +169,12 @@ export function buildPlaybackSnapshotScript(
     ];
     const artworkUrl = artworkCandidates.find((candidate) => {
       if (typeof candidate !== "string" || candidate.length === 0) return false;
-      try { return new URL(candidate, location.href).protocol === "https:"; } catch { return false; }
+      try {
+        const url = new URL(candidate, location.href);
+        return url.protocol === "https:" && ${allowedArtworkHosts}.some(
+          (host) => url.hostname === host || url.hostname.endsWith("." + host)
+        );
+      } catch { return false; }
     });
     const selectorTitle = readText(${titleSelectors});
     const activationTitle = typeof recentActivation?.title === "string"
@@ -193,7 +200,11 @@ export function buildPlaybackSnapshotScript(
   })()`;
 }
 
-export function buildPlaybackActivationTrackerScript(): string {
+export function buildPlaybackActivationTrackerScript(
+  playbackPathPrefixes: readonly string[] = []
+): string {
+  const pathPrefixes = JSON.stringify(playbackPathPrefixes);
+
   return `(() => {
     const key = ${JSON.stringify(PLAYBACK_ACTIVATION_KEY)};
     const storageKey = key + ":session";
@@ -319,6 +330,7 @@ export function buildPlaybackActivationTrackerScript(): string {
     };
 
     const remember = (target) => {
+      if (${pathPrefixes}.some((prefix) => location.pathname.startsWith(prefix))) return;
       const candidate = target instanceof Element ? candidateFrom(target) : null;
       if (candidate === null) return;
       if (state.artworkUrl === null || candidate.artworkPixelArea >= state.artworkPixelArea) {

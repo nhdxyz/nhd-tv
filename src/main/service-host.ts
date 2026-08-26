@@ -578,7 +578,7 @@ export class ServiceHost {
       if (this.#view === view) {
         if (definition.playback !== null) {
           void view.webContents.executeJavaScript(
-            buildPlaybackActivationTrackerScript(),
+            buildPlaybackActivationTrackerScript(definition.playback.pathPrefixes),
             true
           ).catch(() => undefined);
         }
@@ -975,7 +975,7 @@ export class ServiceHost {
           try {
             const observation = qualifyPlaybackSnapshot(
               await view.webContents.executeJavaScript(
-                buildPlaybackSnapshotScript(playback, definition.name),
+                buildPlaybackSnapshotScript(playback, definition.name, definition.artworkHosts),
                 true
               ) as unknown
             );
@@ -1171,7 +1171,7 @@ export class ServiceHost {
     this.#playbackCheckpoint = (async () => {
       try {
         const rawSnapshot = await webContents.executeJavaScript(
-          buildPlaybackSnapshotScript(playback, definition.name),
+          buildPlaybackSnapshotScript(playback, definition.name, definition.artworkHosts),
           true
         ) as unknown;
         const snapshot = qualifyPlaybackSnapshot(rawSnapshot);

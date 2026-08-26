@@ -33,12 +33,13 @@ The architecture must support both focused operation and a future native/global 
 The first home experience contains:
 
 - Continue Watching
+- Search across enabled service integrations
 - Enabled services
 - Profile access
 - Store access
 - Settings
 
-Universal cross-service search, algorithmic recommendations, voice control, and cloud synchronization are not MVP requirements.
+The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. Integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
 
 ## Store
 
@@ -78,11 +79,15 @@ For recognized playback, store:
 
 The listener checkpoints active playback periodically and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful playback from previews and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position.
 
+The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a long-form media element and at least five seconds of engagement, strips undeclared URL parameters, and checkpoints every ten seconds plus pause, navigation, and exit. It removes items observed at 95% completion. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
+
 ## Phone remote
 
 The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
 
-The first remote slice provides directional navigation, Select, Back, and Home. It is session-only, requires television approval, and deliberately excludes all text entry so a phone cannot forward passwords or payment details. The phone gives haptic feedback only after a command is accepted when the browser supports vibration. Trackpad and carefully scoped non-sensitive text entry remain later capabilities; password entry is excluded until the channel has an appropriate encryption design.
+The first remote slice provides directional navigation, Select, Back, Home, and a single bounded Search field. It is session-only and requires television approval. Search text is delivered only to the trusted NHD-TV shell; it cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback only after an action is accepted when the browser supports vibration.
+
+Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. Trackpad control remains a later capability.
 
 ## Desktop behavior
 

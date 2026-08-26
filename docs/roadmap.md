@@ -33,11 +33,12 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 3: Continue Watching
 
-- Playback qualification and preview filtering
-- Metadata and artwork capture
-- Periodic and lifecycle checkpoints
-- Completion and manual-removal rules
-- Resume through service-owned watch URLs
+- [x] Basic playback qualification and preview filtering
+- [x] Title and allowlisted artwork capture foundation
+- [x] Periodic, pause, navigation, and exit checkpoints
+- [x] Observed completion rule
+- [ ] Manual removal and per-service adapter qualification tests
+- [x] Resume through service-owned watch URLs
 
 ## Milestone 4: Phone remote
 
@@ -45,11 +46,21 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Short-lived QR pairing and television approval
 - [x] Revocable in-memory device tokens
 - [x] Directional, Select, Back, and Home controls
+- [x] Bounded phone search with native keyboard dictation
 - [ ] Trackpad controls
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session
 
-## Milestone 5: Packaging and platform expansion
+## Milestone 5: Search and discovery
+
+- [x] TV search overlay and enabled-service launcher
+- [x] Declarative Netflix and YouTube query routes
+- [x] Disney+ browse-search fallback
+- [ ] Licensed cross-service metadata and regional availability
+- [ ] Trusted local HTTPS and opt-in direct microphone capture
+- [ ] Watchlist, favorites, and recommendation controls
+
+## Milestone 6: Packaging and platform expansion
 
 - Windows installer and update path
 - macOS packaging, signing, and platform validation

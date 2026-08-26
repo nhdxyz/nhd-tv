@@ -30,7 +30,7 @@ Verified 2026-08-25 on Apple silicon (`darwin arm64`). These results exercise th
 | Service | Entry page | Login flow reached | Playback | Fullscreen | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Netflix | Pass | Pass; restart persistence confirmed | Pass after EVS production signing | Retest pending | Castlabs' production VMP Lab returned `PLATFORM_SOFTWARE_VERIFIED`. A sanitized in-app smoke test opened Netflix's official Test Patterns title, decoded video, and advanced beyond two seconds without E100. |
-| YouTube | Pass | Incomplete | Pass, signed out | Retest pending | Google sign-in loaded through its explicit navigation-only origin. The passkey challenge rendered, and Google's `Try another way` path exposed password sign-in. A later password plus phone one-time-verification attempt returned to signed-out YouTube without a visible error. Origin-only blocked-navigation diagnostics were added for a clean retry; supported TV device activation is tracked in Issue #11. A public 10:35 video rendered and advanced in the embedded view. |
+| YouTube | Pass | Pass; saved account control observed | Pass | Retest pending | Google sign-in opens in a controlled, sandboxed NHD-TV window using YouTube's isolated session. The unsigned macOS passkey prompt remains unavailable, but Google's password fallback completed and the later authentication smoke check observed YouTube's saved account control without reading account details. A public 10:35 video rendered and advanced in the embedded view. |
 | Disney+ | Pass | Pass | Pending user login | Pending | The isolated service reached the MyDisney login page without a renderer error. |
 
 The initial YouTube load uncovered an expected same-origin redirect reported by Chromium as `ERR_ABORTED (-3)`. The host now tolerates that code only when the replacement URL remains on the service's exact allowlist; other load failures still close the service and surface an error.
@@ -58,9 +58,9 @@ For each service:
 ## Current limitations
 
 - Netflix authentication persistence and preliminary macOS playback are verified after EVS production streaming signing. Reinstalling or updating ECS replaces the locally signed runtime, so the signing command must be rerun. Disney+ authentication remains pending.
-- Google password plus phone verification did not produce a durable YouTube session. The host now records only a blocked navigation's service, event type, and origin so the allowlist can be evaluated without retaining tokenized URLs or account data. Google's supported television activation investigation is tracked in Issue #11.
+- YouTube now exposes its saved account control in the isolated session. Google's supported television activation remains worth evaluating for controller-only onboarding and is tracked in Issue #11.
 - macOS platform passkeys are unavailable in the unsigned feasibility build. Electron requires app-specific WebAuthn configuration plus a matching code-signing keychain entitlement, and its Touch ID credentials are device-bound rather than inherited from an existing browser. The shell shows Google's tested password fallback; Windows Hello remains part of the Windows 11 acceptance run. Production macOS support is tracked in Issue #9.
 - NHD-TV's built-in video-decode value reports Chromium capability, not proof that a particular frame was hardware-decoded. Confirm active use with Windows Task Manager's Video Decode engine.
 - The fullscreen bridge needs a clean Netflix retest; playback is now unblocked.
-- Popup creation remains denied. If a service requires a popup rather than same-view authentication, document the failure before adding a narrowly scoped host-owned popup policy.
+- Popups are allowed only when their URL matches the service adapter's exact origin allowlist. They open as sandboxed, app-owned modal windows in the same isolated service session; nested or unexpected-origin popups remain denied.
 - Service-specific origin additions must be justified by an observed top-level login or playback navigation. Broad wildcard allowlists are not acceptable.

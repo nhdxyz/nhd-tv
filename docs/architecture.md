@@ -35,9 +35,11 @@ The host decides whether an action belongs to the shell, the service, or an NHD-
 
 The shell locks horizontal movement to the current labeled rail while vertical movement can cross sections. Curated service adapters can add a DOM-spatial layer on browse routes; it applies a visible focus marker and falls back to native key events when no safe target is found. Watch/player routes and HTML fullscreen bypass that layer.
 
-The current phone-remote slice starts an HTTP server on a random port only when pairing is requested. Its QR secret is 256-bit random data held in memory and expires quickly. Scanning creates a pending request; the TV must approve it before the server returns a separate session-only controller token. Pairing and controller tokens are stored as hashes in the host, never logged, and revoked at app shutdown. The local page has a restrictive Content Security Policy and accepts only a fixed action vocabulary. It intentionally has no text-entry channel.
+The current phone-remote slice starts an HTTP server on a random port only when pairing is requested. Its QR secret is 256-bit random data held in memory and expires quickly. Scanning creates a pending request; the TV must approve it before the server returns a separate session-only controller token. Pairing and controller tokens are stored as hashes in the host, never logged, and revoked at app shutdown. The local page has a restrictive Content Security Policy and accepts a fixed action vocabulary plus one authenticated, same-origin, length-bounded search message. Search is routed to the trusted shell overlay and cannot target arbitrary service fields.
 
 The first implementation uses small authenticated HTTP requests for commands rather than a persistent WebSocket. This keeps the exposed local surface narrow while retaining adequate D-pad latency; the normalized action layer allows the transport to change later without changing shell or service routing.
+
+The LAN page is deliberately served without microphone permission. Browser media capture is a secure-context capability, while the current QR address is plain HTTP on a private-network IP. Voice input therefore uses native iOS or Android keyboard dictation in the bounded Search field until NHD-TV has a trusted local HTTPS design.
 
 ## Service adapters
 
@@ -58,9 +60,17 @@ Service popup policy never creates an unrestricted child window. A popup URL on 
 
 ## Local data
 
-SQLite is the leading store for profiles, enabled services, ordering, viewing progress, paired remotes, and settings. Browser cookies and other service session state remain in the runtime's session storage rather than being copied into application tables.
+The first Continue Watching slice uses a versioned, owner-readable JSON document in Electron's application-data directory. Writes use a temporary file and atomic rename. Private watch URLs never cross renderer IPC; service, title, progress, duration, timestamp, and cached JPEG artwork form the renderer-safe view. Artwork is downloaded only over HTTPS from per-adapter host suffixes, checked again after redirects, size-limited, decoded, resized, and re-encoded before storage.
+
+SQLite remains the target once profiles, ordering, migrations, manual removal, and larger libraries justify it. Browser cookies and other service session state remain in the runtime's session storage rather than being copied into application tables.
 
 Application-owned secrets must use operating-system-backed encryption where available. Linux must expose degraded-security states rather than silently treating weak storage as secure.
+
+## Search boundary
+
+Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.
+
+This is federated launching, not a metadata index: NHD-TV does not scrape provider catalogs or claim that a result is available in a subscription. A later metadata provider must have explicit attribution, regional availability semantics, caching limits, and commercial-use terms before its results appear in the shell.
 
 ## Performance strategy
 

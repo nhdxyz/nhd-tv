@@ -33,6 +33,10 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("clearFocus();");
     expect(script).toContain("distance <= 28 && nearest.distance > 0");
     expect(script).toContain("nearest.distance > 0");
+    expect(script).toContain("visibleModalRoots");
+    expect(script).toContain("modalRoot !== null && !modalRoot.contains(element)");
+    expect(script).toContain('[class*="previewModal"]');
+    expect(script).toContain("netflixEpisodeRect.height <= 260");
     expect(script).not.toContain("element.focus(");
     expect(script).not.toContain(".click()");
   });

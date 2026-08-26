@@ -158,6 +158,7 @@ export function buildPrecisionPointerTargetScript(
     ].join(',');
     const snapRadius = Math.max(52, Math.min(108, Math.min(innerWidth, innerHeight) * 0.1));
     const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
+    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     const cardSelector = [
       'ytd-rich-item-renderer',
       'ytd-video-renderer',
@@ -196,9 +197,29 @@ export function buildPrecisionPointerTargetScript(
       }
       return false;
     };
+    const modalSelector = [
+      'dialog[open]',
+      '[role="dialog"]',
+      '[aria-modal="true"]',
+      '[data-uia*="modal"]',
+      '[class*="previewModal"]',
+      '[class*="detail-modal"]'
+    ].join(',');
+    const visibleModalRoots = [...document.querySelectorAll(modalSelector)].filter((element) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0.05 && rect.width >= 40 && rect.height >= 40 &&
+        rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+    });
+    const modalRoot = visibleModalRoots
+      .filter((candidate) => !visibleModalRoots.some((other) => other !== candidate && other.contains(candidate)))
+      .at(-1) || null;
     const isCandidate = (element) => {
       if (
         !(element instanceof HTMLElement) ||
+        (modalRoot !== null && !modalRoot.contains(element)) ||
         blocked(element) ||
         element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
         element.closest('[aria-hidden="true"],[inert]') !== null
@@ -307,9 +328,24 @@ export function buildPrecisionPointerTargetScript(
     }
     element.dataset.nhdTvFocus = 'true';
     element.dataset.remoteFocused = 'true';
+    const netflixEpisodeRow = netflix
+      ? element.closest([
+        '[data-uia*="episode-item"]',
+        '.episodeSelector .episode',
+        '[class*="episodeSelector"] [class*="episode"]'
+      ].join(','))
+      : null;
+    const netflixEpisodeRect = netflixEpisodeRow instanceof HTMLElement
+      ? netflixEpisodeRow.getBoundingClientRect()
+      : null;
     const overlayRect = youtube
       ? element.closest(cardSelector)?.getBoundingClientRect() || rect
-      : rect;
+      : netflixEpisodeRect !== null &&
+          netflixEpisodeRect.width >= rect.width &&
+          netflixEpisodeRect.height >= rect.height &&
+          netflixEpisodeRect.height <= 260
+        ? netflixEpisodeRect
+        : rect;
     document.documentElement.dataset.nhdTvHasFocus = 'true';
     document.documentElement.style.setProperty('--nhd-tv-focus-top', overlayRect.top + 'px');
     document.documentElement.style.setProperty('--nhd-tv-focus-left', overlayRect.left + 'px');

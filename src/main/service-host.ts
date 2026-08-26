@@ -12,6 +12,10 @@ import {
   sanitizePlaybackUrl,
   type ServiceDefinition
 } from "./security/navigation-policy";
+import {
+  buildPlaybackSnapshotScript,
+  qualifyPlaybackSnapshot
+} from "./playback-observer";
 import type { NavigationDiagnostic, RemoteAction } from "./contracts";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
@@ -26,6 +30,7 @@ export interface PlaybackObservation {
   positionSeconds: number;
   serviceId: string;
   serviceName: string;
+  subtitle: string | null;
   title: string;
   watchUrl: string;
 }
@@ -60,6 +65,7 @@ const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
+const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SERVICE_FOCUS_STYLE = `
   [data-nhd-tv-focus="true"] {
     outline: 4px solid #63e6ff !important;
@@ -70,54 +76,6 @@ const SERVICE_FOCUS_STYLE = `
     transition: outline-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
   }
 `;
-
-interface PlaybackSnapshot {
-  artworkUrl: string | null;
-  currentTime: number;
-  duration: number;
-  ended: boolean;
-  title: string;
-  url: string;
-}
-
-const playbackSnapshotScript = `(() => {
-  const videos = [...document.querySelectorAll("video")]
-    .filter((video) => Number.isFinite(video.duration) && video.duration >= 60)
-    .sort((left, right) => {
-      const leftRect = left.getBoundingClientRect();
-      const rightRect = right.getBoundingClientRect();
-      return rightRect.width * rightRect.height - leftRect.width * leftRect.height;
-    });
-  const video = videos[0];
-  if (!(video instanceof HTMLVideoElement) || video.currentTime < 5) return null;
-
-  const titleCandidates = [
-    document.querySelector('[data-uia="video-title"]')?.textContent,
-    document.querySelector('h1.ytd-watch-metadata')?.textContent,
-    document.querySelector('meta[property="og:title"]')?.getAttribute("content"),
-    document.title
-  ];
-  const title = titleCandidates
-    .find((candidate) => typeof candidate === "string" && candidate.trim().length > 0)
-    ?.replace(/\\s+/g, " ").trim() ?? "";
-  const artworkCandidates = [
-    document.querySelector('meta[property="og:image"]')?.getAttribute("content"),
-    video.poster
-  ];
-  const artworkUrl = artworkCandidates.find((candidate) => {
-    if (typeof candidate !== "string" || candidate.length === 0) return false;
-    try { return new URL(candidate, location.href).protocol === "https:"; } catch { return false; }
-  });
-
-  return {
-    artworkUrl: artworkUrl ? new URL(artworkUrl, location.href).toString() : null,
-    currentTime: video.currentTime,
-    duration: video.duration,
-    ended: video.ended,
-    title,
-    url: location.href
-  };
-})()`;
 
 function shouldUseDomSpatialNavigation(
   definition: ServiceDefinition,
@@ -380,6 +338,7 @@ export class ServiceHost {
   #quitPromptVisible = false;
   #replayingInput = false;
   #playbackCheckpoint: Promise<void> | null = null;
+  #playbackQualificationTimer: NodeJS.Timeout | null = null;
   #playbackTimer: NodeJS.Timeout | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
@@ -567,6 +526,23 @@ export class ServiceHost {
       }
     });
 
+    view.webContents.on("media-started-playing", () => {
+      if (this.#view !== view) {
+        return;
+      }
+
+      if (this.#playbackQualificationTimer !== null) {
+        clearTimeout(this.#playbackQualificationTimer);
+      }
+
+      this.#playbackQualificationTimer = setTimeout(() => {
+        this.#playbackQualificationTimer = null;
+        if (this.#view === view) {
+          void this.#checkpointPlayback();
+        }
+      }, PLAYBACK_QUALIFICATION_DELAY_MS);
+    });
+
     view.webContents.on("enter-html-full-screen", () => {
       if (this.#view === view) {
         this.#htmlFullscreen = true;
@@ -639,6 +615,11 @@ export class ServiceHost {
     if (this.#playbackTimer !== null) {
       clearInterval(this.#playbackTimer);
       this.#playbackTimer = null;
+    }
+
+    if (this.#playbackQualificationTimer !== null) {
+      clearTimeout(this.#playbackQualificationTimer);
+      this.#playbackQualificationTimer = null;
     }
 
     if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
@@ -802,8 +783,14 @@ export class ServiceHost {
 
   async runNetflixSmokeTest(): Promise<NetflixSmokeResult> {
     const view = this.#view;
+    const definition = this.#activeDefinition;
 
-    if (view === null || view.webContents.isDestroyed() || this.activeServiceId !== "netflix") {
+    if (
+      view === null ||
+      definition === null ||
+      view.webContents.isDestroyed() ||
+      definition.id !== "netflix"
+    ) {
       return {
         detail: "Netflix is not open in the service host.",
         status: "inconclusive"
@@ -817,7 +804,7 @@ export class ServiceHost {
         !isExpectedAllowedNavigationAbort(
           error,
           view.webContents.getURL(),
-          this.#activeDefinition?.allowedOrigins ?? []
+          definition.allowedOrigins
         )
       ) {
         return {
@@ -867,11 +854,31 @@ export class ServiceHost {
         };
       }
 
-      if (snapshot.isPlaying && snapshot.readyState >= 3 && snapshot.currentTime >= 2) {
-        return {
-          detail: "Netflix test video decoded and advanced beyond two seconds.",
-          status: "passed"
-        };
+      if (snapshot.isPlaying && snapshot.readyState >= 3 && snapshot.currentTime >= 6) {
+        const playback = definition.playback;
+
+        if (playback !== null) {
+          try {
+            const observation = qualifyPlaybackSnapshot(
+              await view.webContents.executeJavaScript(
+                buildPlaybackSnapshotScript(playback),
+                true
+              ) as unknown
+            );
+            const watchUrl = observation === null
+              ? null
+              : sanitizePlaybackUrl(observation.url, definition);
+
+            if (observation !== null && watchUrl !== null) {
+              return {
+                detail: "Netflix test video decoded and qualified for passive Continue Watching observation.",
+                status: "passed"
+              };
+            }
+          } catch {
+            // Keep sampling until the observer can read a stable player document.
+          }
+        }
       }
 
       if (!clickedPlay && snapshot.hasPlayControl) {
@@ -1028,10 +1035,11 @@ export class ServiceHost {
 
     const view = this.#view;
     const definition = this.#activeDefinition;
+    const playback = definition?.playback ?? null;
     if (
       view === null ||
       definition === null ||
-      definition.playback === null
+      playback === null
     ) {
       return;
     }
@@ -1043,10 +1051,11 @@ export class ServiceHost {
 
     this.#playbackCheckpoint = (async () => {
       try {
-        const snapshot = await webContents.executeJavaScript(
-          playbackSnapshotScript,
+        const rawSnapshot = await webContents.executeJavaScript(
+          buildPlaybackSnapshotScript(playback),
           true
-        ) as PlaybackSnapshot | null;
+        ) as unknown;
+        const snapshot = qualifyPlaybackSnapshot(rawSnapshot);
         if (snapshot === null || this.#view !== view) {
           return;
         }
@@ -1055,9 +1064,7 @@ export class ServiceHost {
         if (
           watchUrl === null ||
           !Number.isFinite(snapshot.currentTime) ||
-          !Number.isFinite(snapshot.duration) ||
-          snapshot.currentTime < 5 ||
-          snapshot.duration < 60
+          !Number.isFinite(snapshot.duration)
         ) {
           return;
         }
@@ -1069,6 +1076,7 @@ export class ServiceHost {
           positionSeconds: snapshot.currentTime,
           serviceId: definition.id,
           serviceName: definition.name,
+          subtitle: snapshot.subtitle,
           title: typeof snapshot.title === "string" ? snapshot.title : definition.name,
           watchUrl
         });

@@ -535,11 +535,18 @@ h2 {
   display: none;
 }
 
+.continue-card-shell {
+  position: relative;
+  width: clamp(23rem, 29vw, 31rem);
+  min-width: clamp(23rem, 29vw, 31rem);
+  scroll-snap-align: start;
+}
+
 .continue-card {
   display: grid;
   grid-template-rows: auto minmax(6.8rem, 1fr);
-  width: clamp(23rem, 29vw, 31rem);
-  min-width: clamp(23rem, 29vw, 31rem);
+  width: 100%;
+  min-width: 100%;
   min-height: 19rem;
   overflow: hidden;
   padding: 0;
@@ -547,8 +554,13 @@ h2 {
   border-radius: 1.15rem;
   background: var(--panel);
   text-align: left;
-  scroll-snap-align: start;
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.continue-placeholder {
+  width: clamp(23rem, 29vw, 31rem);
+  min-width: clamp(23rem, 29vw, 31rem);
+  scroll-snap-align: start;
 }
 
 .continue-card:hover,
@@ -583,14 +595,17 @@ h2 {
   height: 4.6rem;
 }
 
+.continue-card-shell[data-service-id="netflix"] .continue-art,
 .continue-card[data-service-id="netflix"] .continue-art {
   background: radial-gradient(circle at 74% 25%, #9f1d24, transparent 10rem), #19070a;
 }
 
+.continue-card-shell[data-service-id="youtube"] .continue-art,
 .continue-card[data-service-id="youtube"] .continue-art {
   background: radial-gradient(circle at 74% 25%, #c51b1b, transparent 10rem), #1b090b;
 }
 
+.continue-card-shell[data-service-id="disney-plus"] .continue-art,
 .continue-card[data-service-id="disney-plus"] .continue-art {
   background: radial-gradient(circle at 74% 25%, #2563eb, transparent 11rem), #07152f;
 }
@@ -615,7 +630,7 @@ h2 {
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  padding: 1.05rem 1.2rem 1.2rem;
+  padding: 1.05rem 6.4rem 1.2rem 1.2rem;
 }
 
 .continue-meta strong {
@@ -629,6 +644,39 @@ h2 {
   margin-top: 0.35rem;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.continue-meta .continue-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.continue-remove {
+  position: absolute;
+  z-index: 4;
+  right: 1rem;
+  bottom: 1.05rem;
+  min-width: 4.7rem;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(5 8 14 / 72%);
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.continue-remove:hover,
+.continue-remove:focus-visible {
+  border-color: rgb(251 113 133 / 70%);
+  background: rgb(127 29 29 / 88%);
+  color: #fff;
+}
+
+.continue-placeholder .continue-meta {
+  padding-right: 1.2rem;
 }
 
 .continue-meta .continue-service {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,6 +25,7 @@ function checkpoint(overrides: Partial<PlaybackCheckpoint> = {}): PlaybackCheckp
     positionSeconds: 600,
     serviceId: "netflix",
     serviceName: "Netflix",
+    subtitle: "S1 E2 · An Example",
     title: "Example Show",
     watchUrl: "https://www.netflix.com/watch/123",
     ...overrides
@@ -47,6 +48,7 @@ describe("Continue Watching store", () => {
       durationSeconds: 2_400,
       positionSeconds: 600,
       serviceId: "netflix",
+      subtitle: "S1 E2 · An Example",
       title: "Example Show"
     });
     expect(saved).not.toHaveProperty("watchUrl");
@@ -87,5 +89,48 @@ describe("Continue Watching store", () => {
     }));
 
     expect(store.list().map((item) => item.id)).toEqual([second?.id, first?.id]);
+  });
+
+  it("removes one local item without changing any other service history", async () => {
+    const { store } = await testStore();
+    const netflix = await store.upsert(checkpoint());
+    const youtube = await store.upsert(checkpoint({
+      serviceId: "youtube",
+      serviceName: "YouTube",
+      subtitle: null,
+      title: "Another Video",
+      watchUrl: "https://www.youtube.com/watch?v=abc"
+    }));
+
+    expect(await store.remove(netflix?.id)).toBe(true);
+    expect(await store.remove(netflix?.id)).toBe(false);
+    expect(await store.remove(null)).toBe(false);
+    expect(store.list().map((item) => item.id)).toEqual([youtube?.id]);
+  });
+
+  it("loads version-one history with a null subtitle", async () => {
+    const { filePath } = await testStore();
+    await writeFile(filePath, JSON.stringify({
+      items: [{
+        artworkDataUrl: null,
+        durationSeconds: 2_400,
+        id: "legacy-item",
+        positionSeconds: 600,
+        serviceId: "netflix",
+        serviceName: "Netflix",
+        title: "Legacy Show",
+        updatedAt: 1,
+        watchUrl: "https://www.netflix.com/watch/123"
+      }],
+      version: 1
+    }));
+
+    const restored = new ContinueWatchingStore(filePath);
+    await restored.initialize();
+    expect(restored.list()).toEqual([expect.objectContaining({
+      id: "legacy-item",
+      subtitle: null,
+      title: "Legacy Show"
+    })]);
   });
 });

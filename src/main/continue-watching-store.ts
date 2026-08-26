@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ContinueWatchingItem } from "./contracts";
 
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 const MAX_ITEMS = 18;
 const MAX_TITLE_LENGTH = 180;
 
@@ -13,6 +13,7 @@ export interface PlaybackCheckpoint {
   positionSeconds: number;
   serviceId: string;
   serviceName: string;
+  subtitle: string | null;
   title: string;
   watchUrl: string;
 }
@@ -37,26 +38,50 @@ function finiteNonNegative(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function isStoredItem(value: unknown): value is StoredContinueWatchingItem {
+function normalizedText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length === 0 ? null : normalized.slice(0, MAX_TITLE_LENGTH);
+}
+
+function storedItem(value: unknown): StoredContinueWatchingItem | null {
   if (typeof value !== "object" || value === null) {
-    return false;
+    return null;
   }
 
   const item = value as Partial<StoredContinueWatchingItem>;
-  return (
-    typeof item.id === "string" &&
-    typeof item.serviceId === "string" &&
-    typeof item.serviceName === "string" &&
-    typeof item.title === "string" &&
-    typeof item.watchUrl === "string" &&
-    (item.artworkDataUrl === null || (
+  if (
+    typeof item.id !== "string" ||
+    typeof item.serviceId !== "string" ||
+    typeof item.serviceName !== "string" ||
+    typeof item.title !== "string" ||
+    typeof item.watchUrl !== "string" ||
+    !(item.artworkDataUrl === null || (
       typeof item.artworkDataUrl === "string" &&
       item.artworkDataUrl.startsWith("data:image/jpeg;base64,")
-    )) &&
-    finiteNonNegative(item.durationSeconds) &&
-    finiteNonNegative(item.positionSeconds) &&
-    finiteNonNegative(item.updatedAt)
-  );
+    )) ||
+    !finiteNonNegative(item.durationSeconds) ||
+    !finiteNonNegative(item.positionSeconds) ||
+    !finiteNonNegative(item.updatedAt)
+  ) {
+    return null;
+  }
+
+  return {
+    artworkDataUrl: item.artworkDataUrl,
+    durationSeconds: item.durationSeconds,
+    id: item.id,
+    positionSeconds: item.positionSeconds,
+    serviceId: item.serviceId,
+    serviceName: item.serviceName,
+    subtitle: normalizedText(item.subtitle),
+    title: normalizedText(item.title) ?? item.serviceName,
+    updatedAt: item.updatedAt,
+    watchUrl: item.watchUrl
+  };
 }
 
 function publicItem(item: StoredContinueWatchingItem): ContinueWatchingItem {
@@ -80,11 +105,13 @@ export class ContinueWatchingStore {
       if (
         typeof parsed === "object" &&
         parsed !== null &&
-        (parsed as Partial<StoredContinueWatchingDocument>).version === STORE_VERSION &&
+        ((parsed as Partial<StoredContinueWatchingDocument>).version === 1 ||
+          (parsed as Partial<StoredContinueWatchingDocument>).version === STORE_VERSION) &&
         Array.isArray((parsed as Partial<StoredContinueWatchingDocument>).items)
       ) {
         this.#items = (parsed as StoredContinueWatchingDocument).items
-          .filter(isStoredItem)
+          .map(storedItem)
+          .filter((item): item is StoredContinueWatchingItem => item !== null)
           .sort((left, right) => right.updatedAt - left.updatedAt)
           .slice(0, MAX_ITEMS);
       }
@@ -108,6 +135,21 @@ export class ContinueWatchingStore {
       : { serviceId: item.serviceId, watchUrl: item.watchUrl };
   }
 
+  async remove(id: unknown): Promise<boolean> {
+    if (typeof id !== "string") {
+      return false;
+    }
+
+    const nextItems = this.#items.filter((item) => item.id !== id);
+    if (nextItems.length === this.#items.length) {
+      return false;
+    }
+
+    this.#items = nextItems;
+    await this.#persist();
+    return true;
+  }
+
   async upsert(checkpoint: PlaybackCheckpoint): Promise<ContinueWatchingItem | null> {
     const id = itemId(checkpoint.serviceId, checkpoint.watchUrl);
     const existing = this.#items.find((item) => item.id === id);
@@ -127,7 +169,7 @@ export class ContinueWatchingStore {
       return null;
     }
 
-    const title = checkpoint.title.replace(/\s+/g, " ").trim().slice(0, MAX_TITLE_LENGTH);
+    const title = normalizedText(checkpoint.title);
     const item: StoredContinueWatchingItem = {
       artworkDataUrl: existing?.artworkDataUrl ?? null,
       durationSeconds,
@@ -135,7 +177,8 @@ export class ContinueWatchingStore {
       positionSeconds,
       serviceId: checkpoint.serviceId,
       serviceName: checkpoint.serviceName,
-      title: title || checkpoint.serviceName,
+      subtitle: normalizedText(checkpoint.subtitle),
+      title: title ?? checkpoint.serviceName,
       updatedAt: Date.now(),
       watchUrl: checkpoint.watchUrl
     };

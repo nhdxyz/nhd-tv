@@ -14,6 +14,7 @@ export const IPC_CHANNELS = {
   remoteAction: "nhd:remote:action",
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
+  removeContinueWatching: "nhd:continue-watching:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
   serviceQuitRequested: "nhd:service:quit:requested",
@@ -60,6 +61,7 @@ export interface ContinueWatchingItem {
   positionSeconds: number;
   serviceId: string;
   serviceName: string;
+  subtitle: string | null;
   title: string;
   updatedAt: number;
 }

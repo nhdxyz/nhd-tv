@@ -29,7 +29,20 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-netflix",
     playback: {
       pathPrefixes: ["/watch/"],
-      queryParameters: []
+      queryParameters: [],
+      subtitleSelectors: [
+        '[data-uia="video-title"] [data-uia*="episode"]',
+        '[data-uia="video-title"] [class*="episode"]',
+        '[data-uia="video-title"] [class*="ellipsize"]'
+      ],
+      titleSelectors: [
+        '[data-uia="video-title"] [data-uia="title"]',
+        '[data-uia="video-title"] h1',
+        '[data-uia="video-title"] h2',
+        '[data-uia="video-title"]',
+        'meta[property="og:title"]',
+        "title"
+      ]
     },
     rootUrls: ["https://www.netflix.com/browse"],
     search: {
@@ -55,7 +68,17 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-youtube",
     playback: {
       pathPrefixes: ["/watch", "/shorts/"],
-      queryParameters: ["v"]
+      queryParameters: ["v"],
+      subtitleSelectors: [
+        "#owner #channel-name",
+        "ytd-video-owner-renderer #channel-name"
+      ],
+      titleSelectors: [
+        "h1.ytd-watch-metadata yt-formatted-string",
+        "h1.ytd-watch-metadata",
+        'meta[property="og:title"]',
+        "title"
+      ]
     },
     rootUrls: ["https://www.youtube.com/"],
     search: {
@@ -75,7 +98,12 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-disney-plus",
     playback: {
       pathPrefixes: ["/play/", "/video/"],
-      queryParameters: []
+      queryParameters: [],
+      subtitleSelectors: [],
+      titleSelectors: [
+        'meta[property="og:title"]',
+        "title"
+      ]
     },
     rootUrls: ["https://www.disneyplus.com/home"],
     search: {

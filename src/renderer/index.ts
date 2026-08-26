@@ -182,10 +182,13 @@ function playbackTime(seconds: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-function continueCard(item: ContinueWatchingItem): HTMLButtonElement {
+function continueCard(item: ContinueWatchingItem): HTMLElement {
+  const shell = document.createElement("article");
+  shell.className = "continue-card-shell";
+  shell.dataset.serviceId = item.serviceId;
+
   const button = document.createElement("button");
   button.className = "continue-card continue-card-item";
-  button.dataset.serviceId = item.serviceId;
   button.type = "button";
   button.setAttribute("aria-label", `Resume ${item.title} in ${item.serviceName}`);
 
@@ -215,7 +218,10 @@ function continueCard(item: ContinueWatchingItem): HTMLButtonElement {
   title.textContent = item.title;
   const remaining = Math.max(0, item.durationSeconds - item.positionSeconds);
   const detail = document.createElement("small");
-  detail.textContent = `${playbackTime(remaining)} left`;
+  detail.className = "continue-detail";
+  detail.textContent = item.subtitle === null
+    ? `${playbackTime(remaining)} left`
+    : `${item.subtitle} · ${playbackTime(remaining)} left`;
   const progress = document.createElement("span");
   progress.className = "placeholder-progress";
   progress.setAttribute("aria-hidden", "true");
@@ -232,7 +238,28 @@ function continueCard(item: ContinueWatchingItem): HTMLButtonElement {
       showFeedback(error instanceof Error ? error.message : String(error));
     }
   });
-  return button;
+
+  const remove = document.createElement("button");
+  remove.className = "continue-remove";
+  remove.dataset.navGroup = "continue-remove";
+  remove.type = "button";
+  remove.textContent = "Remove";
+  remove.setAttribute("aria-label", `Remove ${item.title} from Continue Watching`);
+  remove.addEventListener("click", async () => {
+    remove.disabled = true;
+    try {
+      const removed = await window.nhd.removeContinueWatching(item.id);
+      showFeedback(removed
+        ? `${item.title} removed from Continue Watching.`
+        : "That Continue Watching item was already removed.");
+    } catch (error) {
+      remove.disabled = false;
+      showFeedback(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  shell.append(button, remove);
+  return shell;
 }
 
 function renderContinueWatching(): void {

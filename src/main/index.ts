@@ -409,6 +409,17 @@ function registerIpc(): void {
     await serviceHost.open(definition, watchUrl);
   });
 
+  ipcMain.handle(IPC_CHANNELS.removeContinueWatching, async (event, itemId: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+
+    const removed = await continueWatchingStore?.remove(itemId) ?? false;
+    if (removed) {
+      publishContinueWatching();
+    }
+
+    return removed;
+  });
+
   ipcMain.handle(IPC_CHANNELS.closeService, async (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     await serviceHost?.closeWithCheckpoint();

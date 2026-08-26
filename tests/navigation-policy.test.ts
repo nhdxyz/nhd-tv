@@ -24,7 +24,9 @@ const validDefinition: ServiceDefinition = {
   partition: "persist:service-example",
   playback: {
     pathPrefixes: ["/watch/"],
-    queryParameters: ["id"]
+    queryParameters: ["id"],
+    subtitleSelectors: [".episode"],
+    titleSelectors: ["h1"]
   },
   rootUrls: ["https://example.com"],
   search: {

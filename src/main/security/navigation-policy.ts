@@ -10,6 +10,8 @@ export interface ServiceDefinition {
   playback: {
     pathPrefixes: readonly string[];
     queryParameters: readonly string[];
+    subtitleSelectors: readonly string[];
+    titleSelectors: readonly string[];
   } | null;
   rootUrls: readonly string[];
   search: {
@@ -237,6 +239,10 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
       definition.playback.pathPrefixes.some((prefix) => !prefix.startsWith("/")) ||
       definition.playback.queryParameters.some(
         (parameter) => !/^[A-Za-z0-9_-]+$/.test(parameter)
+      ) ||
+      definition.playback.titleSelectors.length === 0 ||
+      [...definition.playback.titleSelectors, ...definition.playback.subtitleSelectors].some(
+        (selector) => selector.trim().length === 0 || selector.length > 200
       )
     )
   ) {

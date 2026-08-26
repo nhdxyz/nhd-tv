@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildPlaybackSnapshotScript,
+  qualifyPlaybackSnapshot
+} from "../src/main/playback-observer";
+
+function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    artworkUrl: "https://assets.nflximg.net/poster.jpg",
+    currentTime: 620,
+    duration: 2_400,
+    ended: false,
+    hasError: false,
+    playedSeconds: 8,
+    readyState: 4,
+    subtitle: "S1:E2 An Example",
+    title: "Example Show S1:E2 An Example",
+    url: "https://www.netflix.com/watch/123",
+    visibleArea: 1280 * 720,
+    ...overrides
+  };
+}
+
+describe("passive playback observer", () => {
+  it("qualifies visible long-form playback after real engagement", () => {
+    expect(qualifyPlaybackSnapshot(snapshot())).toEqual({
+      artworkUrl: "https://assets.nflximg.net/poster.jpg",
+      currentTime: 620,
+      duration: 2_400,
+      ended: false,
+      subtitle: "S1:E2 An Example",
+      title: "Example Show",
+      url: "https://www.netflix.com/watch/123"
+    });
+  });
+
+  it("rejects cloud seeks, previews, hidden players, and errored media", () => {
+    expect(qualifyPlaybackSnapshot(snapshot({ currentTime: 1_200, playedSeconds: 0 }))).toBeNull();
+    expect(qualifyPlaybackSnapshot(snapshot({ duration: 45 }))).toBeNull();
+    expect(qualifyPlaybackSnapshot(snapshot({ visibleArea: 0 }))).toBeNull();
+    expect(qualifyPlaybackSnapshot(snapshot({ hasError: true }))).toBeNull();
+  });
+
+  it("bounds provider metadata and never embeds it into the generated script", () => {
+    const qualified = qualifyPlaybackSnapshot(snapshot({
+      subtitle: " ",
+      title: `  ${"x".repeat(220)}  `
+    }));
+    expect(qualified?.title).toHaveLength(180);
+    expect(qualified?.subtitle).toBeNull();
+
+    const script = buildPlaybackSnapshotScript({
+      pathPrefixes: ["/watch/"],
+      queryParameters: [],
+      subtitleSelectors: [".episode"],
+      titleSelectors: ["h1"]
+    });
+    expect(script).toContain("video.played.end(index)");
+    expect(script).toContain('readText(["h1"])');
+    expect(script).not.toContain("Example Show");
+  });
+});

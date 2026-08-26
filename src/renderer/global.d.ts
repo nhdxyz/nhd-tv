@@ -28,6 +28,7 @@ declare global {
       onRemoteStatusChanged: (callback: (status: RemoteStatus) => void) => void;
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;
       openService: (serviceId: string) => Promise<void>;
+      removeContinueWatching: (itemId: string) => Promise<boolean>;
       resumeContinueWatching: (itemId: string) => Promise<void>;
       searchService: (serviceId: string, query: string) => Promise<void>;
       startRemotePairing: () => Promise<RemoteStatus>;

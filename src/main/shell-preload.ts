@@ -27,6 +27,7 @@ const IPC_CHANNELS = {
   remoteAction: "nhd:remote:action",
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
+  removeContinueWatching: "nhd:continue-watching:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
   serviceQuitRequested: "nhd:service:quit:requested",
@@ -85,6 +86,8 @@ contextBridge.exposeInMainWorld("nhd", {
   },
   openService: (serviceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.openService, serviceId),
+  removeContinueWatching: (itemId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.removeContinueWatching, itemId),
   resumeContinueWatching: (itemId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.resumeContinueWatching, itemId),
   searchService: (serviceId: string, query: string): Promise<void> =>

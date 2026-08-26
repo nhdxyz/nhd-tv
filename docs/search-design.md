@@ -13,6 +13,8 @@ The paired phone exposes the same bounded `type="search"` field with a 120-chara
 - while Disney+ is open, the service's search page opens because its adapter has no supported query parameter;
 - from Home or a service without a search route, NHD-TV presents the TV provider chooser.
 
+As a convenience, tapping the qualified search field in Netflix or YouTube with the precision cursor opens this same bounded field and the phone's native keyboard. The phone is told only that the current safe target supports text entry; it never receives a DOM selector, field content, URL, or service-page text. Submitting still uses the adapter-declared search destination instead of injecting keystrokes into the page.
+
 This routing occurs in the trusted main process and accepts only adapter-declared, allowlisted destinations. Search never types into the focused web page, so it cannot accidentally target a login or payment field. Queries are not stored or logged. The TV UI discloses that two-character-or-longer Home queries are sent to TVmaze. iPhone Dictation and Gboard voice typing work in ordinary text fields, providing useful voice search without granting the LAN page microphone access.
 
 ## Why direct microphone capture is deferred

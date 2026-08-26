@@ -91,10 +91,14 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("usePrecisionMode(false)");
     expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 40");
     expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');
-    expect(REMOTE_JS).toContain("distance < 14");
+    expect(REMOTE_JS).toContain('queuePointer(pointerInput(event, "move", 0), true)');
+    expect(REMOTE_JS).toContain("distance < 24 && elapsed < 650");
+    expect(REMOTE_JS).toContain("normalizedY < 0.12 && verticalDelta < 0");
+    expect(REMOTE_JS).toContain("normalizedY > 0.88 && verticalDelta > 0");
+    expect(REMOTE_JS).toContain('queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true)');
     expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
     expect(REMOTE_JS).toContain('precisionGuideX.style.top = (y * 100) + "%"');
-    expect(REMOTE_JS).toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
+    expect(REMOTE_JS).not.toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
     expect(REMOTE_JS).not.toContain("movementY");
   });

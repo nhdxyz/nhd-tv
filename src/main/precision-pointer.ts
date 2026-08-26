@@ -15,10 +15,60 @@ export interface PrecisionPointerDispatch extends RemotePointerResult {
   snapKey: string | null;
 }
 
-export function buildPrecisionPointerTargetScript(x: number, y: number): string {
+export function precisionScrollDelta(scroll: number): number {
+  return scroll * -90;
+}
+
+export function buildPrecisionPointerTargetScript(
+  x: number,
+  y: number,
+  phase: RemotePointerInput["phase"] = "move"
+): string {
   return `(() => {
     const requestedX = Math.max(0, Math.min(1, ${JSON.stringify(x)})) * innerWidth;
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
+    const phase = ${JSON.stringify(phase)};
+    const cursorId = 'nhd-tv-precision-cursor';
+    let cursor = document.getElementById(cursorId);
+    if (!(cursor instanceof HTMLElement) || cursor.dataset.nhdTvOwned !== 'true') {
+      cursor?.remove();
+      cursor = document.createElement('div');
+      cursor.id = cursorId;
+      cursor.dataset.nhdTvOwned = 'true';
+      cursor.setAttribute('aria-hidden', 'true');
+    }
+    cursor.style.cssText = [
+      'position:fixed !important',
+      'z-index:2147483647 !important',
+      'width:18px !important',
+      'height:18px !important',
+      'margin:0 !important',
+      'padding:0 !important',
+      'border:2px solid rgba(255,255,255,.96) !important',
+      'border-radius:999px !important',
+      'background:radial-gradient(circle at center,#fff 0 15%,#7dd3fc 18%,#1685ff 68%) !important',
+      'box-shadow:0 0 0 6px rgba(22,133,255,.22),0 0 24px 9px rgba(37,99,235,.62) !important',
+      'pointer-events:none !important',
+      'transform:translate(-50%,-50%) !important',
+      'transition:width 80ms ease,height 80ms ease,box-shadow 80ms ease !important'
+    ].join(';');
+    cursor.style.setProperty('left', requestedX + 'px', 'important');
+    cursor.style.setProperty('top', requestedY + 'px', 'important');
+    const cursorHost = document.fullscreenElement instanceof HTMLElement
+      ? document.fullscreenElement
+      : document.documentElement;
+    cursorHost.append(cursor);
+    const setCursorSnapped = (snapped) => {
+      cursor.dataset.nhdTvSnapped = String(snapped);
+      if (!snapped) return;
+      cursor.style.setProperty('width', '22px', 'important');
+      cursor.style.setProperty('height', '22px', 'important');
+      cursor.style.setProperty(
+        'box-shadow',
+        '0 0 0 7px rgba(34,211,238,.26),0 0 30px 11px rgba(14,165,233,.76)',
+        'important'
+      );
+    };
     const selectors = [
       'a[href]',
       'button',
@@ -50,6 +100,20 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
       ].filter((value) => typeof value === 'string').join(' ');
       return /login|log-in|signin|sign-in|password|payment|checkout|billing/i.test(boundary);
     };
+    const isCandidate = (element) => {
+      if (
+        !(element instanceof HTMLElement) ||
+        blocked(element) ||
+        element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
+        element.closest('[aria-hidden="true"],[inert]') !== null
+      ) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0.05 && rect.width >= 12 && rect.height >= 12 &&
+        rect.bottom >= 0 && rect.top <= innerHeight && rect.right >= 0 && rect.left <= innerWidth;
+    };
+    const previousTarget = document.querySelector('[data-nhd-tv-focus="true"]');
     const sampleOffset = snapRadius * 0.7;
     const samplePoints = [
       [0, 0],
@@ -74,25 +138,13 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
         if (target instanceof HTMLElement) nearby.add(target);
       }
     }
-    const candidates = [...nearby].filter((element) => {
-      if (
-        !(element instanceof HTMLElement) ||
-        blocked(element) ||
-        element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
-        element.closest('[aria-hidden="true"],[inert]') !== null
-      ) return false;
-      const rect = element.getBoundingClientRect();
-      const style = getComputedStyle(element);
-      return style.display !== 'none' && style.visibility !== 'hidden' &&
-        Number(style.opacity) > 0.05 && rect.width >= 12 && rect.height >= 12 &&
-        rect.bottom >= 0 && rect.top <= innerHeight && rect.right >= 0 && rect.left <= innerWidth;
-    });
+    const candidates = [...nearby].filter(isCandidate);
 
     const distanceTo = (rect) => Math.hypot(
       Math.max(rect.left - requestedX, 0, requestedX - rect.right),
       Math.max(rect.top - requestedY, 0, requestedY - rect.bottom)
     );
-    const nearest = candidates
+    let nearest = candidates
       .map((element) => {
         const rect = element.getBoundingClientRect();
         const distance = distanceTo(rect);
@@ -105,11 +157,25 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
       .filter((candidate) => candidate.distance <= snapRadius)
       .sort((left, right) => left.score - right.score)[0];
 
+    if (
+      nearest === undefined &&
+      phase === 'tap' &&
+      previousTarget instanceof HTMLElement &&
+      isCandidate(previousTarget)
+    ) {
+      const rect = previousTarget.getBoundingClientRect();
+      const distance = distanceTo(rect);
+      if (distance <= snapRadius * 1.4) {
+        nearest = { distance, element: previousTarget, rect, score: distance };
+      }
+    }
+
     document.querySelectorAll('[data-nhd-tv-focus="true"],[data-remote-focused="true"]').forEach((element) => {
       element.removeAttribute('data-nhd-tv-focus');
       element.removeAttribute('data-remote-focused');
     });
     if (nearest === undefined) {
+      setCursorSnapped(false);
       document.documentElement.removeAttribute('data-nhd-tv-has-focus');
       return {
         key: null,
@@ -121,6 +187,7 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
 
     const element = nearest.element;
     const rect = nearest.rect;
+    setCursorSnapped(true);
     const pointerState = globalThis.__nhdTvPrecisionPointer || {
       keys: new WeakMap(),
       nextKey: 1
@@ -151,6 +218,22 @@ export function buildPrecisionPointerTargetScript(x: number, y: number): string 
   })()`;
 }
 
+export function buildPrecisionPointerHideScript(): string {
+  return `(() => {
+    document.getElementById('nhd-tv-precision-cursor')?.remove();
+    document.querySelectorAll('[data-nhd-tv-focus="true"],[data-remote-focused="true"]').forEach((element) => {
+      element.removeAttribute('data-nhd-tv-focus');
+      element.removeAttribute('data-remote-focused');
+    });
+    document.documentElement.removeAttribute('data-nhd-tv-has-focus');
+    document.documentElement.style.removeProperty('--nhd-tv-focus-top');
+    document.documentElement.style.removeProperty('--nhd-tv-focus-left');
+    document.documentElement.style.removeProperty('--nhd-tv-focus-width');
+    document.documentElement.style.removeProperty('--nhd-tv-focus-height');
+    return true;
+  })()`;
+}
+
 function validTarget(value: unknown): value is PointerTarget {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -172,8 +255,13 @@ export async function dispatchPrecisionPointer(
   input: RemotePointerInput,
   previousSnapKey: string | null
 ): Promise<PrecisionPointerDispatch> {
+  if (input.phase === "hide") {
+    await webContents.executeJavaScript(buildPrecisionPointerHideScript(), true);
+    return { snapChanged: false, snapKey: null, snapped: false };
+  }
+
   const rawTarget = await webContents.executeJavaScript(
-    buildPrecisionPointerTargetScript(input.x, input.y),
+    buildPrecisionPointerTargetScript(input.x, input.y, input.phase),
     true
   ) as unknown;
   if (!validTarget(rawTarget)) {
@@ -181,6 +269,7 @@ export async function dispatchPrecisionPointer(
   }
 
   const target = rawTarget;
+  webContents.focus();
   webContents.sendInputEvent({
     movementX: 0,
     movementY: 0,
@@ -193,7 +282,7 @@ export async function dispatchPrecisionPointer(
     webContents.sendInputEvent({
       canScroll: true,
       deltaX: 0,
-      deltaY: input.scroll * 90,
+      deltaY: precisionScrollDelta(input.scroll),
       hasPreciseScrollingDeltas: true,
       type: "mouseWheel",
       x: target.x,

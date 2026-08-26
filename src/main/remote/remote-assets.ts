@@ -644,7 +644,12 @@ export const REMOTE_JS = `(() => {
   function usePrecisionMode(enabled) {
     dpad.hidden = enabled;
     precisionPad.hidden = !enabled;
-    if (!enabled) precisionPad.classList.remove("has-snap", "is-tracking");
+    if (!enabled) {
+      precisionPad.classList.remove("has-snap", "is-tracking");
+      if (controllerToken) {
+        queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true);
+      }
+    }
     controlMode.textContent = enabled ? "Use arrow buttons" : "Use precision pad";
   }
 
@@ -686,29 +691,49 @@ export const REMOTE_JS = `(() => {
     pointerFlushTimer = setTimeout(flushPointer, wait);
   }
 
-  function pointerInput(event, phase) {
+  function pointerInput(event, phase, scroll) {
     const rect = precisionPad.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-    const scroll = phase === "move" ? y < 0.12 ? -1 : y > 0.88 ? 1 : 0 : 0;
     precisionDot.style.left = (x * 100) + "%";
     precisionDot.style.top = (y * 100) + "%";
     precisionGuideX.style.top = (y * 100) + "%";
     precisionGuideY.style.left = (x * 100) + "%";
-    return { phase, scroll, x, y };
+    return { phase, scroll: scroll || 0, x, y };
   }
 
   controlMode.addEventListener("click", () => usePrecisionMode(!dpad.hidden));
 
   precisionPad.addEventListener("pointerdown", (event) => {
-    pointerGesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    pointerGesture = {
+      id: event.pointerId,
+      lastY: event.clientY,
+      startedAt: performance.now(),
+      x: event.clientX,
+      y: event.clientY
+    };
     precisionPad.setPointerCapture(event.pointerId);
     precisionPad.classList.add("is-tracking");
-    queuePointer(pointerInput(event, "move"), true);
+    queuePointer(pointerInput(event, "move", 0), true);
   });
   precisionPad.addEventListener("pointermove", (event) => {
     if (!pointerGesture || pointerGesture.id !== event.pointerId) return;
-    queuePointer(pointerInput(event, "move"), false);
+    const rect = precisionPad.getBoundingClientRect();
+    const normalizedY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const verticalDelta = event.clientY - pointerGesture.lastY;
+    const distance = Math.hypot(
+      event.clientX - pointerGesture.x,
+      event.clientY - pointerGesture.y
+    );
+    const scroll = distance >= 8 && Math.abs(verticalDelta) >= 1.5
+      ? normalizedY < 0.12 && verticalDelta < 0
+        ? -1
+        : normalizedY > 0.88 && verticalDelta > 0
+          ? 1
+          : 0
+      : 0;
+    pointerGesture.lastY = event.clientY;
+    queuePointer(pointerInput(event, "move", scroll), false);
   });
   precisionPad.addEventListener("pointercancel", () => {
     pointerGesture = null;
@@ -720,10 +745,11 @@ export const REMOTE_JS = `(() => {
       event.clientX - pointerGesture.x,
       event.clientY - pointerGesture.y
     );
-    const phase = distance < 14 ? "tap" : "move";
+    const elapsed = performance.now() - pointerGesture.startedAt;
+    const phase = distance < 24 && elapsed < 650 ? "tap" : "move";
     pointerGesture = null;
     precisionPad.classList.remove("is-tracking");
-    queuePointer(pointerInput(event, phase), true);
+    queuePointer(pointerInput(event, phase, 0), true);
   });
   precisionPad.addEventListener("keydown", (event) => {
     const actions = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "select", " ": "select" };

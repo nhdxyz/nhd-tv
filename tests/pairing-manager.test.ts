@@ -61,6 +61,7 @@ describe("phone remote pairing", () => {
       y: 0.75
     })).toEqual({ phase: "move", scroll: -1, x: 0.25, y: 0.75 });
     expect(parseRemotePointerInput({ phase: "tap", scroll: 0, x: 1, y: 0 })).not.toBeNull();
+    expect(parseRemotePointerInput({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 })).not.toBeNull();
     expect(parseRemotePointerInput({ phase: "drag", scroll: 0, x: 0.5, y: 0.5 })).toBeNull();
     expect(parseRemotePointerInput({ phase: "move", scroll: 0, x: 1.01, y: 0.5 })).toBeNull();
     expect(parseRemotePointerInput({ phase: "move", scroll: 2, x: 0.5, y: 0.5 })).toBeNull();

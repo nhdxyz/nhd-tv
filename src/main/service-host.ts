@@ -933,8 +933,10 @@ export class ServiceHost {
     if (
       view === null ||
       view.webContents.isDestroyed() ||
-      this.#quitPromptVisible ||
-      (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+      (input.phase !== "hide" && (
+        this.#quitPromptVisible ||
+        (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+      ))
     ) {
       return { snapChanged: false, snapped: false };
     }

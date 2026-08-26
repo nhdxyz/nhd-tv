@@ -65,7 +65,7 @@ export function parseRemotePointerInput(value: unknown): RemotePointerInput | nu
   }
 
   if (
-    (candidate.phase !== "move" && candidate.phase !== "tap") ||
+    (candidate.phase !== "hide" && candidate.phase !== "move" && candidate.phase !== "tap") ||
     typeof candidate.x !== "number" ||
     !Number.isFinite(candidate.x) ||
     candidate.x < 0 ||

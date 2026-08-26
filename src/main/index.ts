@@ -537,7 +537,7 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
   if (
     serviceHost !== null &&
     serviceHost.activeServiceId !== null &&
-    !serviceHost.isQuitPromptVisible
+    (input.phase === "hide" || !serviceHost.isQuitPromptVisible)
   ) {
     return serviceHost.sendRemotePointer(input);
   }

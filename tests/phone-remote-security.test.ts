@@ -88,7 +88,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="remote-top-actions"');
     expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back. Hold to force return Home"');
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
-    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(2);
+    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(3);
     expect(REMOTE_HTML).not.toContain(">Back<");
     expect(REMOTE_HTML).not.toContain(">NHD Home<");
   });
@@ -120,11 +120,14 @@ describe("phone remote boundary", () => {
     ]) {
       expect(REMOTE_HTML).toContain(`data-action="${action}"`);
     }
-    expect(REMOTE_HTML).toContain('aria-label="Playback and volume controls"');
+    expect(REMOTE_HTML).toContain('aria-label="Playback controls"');
+    expect(REMOTE_HTML).toContain('aria-label="Volume controls"');
     expect(REMOTE_HTML).toContain('aria-label="Play or pause"');
+    expect(REMOTE_HTML).toContain('class="play-pause-icon"');
+    expect(REMOTE_HTML).not.toContain("⏯");
     expect(REMOTE_HTML).toContain("TV support varies");
     expect(REMOTE_CSS).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
-    expect(REMOTE_CSS).toContain("min-height: 2.85rem");
+    expect(REMOTE_CSS).toContain(".playback-controls button { min-height: 3rem; }");
     expect(REMOTE_JS).toContain("error.status = response.status");
     expect(serverSource).toContain("MIN_COMMAND_INTERVAL_MS");
     expect(serverSource).toContain("writeJson(response, 429");
@@ -135,6 +138,14 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('sendAction("force-home", button)');
     expect(REMOTE_JS).toContain("backHoldTriggered = true");
     expect(REMOTE_JS).toContain("}, 1_200)");
+  });
+
+  it("prevents iPhone text selection outside the intentional search field", () => {
+    expect(REMOTE_CSS).toContain("-webkit-touch-callout: none");
+    expect(REMOTE_CSS).toContain("-webkit-user-select: none");
+    expect(REMOTE_CSS).toContain("-webkit-user-select: text");
+    expect(REMOTE_JS).toContain('document.addEventListener("selectstart"');
+    expect(REMOTE_JS).toContain('event.target.closest("input") === null');
   });
 
   it("keeps arrows as the default and offers a bounded relative precision pad", () => {

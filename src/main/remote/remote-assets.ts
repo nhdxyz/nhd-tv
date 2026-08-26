@@ -116,18 +116,27 @@ export const REMOTE_HTML = `<!doctype html>
           </div>
         </div>
 
-        <button class="control-mode" id="control-mode" type="button" disabled>Use precision pad</button>
-
-        <div class="media-controls" aria-label="Playback and volume controls">
+        <div class="playback-controls" aria-label="Playback controls">
           <button data-action="rewind" data-feedback="Playback control sent" type="button" disabled aria-label="Rewind"><span aria-hidden="true">↶<small>10</small></span></button>
-          <button class="media-primary" data-action="play-pause" data-feedback="Playback control sent" type="button" disabled aria-label="Play or pause"><span aria-hidden="true">⏯</span></button>
+          <button class="media-primary" data-action="play-pause" data-feedback="Playback control sent" type="button" disabled aria-label="Play or pause">
+            <svg class="play-pause-icon" viewBox="0 0 28 20" aria-hidden="true">
+              <path class="play-shape" d="M2 2.5v15l10-7.5z" />
+              <path class="pause-shape" d="M17 2.5h3.5v15H17zm7.5 0H28v15h-3.5z" />
+            </svg>
+          </button>
           <button data-action="fast-forward" data-feedback="Playback control sent" type="button" disabled aria-label="Fast forward"><span aria-hidden="true">↷<small>10</small></span></button>
+        </div>
+
+        <div class="remote-utilities">
+          <button class="control-mode" id="control-mode" type="button" disabled>Pointer</button>
+          <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
+        </div>
+
+        <div class="volume-controls" aria-label="Volume controls">
           <button data-action="volume-down" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume down"><span aria-hidden="true">−</span></button>
           <button data-action="mute" data-feedback="Mute sent · TV support varies" type="button" disabled aria-label="Mute"><span aria-hidden="true">×</span></button>
           <button data-action="volume-up" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume up"><span aria-hidden="true">+</span></button>
         </div>
-
-        <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
 
         <form class="search-panel" id="search-panel" hidden>
           <label id="search-label" for="search-query">Search your services</label>
@@ -176,12 +185,24 @@ body {
 }
 
 html,
-body { touch-action: manipulation; overscroll-behavior: none; }
+body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+}
+
+input {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .remote-shell {
@@ -431,29 +452,17 @@ button {
 }
 .precision-pad.has-snap .precision-status { opacity: 1; transform: translate(-50%, 0); }
 
-.control-mode {
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: 2.65rem;
-  margin: 0 0 0.65rem;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 0.8rem;
-  background: rgb(255 255 255 / 5%);
-  color: #b9c4d4;
-  font: inherit;
-  font-size: 0.7rem;
-  font-weight: 850;
-}
-
-.media-controls {
+.playback-controls,
+.volume-controls {
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.42rem;
 }
-.media-controls button {
+.playback-controls { margin-bottom: 0.5rem; }
+.playback-controls button,
+.volume-controls button {
   display: grid;
-  min-height: 2.85rem;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 11%);
   border-radius: 0.82rem;
@@ -464,30 +473,49 @@ button {
   font-weight: 900;
   box-shadow: inset 0 1px rgb(255 255 255 / 8%);
 }
-.media-controls button.media-primary {
+.playback-controls button { min-height: 3rem; }
+.volume-controls button { min-height: 2.5rem; }
+.playback-controls button.media-primary {
   border-color: rgb(125 187 255 / 32%);
   background: linear-gradient(145deg, #1d477a, #162943);
   color: #fff;
 }
-.media-controls button:not(:disabled).is-pressed,
-.media-controls button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
-.media-controls span { display: inline-flex; align-items: center; gap: 0.08rem; }
-.media-controls small { font-size: 0.48rem; line-height: 1; }
+.playback-controls button:not(:disabled).is-pressed,
+.playback-controls button:not(:disabled):active,
+.volume-controls button:not(:disabled).is-pressed,
+.volume-controls button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
+.playback-controls span,
+.volume-controls span { display: inline-flex; align-items: center; gap: 0.08rem; }
+.playback-controls small { font-size: 0.48rem; line-height: 1; }
+.play-pause-icon { width: 1.65rem; height: 1.2rem; fill: currentColor; }
+.play-shape { opacity: 1; }
+.pause-shape { opacity: 0.88; }
+
+.remote-utilities {
+  display: grid;
+  margin-bottom: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+.control-mode,
+.search-toggle {
+  width: 100%;
+  min-height: 2.65rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.8rem;
+  background: rgb(255 255 255 / 5%);
+  color: #b9c4d4;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
 
 button:disabled { opacity: 0.3; }
 
 .search-toggle {
-  width: 100%;
-  min-height: 3.15rem;
-  margin-top: 0.6rem;
-  flex: 0 0 auto;
   border: 1px solid rgb(125 187 255 / 30%);
-  border-radius: 0.9rem;
   background: linear-gradient(145deg, #18345e, #15223a);
   color: #eff6ff;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 900;
 }
 .search-toggle:not(:disabled).is-pressed,
 .search-toggle:not(:disabled):active { transform: scale(0.97); filter: brightness(1.2); }
@@ -528,9 +556,10 @@ button:disabled { opacity: 0.3; }
 
 body.is-typing .control-surface,
 body.is-typing .control-mode,
-body.is-typing .media-controls { display: none; }
+body.is-typing .playback-controls,
+body.is-typing .volume-controls { display: none; }
 body.is-typing .remote-card { justify-content: flex-start; }
-body.is-typing .search-toggle { margin-top: auto; }
+body.is-typing .remote-utilities { display: block; margin-top: auto; }
 
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
@@ -544,9 +573,10 @@ body.is-typing .search-toggle { margin-top: auto; }
   .remote-icon-button { width: 2.8rem; height: 2.8rem; }
   .dpad,
   .precision-pad { width: min(78vw, 31dvh, 15rem); }
-  .control-mode { min-height: 2.4rem; margin-bottom: 0.5rem; }
-  .media-controls button { min-height: 2.55rem; }
-  .search-toggle { min-height: 2.8rem; margin-top: 0.5rem; }
+  .control-mode,
+  .search-toggle { min-height: 2.4rem; }
+  .playback-controls button { min-height: 2.65rem; }
+  .volume-controls button { min-height: 2.35rem; }
   .privacy-note { margin-top: 0.5rem; }
 }
 
@@ -593,6 +623,11 @@ export const REMOTE_JS = `(() => {
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
     document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
   }
+  document.addEventListener("selectstart", (event) => {
+    if (!(event.target instanceof Element) || event.target.closest("input") === null) {
+      event.preventDefault();
+    }
+  });
   document.addEventListener("wheel", (event) => {
     if (event.ctrlKey) event.preventDefault();
   }, { passive: false });
@@ -827,7 +862,7 @@ export const REMOTE_JS = `(() => {
         queuePointer({ phase: "hide", scroll: 0, scrollX: 0, x: 0.5, y: 0.5 }, true);
       }
     }
-    controlMode.textContent = enabled ? "Use arrow buttons" : "Use precision pad";
+    controlMode.textContent = enabled ? "Arrows" : "Pointer";
   }
 
   async function flushPointer() {

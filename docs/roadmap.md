@@ -25,7 +25,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 2: Profiles, Store, and sessions
 
-- [ ] Local profiles
+- [ ] Local profiles and per-profile viewing history (#22)
 - [x] Curated service catalog foundation
 - [x] Add and remove services without clearing sessions
 - [ ] Reorder and favorite services
@@ -38,7 +38,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Title and allowlisted artwork capture foundation
 - [x] Periodic, pause, navigation, exit, and window-shutdown checkpoints
 - [x] Observed completion rule
-- [ ] Manual removal and per-service adapter qualification tests (#18)
+- [ ] Manual removal and per-profile history controls (#22)
+- [ ] Per-service adapter qualification tests (#18)
 - [x] Resume through service-owned watch URLs
 
 ## Milestone 4: Phone remote

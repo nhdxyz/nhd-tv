@@ -1,13 +1,35 @@
-export function smoothPrecisionCoordinate(previous: number, next: number): number {
-  const delta = next - previous;
-  const distance = Math.abs(delta);
-
-  if (distance < 0.0015) {
-    return previous;
+export function precisionRelativeDelta(deltaPixels: number, extentPixels: number): number {
+  if (
+    !Number.isFinite(deltaPixels) ||
+    !Number.isFinite(extentPixels) ||
+    extentPixels <= 0 ||
+    Math.abs(deltaPixels) < 0.45
+  ) {
+    return 0;
   }
 
-  const response = distance >= 0.12 ? 0.82 : distance >= 0.04 ? 0.64 : 0.46;
-  return Math.max(0, Math.min(1, previous + delta * response));
+  const normalized = deltaPixels / extentPixels;
+  const magnitude = Math.abs(normalized);
+  const gain = magnitude >= 0.08 ? 1.4 : magnitude >= 0.025 ? 1.22 : 1.06;
+  return Math.max(-0.24, Math.min(0.24, normalized * gain));
+}
+
+export interface PrecisionPoint {
+  x: number;
+  y: number;
+}
+
+export function movePrecisionPoint(
+  point: PrecisionPoint,
+  deltaX: number,
+  deltaY: number,
+  width: number,
+  height: number
+): PrecisionPoint {
+  return {
+    x: Math.max(0, Math.min(1, point.x + precisionRelativeDelta(deltaX, width))),
+    y: Math.max(0, Math.min(1, point.y + precisionRelativeDelta(deltaY, height)))
+  };
 }
 
 export function precisionEdgeScroll(normalizedY: number, verticalDelta: number): number {
@@ -66,11 +88,11 @@ export const REMOTE_HTML = `<!doctype html>
             <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
           </div>
 
-          <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Move freely, drag at an edge to scroll, and tap a highlighted item" hidden>
+          <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
             <span class="precision-guide precision-guide-x" aria-hidden="true"></span>
             <span class="precision-guide precision-guide-y" aria-hidden="true"></span>
             <span class="precision-dot" aria-hidden="true"></span>
-            <span class="precision-copy">Move freely<small>Edge-drag scrolls · Tap selects</small></span>
+            <span class="precision-copy">Swipe to move<small>Lift and continue · Tap anywhere</small></span>
             <span class="precision-status" aria-hidden="true"><i></i> Target locked</span>
           </div>
         </div>
@@ -540,8 +562,10 @@ export const REMOTE_JS = `(() => {
   let pointerFlushTimer = null;
   let pointerRequestInFlight = false;
   let lastPointerSentAt = 0;
+  let virtualPointer = { x: 0.5, y: 0.5 };
   const POINTER_INTERVAL_MS = 32;
-  const smoothCoordinate = (${smoothPrecisionCoordinate.toString()});
+  const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
+  const movePrecisionPoint = (${movePrecisionPoint.toString()});
   const edgeScroll = (${precisionEdgeScroll.toString()});
 
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
@@ -675,7 +699,13 @@ export const REMOTE_JS = `(() => {
   function usePrecisionMode(enabled) {
     dpad.hidden = enabled;
     precisionPad.hidden = !enabled;
-    if (!enabled) {
+    if (enabled) {
+      renderPointerPoint(virtualPointer);
+      if (controllerToken) {
+        queuePointer(pointerInput(virtualPointer, "move", 0), true);
+      }
+    } else {
+      pointerGesture = null;
       precisionPad.classList.remove("has-snap", "is-tracking");
       if (controllerToken) {
         queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true);
@@ -706,6 +736,7 @@ export const REMOTE_JS = `(() => {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
       setEnabled(false);
+      pointerGesture = null;
       precisionPad.classList.remove("has-snap", "is-tracking");
       setState(error instanceof Error ? error.message : "Remote disconnected", "error");
     } finally {
@@ -726,12 +757,16 @@ export const REMOTE_JS = `(() => {
     pointerFlushTimer = setTimeout(flushPointer, wait);
   }
 
-  function rawPointerPoint(event) {
+  function moveVirtualPointer(deltaX, deltaY) {
     const rect = precisionPad.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
-      y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
-    };
+    virtualPointer = movePrecisionPoint(
+      virtualPointer,
+      deltaX,
+      deltaY,
+      rect.width,
+      rect.height
+    );
+    return virtualPointer;
   }
 
   function renderPointerPoint(point) {
@@ -760,36 +795,29 @@ export const REMOTE_JS = `(() => {
       return;
     }
     event.preventDefault();
-    const point = rawPointerPoint(event);
     pointerGesture = {
       id: event.pointerId,
+      lastX: event.clientX,
       lastY: event.clientY,
-      point,
       startedAt: performance.now(),
-      x: event.clientX,
-      y: event.clientY
+      totalDistance: 0
     };
     precisionPad.setPointerCapture(event.pointerId);
     precisionPad.classList.add("is-tracking");
-    queuePointer(pointerInput(point, "move", 0), true);
   });
   precisionPad.addEventListener("pointermove", (event) => {
     if (!pointerGesture || pointerGesture.id !== event.pointerId) return;
     event.preventDefault();
     const currentEvent = latestPointerEvent(event);
-    const rawPoint = rawPointerPoint(currentEvent);
-    const point = {
-      x: smoothCoordinate(pointerGesture.point.x, rawPoint.x),
-      y: smoothCoordinate(pointerGesture.point.y, rawPoint.y)
-    };
+    const horizontalDelta = currentEvent.clientX - pointerGesture.lastX;
     const verticalDelta = currentEvent.clientY - pointerGesture.lastY;
-    const distance = Math.hypot(
-      currentEvent.clientX - pointerGesture.x,
-      currentEvent.clientY - pointerGesture.y
-    );
-    const scroll = distance >= 8 ? edgeScroll(rawPoint.y, verticalDelta) : 0;
+    pointerGesture.totalDistance += Math.hypot(horizontalDelta, verticalDelta);
+    const point = moveVirtualPointer(horizontalDelta, verticalDelta);
+    const scroll = pointerGesture.totalDistance >= 8
+      ? edgeScroll(point.y, verticalDelta)
+      : 0;
+    pointerGesture.lastX = currentEvent.clientX;
     pointerGesture.lastY = currentEvent.clientY;
-    pointerGesture.point = point;
     queuePointer(pointerInput(point, "move", scroll), false);
   });
   precisionPad.addEventListener("pointercancel", () => {
@@ -799,15 +827,15 @@ export const REMOTE_JS = `(() => {
   precisionPad.addEventListener("pointerup", (event) => {
     if (!pointerGesture || pointerGesture.id !== event.pointerId) return;
     event.preventDefault();
-    const distance = Math.hypot(
-      event.clientX - pointerGesture.x,
-      event.clientY - pointerGesture.y
-    );
+    const horizontalDelta = event.clientX - pointerGesture.lastX;
+    const verticalDelta = event.clientY - pointerGesture.lastY;
+    const finalDistance = Math.hypot(horizontalDelta, verticalDelta);
+    pointerGesture.totalDistance += finalDistance;
     const elapsed = performance.now() - pointerGesture.startedAt;
-    const phase = distance < 24 && elapsed < 650 ? "tap" : "move";
-    const point = phase === "tap"
-      ? pointerGesture.point
-      : rawPointerPoint(event);
+    const phase = pointerGesture.totalDistance < 18 && elapsed < 650 ? "tap" : "move";
+    const point = phase === "tap" || finalDistance < 0.45
+      ? virtualPointer
+      : moveVirtualPointer(horizontalDelta, verticalDelta);
     pointerGesture = null;
     precisionPad.classList.remove("is-tracking");
     queuePointer(pointerInput(point, phase, 0), true);

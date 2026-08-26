@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { remotePostHeadersAreAllowed } from "../src/main/remote/phone-remote-server";
 import {
+  movePrecisionPoint,
   precisionEdgeScroll,
+  precisionRelativeDelta,
   REMOTE_CSS,
   REMOTE_HTML,
-  REMOTE_JS,
-  smoothPrecisionCoordinate
+  REMOTE_JS
 } from "../src/main/remote/remote-assets";
 
 describe("phone remote boundary", () => {
@@ -82,7 +83,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("navigator.vibrate(10)");
   });
 
-  it("keeps arrows as the default and offers a bounded precision pad", () => {
+  it("keeps arrows as the default and offers a bounded relative precision pad", () => {
     expect(REMOTE_HTML).toContain('class="dpad"');
     expect(REMOTE_HTML).toContain('id="precision-pad"');
     expect(REMOTE_HTML).toContain('class="precision-dot"');
@@ -93,26 +94,51 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("usePrecisionMode(false)");
     expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 32");
     expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');
-    expect(REMOTE_JS).toContain('queuePointer(pointerInput(point, "move", 0), true)');
-    expect(REMOTE_JS).toContain("distance < 24 && elapsed < 650");
-    expect(REMOTE_JS).toContain("edgeScroll(rawPoint.y, verticalDelta)");
-    expect(REMOTE_JS).toContain("smoothCoordinate(pointerGesture.point.x, rawPoint.x)");
+    expect(REMOTE_JS).toContain('queuePointer(pointerInput(virtualPointer, "move", 0), true)');
+    expect(REMOTE_JS).toContain("pointerGesture.totalDistance < 18 && elapsed < 650");
+    expect(REMOTE_JS).toContain("edgeScroll(point.y, verticalDelta)");
+    expect(REMOTE_JS).toContain("virtualPointer = movePrecisionPoint(");
     expect(REMOTE_JS).toContain("event.getCoalescedEvents");
     expect(REMOTE_JS).toContain("clearTimeout(pointerFlushTimer)");
     expect(REMOTE_JS).toContain("event.isPrimary === false");
     expect(REMOTE_JS).toContain('queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true)');
     expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
     expect(REMOTE_JS).toContain('precisionGuideX.style.top = (point.y * 100) + "%"');
+    expect(REMOTE_JS).not.toContain("event.clientX - rect.left");
     expect(REMOTE_JS).not.toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
     expect(REMOTE_JS).not.toContain("movementY");
   });
 
-  it("smooths small pointer jitter while keeping large movement responsive", () => {
-    expect(smoothPrecisionCoordinate(0.5, 0.5005)).toBe(0.5);
-    expect(smoothPrecisionCoordinate(0.5, 0.52)).toBeCloseTo(0.5092);
-    expect(smoothPrecisionCoordinate(0.1, 0.3)).toBeCloseTo(0.264);
-    expect(smoothPrecisionCoordinate(0.98, 1.4)).toBe(1);
+  it("uses a bounded relative delta with jitter rejection and acceleration", () => {
+    expect(precisionRelativeDelta(0.2, 300)).toBe(0);
+    expect(precisionRelativeDelta(3, 300)).toBeCloseTo(0.0106);
+    expect(precisionRelativeDelta(15, 300)).toBeCloseTo(0.061);
+    expect(precisionRelativeDelta(30, 300)).toBeCloseTo(0.14);
+    expect(precisionRelativeDelta(-30, 300)).toBeCloseTo(-0.14);
+    expect(precisionRelativeDelta(300, 300)).toBe(0.24);
+    expect(precisionRelativeDelta(3, 0)).toBe(0);
+  });
+
+  it("continues the virtual cursor across independent swipes", () => {
+    const firstSwipe = movePrecisionPoint({ x: 0.5, y: 0.5 }, 60, -60, 300, 300);
+    const secondSwipe = movePrecisionPoint(firstSwipe, 60, -60, 300, 300);
+
+    expect(firstSwipe).toEqual({ x: 0.74, y: 0.26 });
+    expect(secondSwipe.x).toBeCloseTo(0.98);
+    expect(secondSwipe.y).toBeCloseTo(0.02);
+    expect(movePrecisionPoint(secondSwipe, 60, -60, 300, 300)).toEqual({ x: 1, y: 0 });
+  });
+
+  it("does not teleport on touch-down and taps from the persistent cursor", () => {
+    const pointerDownStart = REMOTE_JS.indexOf('precisionPad.addEventListener("pointerdown"');
+    const pointerMoveStart = REMOTE_JS.indexOf('precisionPad.addEventListener("pointermove"');
+    const pointerDownHandler = REMOTE_JS.slice(pointerDownStart, pointerMoveStart);
+
+    expect(pointerDownHandler).not.toContain("moveVirtualPointer");
+    expect(pointerDownHandler).not.toContain("queuePointer");
+    expect(REMOTE_JS).toContain('? virtualPointer\n      : moveVirtualPointer');
+    expect(REMOTE_HTML).toContain("Lift and continue · Tap anywhere");
   });
 
   it("scales edge scrolling with deliberate movement and preserves direction", () => {

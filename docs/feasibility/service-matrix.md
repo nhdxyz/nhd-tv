@@ -21,6 +21,7 @@ Never paste account identifiers, credentials, verification codes, cookies, servi
 | Widevine CDM | `4.10.3050.0` on the preliminary macOS run |
 | Service isolation | One `persist:service-*` partition per service |
 | Renderer policy | Sandbox and context isolation enabled; Node.js disabled |
+| Built-in diagnostics | GPU video-decode capability and service/GPU process CPU and working-set memory; no page URLs or content |
 
 ## Preliminary macOS run
 
@@ -57,6 +58,7 @@ For each service:
 ## Current limitations
 
 - Commercial playback and session persistence are not yet verified because the preliminary run did not receive or store user credentials.
+- NHD-TV's built-in video-decode value reports Chromium capability, not proof that a particular frame was hardware-decoded. Confirm active use with Windows Task Manager's Video Decode engine.
 - The fullscreen bridge needs a clean retest after the user-controlled Netflix verification flow is complete.
 - Popup creation remains denied. If a service requires a popup rather than same-view authentication, document the failure before adding a narrowly scoped host-owned popup policy.
 - Service-specific origin additions must be justified by an observed top-level login or playback navigation. Broad wildcard allowlists are not acceptable.

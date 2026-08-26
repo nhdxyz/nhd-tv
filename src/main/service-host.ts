@@ -53,6 +53,15 @@ export class ServiceHost {
     return this.#activeDefinition?.id ?? null;
   }
 
+  get activeProcessId(): number | null {
+    if (this.#view === null || this.#view.webContents.isDestroyed()) {
+      return null;
+    }
+
+    const processId = this.#view.webContents.getOSProcessId();
+    return processId > 0 ? processId : null;
+  }
+
   async open(definition: ServiceDefinition): Promise<void> {
     this.close();
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();

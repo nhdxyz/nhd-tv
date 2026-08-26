@@ -4,6 +4,7 @@ import type { HostStatus } from "../main/contracts";
 const runtimeStatus = document.querySelector<HTMLParagraphElement>("#runtime-status");
 const widevineStatus = document.querySelector<HTMLParagraphElement>("#widevine-status");
 const serviceStatus = document.querySelector<HTMLParagraphElement>("#service-status");
+const diagnosticsStatus = document.querySelector<HTMLParagraphElement>("#diagnostics-status");
 const feedback = document.querySelector<HTMLParagraphElement>("#feedback");
 const closeServiceButton = document.querySelector<HTMLButtonElement>("#close-service");
 const serviceActions = document.querySelector<HTMLDivElement>("#service-actions");
@@ -18,6 +19,7 @@ function requireElement<T>(element: T | null, name: string): T {
 
 const elements = {
   closeServiceButton: requireElement(closeServiceButton, "close-service"),
+  diagnosticsStatus: requireElement(diagnosticsStatus, "diagnostics-status"),
   feedback: requireElement(feedback, "feedback"),
   runtimeStatus: requireElement(runtimeStatus, "runtime-status"),
   serviceActions: requireElement(serviceActions, "service-actions"),
@@ -33,6 +35,19 @@ function renderStatus(status: HostStatus): void {
   ].join(" · ");
   elements.widevineStatus.textContent = `${status.widevine.state}: ${status.widevine.details}`;
   elements.serviceStatus.textContent = status.activeServiceId ?? "None";
+  const serviceProcess = status.diagnostics.serviceRenderer;
+  const gpuProcess = status.diagnostics.gpuProcess;
+  elements.diagnosticsStatus.textContent = [
+    `Acceleration ${status.diagnostics.hardwareAcceleration ?? "checking"}`,
+    `Video decode ${status.diagnostics.videoDecode}`,
+    `VPx ${status.diagnostics.vpxDecode}`,
+    serviceProcess === null
+      ? "Service process inactive"
+      : `Service ${serviceProcess.cpuPercent}% CPU · ${serviceProcess.memoryMegabytes} MB · sandbox ${serviceProcess.sandboxed ?? "unknown"}`,
+    gpuProcess === null
+      ? "GPU process unavailable"
+      : `GPU process ${gpuProcess.cpuPercent}% CPU · ${gpuProcess.memoryMegabytes} MB`
+  ].join(" · ");
 }
 
 async function refreshStatus(): Promise<void> {
@@ -70,3 +85,4 @@ elements.closeServiceButton.addEventListener("click", async () => {
 window.nhd.onHostStatusChanged(renderStatus);
 void refreshStatus();
 void renderServices();
+window.setInterval(() => void refreshStatus().catch(() => undefined), 5_000);

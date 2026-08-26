@@ -18,6 +18,13 @@ export type WidevineState = "checking" | "ready" | "timed-out" | "unavailable";
 
 export interface HostStatus {
   activeServiceId: string | null;
+  diagnostics: {
+    gpuProcess: ProcessDiagnostics | null;
+    hardwareAcceleration: boolean | null;
+    serviceRenderer: ProcessDiagnostics | null;
+    videoDecode: string;
+    vpxDecode: string;
+  };
   runtime: {
     chrome: string;
     electron: string;
@@ -27,4 +34,10 @@ export interface HostStatus {
     details: string;
     state: WidevineState;
   };
+}
+
+export interface ProcessDiagnostics {
+  cpuPercent: number;
+  memoryMegabytes: number;
+  sandboxed: boolean | null;
 }

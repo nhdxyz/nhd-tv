@@ -9,7 +9,12 @@ import {
   protocol,
   session
 } from "electron";
-import { IPC_CHANNELS, type HostStatus, type WidevineState } from "./contracts";
+import {
+  IPC_CHANNELS,
+  type HostStatus,
+  type ProcessDiagnostics,
+  type WidevineState
+} from "./contracts";
 import { getServiceDefinition, getServiceSummaries } from "./service-registry";
 import { ServiceHost } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
@@ -33,12 +38,47 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let serviceHost: ServiceHost | null = null;
+let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
+
+type AppMetric = ReturnType<typeof app.getAppMetrics>[number];
+
+function processDiagnostics(metric: AppMetric | undefined): ProcessDiagnostics | null {
+  if (metric === undefined) {
+    return null;
+  }
+
+  return {
+    cpuPercent: Math.round(metric.cpu.percentCPUUsage * 10) / 10,
+    memoryMegabytes: Math.round((metric.memory.workingSetSize / 1024) * 10) / 10,
+    sandboxed: metric.sandboxed ?? null
+  };
+}
+
+function runtimeDiagnostics(): HostStatus["diagnostics"] {
+  const metrics = app.getAppMetrics();
+  const serviceProcessId = serviceHost?.activeProcessId ?? null;
+  const gpuFeatures: Partial<ReturnType<typeof app.getGPUFeatureStatus>> =
+    gpuInfoReady ? app.getGPUFeatureStatus() : {};
+
+  return {
+    gpuProcess: processDiagnostics(metrics.find((metric) => metric.type === "GPU")),
+    hardwareAcceleration: gpuInfoReady ? app.isHardwareAccelerationEnabled() : null,
+    serviceRenderer: processDiagnostics(
+      serviceProcessId === null
+        ? undefined
+        : metrics.find((metric) => metric.pid === serviceProcessId)
+    ),
+    videoDecode: gpuFeatures.video_decode ?? "checking",
+    vpxDecode: gpuFeatures.vpx_decode ?? "checking"
+  };
+}
 
 function hostStatus(): HostStatus {
   return {
     activeServiceId: serviceHost?.activeServiceId ?? null,
+    diagnostics: runtimeDiagnostics(),
     runtime: {
       chrome: process.versions.chrome ?? "unknown",
       electron: process.versions.electron ?? "unknown",
@@ -199,6 +239,11 @@ app.whenReady().then(async () => {
 
   await createMainWindow();
   void initializeWidevine();
+});
+
+app.on("gpu-info-update", () => {
+  gpuInfoReady = true;
+  publishHostStatus();
 });
 
 app.on("window-all-closed", () => {

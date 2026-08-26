@@ -1,5 +1,9 @@
 import "./style.css";
 import type { HostStatus } from "../main/contracts";
+import {
+  findDirectionalTarget,
+  type SpatialDirection
+} from "./spatial-navigation";
 
 const runtimeStatus = document.querySelector<HTMLParagraphElement>("#runtime-status");
 const widevineStatus = document.querySelector<HTMLParagraphElement>("#widevine-status");
@@ -154,6 +158,45 @@ document.querySelector<HTMLButtonElement>("#settings-nav")?.addEventListener("cl
 
 document.querySelector<HTMLButtonElement>("#remote-card")?.addEventListener("click", () => {
   showPlannedFeature("QR phone pairing is planned for Milestone 4.");
+});
+
+const arrowDirections: Readonly<Record<string, SpatialDirection>> = {
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up"
+};
+
+document.addEventListener("keydown", (event) => {
+  const direction = arrowDirections[event.key];
+  const current = event.target;
+
+  if (direction === undefined || !(current instanceof HTMLElement)) {
+    return;
+  }
+
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>("button:not(:disabled), summary")
+  ).filter((candidate) => candidate.getClientRects().length > 0);
+  const currentIndex = candidates.indexOf(current);
+
+  if (currentIndex === -1) {
+    return;
+  }
+
+  const nextIndex = findDirectionalTarget(
+    currentIndex,
+    candidates.map((candidate) => candidate.getBoundingClientRect()),
+    direction
+  );
+
+  if (nextIndex === null) {
+    return;
+  }
+
+  event.preventDefault();
+  candidates[nextIndex]?.focus({ preventScroll: true });
+  candidates[nextIndex]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
 });
 
 elements.closeServiceButton.addEventListener("click", async () => {

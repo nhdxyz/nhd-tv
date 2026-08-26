@@ -120,12 +120,16 @@ button {
 
 #connection-state {
   display: flex;
+  min-width: 0;
+  max-width: 58%;
   margin: 0;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.4rem;
   color: #fcd34d;
   font-size: 0.66rem;
   font-weight: 800;
+  line-height: 1.2;
   text-align: right;
 }
 #connection-state span {
@@ -159,6 +163,7 @@ button {
   gap: 0.42rem;
   margin: 0 auto 0.85rem;
 }
+.dpad[hidden] { display: none; }
 
 .dpad button {
   border: 1px solid rgb(255 255 255 / 12%);

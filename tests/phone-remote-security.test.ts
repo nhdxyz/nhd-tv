@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { remotePostHeadersAreAllowed } from "../src/main/remote/phone-remote-server";
-import { REMOTE_HTML, REMOTE_JS } from "../src/main/remote/remote-assets";
+import {
+  REMOTE_CSS,
+  REMOTE_HTML,
+  REMOTE_JS
+} from "../src/main/remote/remote-assets";
 
 describe("phone remote boundary", () => {
   const expectedOrigin = "http://192.0.2.10:43123";
@@ -67,6 +71,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('id="precision-pad"');
     expect(REMOTE_HTML).toContain('class="precision-dot"');
     expect(REMOTE_HTML).toContain('id="control-mode"');
+    expect(REMOTE_CSS).toContain('.dpad[hidden] { display: none; }');
     expect(REMOTE_JS).toContain("usePrecisionMode(false)");
     expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 40");
     expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');

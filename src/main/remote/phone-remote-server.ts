@@ -11,13 +11,15 @@ import type {
   RemoteAction,
   RemotePointerInput,
   RemotePointerResult,
-  RemoteStatus
+  RemoteStatus,
+  RemoteTextInput
 } from "../contracts";
 import { normalizeSearchQuery } from "../security/navigation-policy";
 import {
   PairingManager,
   parseRemoteAction,
-  parseRemotePointerInput
+  parseRemotePointerInput,
+  parseRemoteTextInput
 } from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 
@@ -38,6 +40,7 @@ export interface PhoneRemoteServerOptions {
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
+  onText: (input: RemoteTextInput) => boolean | Promise<boolean>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
 
@@ -141,6 +144,7 @@ export class PhoneRemoteServer {
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
+  readonly #onText: PhoneRemoteServerOptions["onText"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
   #lastPointerAt = 0;
@@ -154,6 +158,7 @@ export class PhoneRemoteServer {
     this.#onPointer = options.onPointer;
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
+    this.#onText = options.onText;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
 
@@ -465,6 +470,38 @@ export class PhoneRemoteServer {
 
       const result = await this.#onPointer(input);
       writeJson(response, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/text") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "Text-entry origin rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+
+      if (!this.#manager.authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      const input = parseRemoteTextInput(body);
+      if (input === null) {
+        writeJson(response, 400, { error: "Remote text must be at most 120 safe characters" });
+        return;
+      }
+
+      if (!await this.#onText(input)) {
+        writeJson(response, 409, { error: "Select a supported search box on the TV first" });
+        return;
+      }
+
+      writeJson(response, 200, { ok: true });
       return;
     }
 

@@ -519,6 +519,8 @@ export const REMOTE_JS = `(() => {
   let lastPointerSentAt = 0;
   let virtualPointer = { x: 0.5, y: 0.5 };
   let precisionTextEntryAvailable = false;
+  let directTextEntry = false;
+  let textEntryTimer = null;
   const POINTER_INTERVAL_MS = 32;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
@@ -668,6 +670,30 @@ export const REMOTE_JS = `(() => {
     }
   }
 
+  async function sendRemoteText(text, submit) {
+    if (!controllerToken) return;
+
+    try {
+      await jsonRequest("/api/text", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ submit, text })
+      });
+      setState(submit ? "Search sent to TV" : "Typing on TV", "connected");
+      if (submit) {
+        directTextEntry = false;
+        searchQuery.value = "";
+        searchPanel.hidden = true;
+        confirmCommand(searchToggle);
+      }
+    } catch (error) {
+      setState(error instanceof Error ? error.message : "Text entry failed", "error");
+    }
+  }
+
   function usePrecisionMode(enabled) {
     dpad.hidden = enabled;
     precisionPad.hidden = !enabled;
@@ -709,6 +735,7 @@ export const REMOTE_JS = `(() => {
         precisionPad.dataset.textEntryAvailable = String(precisionTextEntryAvailable);
         precisionStatusCopy.textContent = precisionTextEntryAvailable ? "Tap to type" : "Target locked";
         precisionPad.classList.toggle("has-snap", result.snapped === true);
+        if (input.phase === "tap" && precisionTextEntryAvailable) openProviderKeyboard();
       }
       if (result.snapChanged && navigator.vibrate) navigator.vibrate(7);
     } catch (error) {
@@ -754,10 +781,12 @@ export const REMOTE_JS = `(() => {
   }
 
   function openProviderKeyboard() {
-    searchLabel.textContent = "Type your search";
-    searchQuery.placeholder = "Search this service";
+    if (!directTextEntry) searchQuery.value = "";
+    directTextEntry = true;
+    searchLabel.textContent = "Type on your TV";
+    searchQuery.placeholder = "Type in the selected search box";
     searchPanel.hidden = false;
-    searchQuery.focus();
+    searchQuery.focus({ preventScroll: true });
   }
 
   function latestPointerEvent(event) {
@@ -773,6 +802,7 @@ export const REMOTE_JS = `(() => {
     if (pointerGesture !== null || event.isPrimary === false || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
     }
+    if (precisionTextEntryAvailable) openProviderKeyboard();
     event.preventDefault();
     pointerGesture = {
       id: event.pointerId,
@@ -833,6 +863,11 @@ export const REMOTE_JS = `(() => {
 
   searchToggle.addEventListener("click", () => {
     if (searchToggle.disabled) return;
+    directTextEntry = false;
+    if (textEntryTimer !== null) {
+      clearTimeout(textEntryTimer);
+      textEntryTimer = null;
+    }
     searchLabel.textContent = "Search your services";
     searchQuery.placeholder = "Title, person, or topic";
     searchPanel.hidden = !searchPanel.hidden;
@@ -841,8 +876,25 @@ export const REMOTE_JS = `(() => {
 
   searchPanel.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (textEntryTimer !== null) {
+      clearTimeout(textEntryTimer);
+      textEntryTimer = null;
+    }
+    if (directTextEntry) {
+      void sendRemoteText(searchQuery.value, true);
+      return;
+    }
     const query = searchQuery.value.replace(/\\s+/g, " ").trim();
     if (query.length > 0 && query.length <= 120) void sendSearch(query);
+  });
+
+  searchQuery.addEventListener("input", () => {
+    if (!directTextEntry) return;
+    if (textEntryTimer !== null) clearTimeout(textEntryTimer);
+    textEntryTimer = setTimeout(() => {
+      textEntryTimer = null;
+      void sendRemoteText(searchQuery.value, false);
+    }, 45);
   });
 
   buttons.forEach((button) => {

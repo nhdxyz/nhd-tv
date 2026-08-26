@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
+  remotePrecisionMoved: "nhd:remote:precision:moved",
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
@@ -56,6 +57,11 @@ export interface RemotePointerResult {
   snapChanged: boolean;
   snapped: boolean;
   textEntryAvailable: boolean;
+}
+
+export interface RemoteTextInput {
+  submit: boolean;
+  text: string;
 }
 
 export type RemoteState = "awaiting-approval" | "inactive" | "pairing" | "ready";

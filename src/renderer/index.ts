@@ -1852,6 +1852,7 @@ window.nhd.onContinueWatchingChanged((items) => {
   renderContinueWatching();
 });
 window.nhd.onRemoteAction(handleShellRemoteAction);
+window.nhd.onRemotePrecisionMoved(() => navigationSounds.playMove());
 window.nhd.onRemoteSearchRequested((query) => openSearchDialog(query, true));
 window.nhd.onRemoteStatusChanged(renderRemoteStatus);
 window.nhd.onServiceQuitRequested((request) => {

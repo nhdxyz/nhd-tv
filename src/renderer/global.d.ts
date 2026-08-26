@@ -34,6 +34,7 @@ declare global {
         callback: (items: readonly ContinueWatchingItem[]) => void
       ) => void;
       onRemoteAction: (callback: (action: RemoteAction) => void) => void;
+      onRemotePrecisionMoved: (callback: () => void) => void;
       onRemoteSearchRequested: (callback: (query: string) => void) => void;
       onRemoteStatusChanged: (callback: (status: RemoteStatus) => void) => void;
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;

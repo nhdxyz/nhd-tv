@@ -35,6 +35,7 @@ const IPC_CHANNELS = {
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
+  remotePrecisionMoved: "nhd:remote:precision:moved",
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
@@ -95,6 +96,9 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.on(IPC_CHANNELS.remoteAction, (_event, action: RemoteAction) => {
       callback(action);
     });
+  },
+  onRemotePrecisionMoved: (callback: () => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.remotePrecisionMoved, () => callback());
   },
   onRemoteSearchRequested: (callback: (query: string) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.remoteSearchRequested, (_event, query: string) => {

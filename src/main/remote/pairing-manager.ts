@@ -6,7 +6,8 @@ import {
 import {
   REMOTE_ACTIONS,
   type RemoteAction,
-  type RemotePointerInput
+  type RemotePointerInput,
+  type RemoteTextInput
 } from "../contracts";
 
 const PAIRING_TOKEN_BYTES = 32;
@@ -93,6 +94,26 @@ export function parseRemotePointerInput(value: unknown): RemotePointerInput | nu
     x: candidate.x,
     y: candidate.y
   };
+}
+
+export function parseRemoteTextInput(value: unknown): RemoteTextInput | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const allowedKeys = new Set(["submit", "text"]);
+  if (
+    Object.keys(candidate).some((key) => !allowedKeys.has(key)) ||
+    typeof candidate.submit !== "boolean" ||
+    typeof candidate.text !== "string" ||
+    candidate.text.length > 120 ||
+    /[\0\r\n]/.test(candidate.text)
+  ) {
+    return null;
+  }
+
+  return { submit: candidate.submit, text: candidate.text };
 }
 
 export class PairingManager {

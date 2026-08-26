@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   PairingManager,
   parseRemoteAction,
-  parseRemotePointerInput
+  parseRemotePointerInput,
+  parseRemoteTextInput
 } from "../src/main/remote/pairing-manager";
 
 describe("phone remote pairing", () => {
@@ -75,5 +76,17 @@ describe("phone remote pairing", () => {
       x: 0.5,
       y: 0.5
     })).toBeNull();
+  });
+
+  it("accepts only bounded remote search text with an explicit submit flag", () => {
+    expect(parseRemoteTextInput({ submit: false, text: "Breaking Bad" })).toEqual({
+      submit: false,
+      text: "Breaking Bad"
+    });
+    expect(parseRemoteTextInput({ submit: true, text: "" })).toEqual({ submit: true, text: "" });
+    expect(parseRemoteTextInput({ submit: false, text: "x".repeat(121) })).toBeNull();
+    expect(parseRemoteTextInput({ submit: false, text: "query\nnext" })).toBeNull();
+    expect(parseRemoteTextInput({ selector: "input", submit: false, text: "query" })).toBeNull();
+    expect(parseRemoteTextInput({ submit: "yes", text: "query" })).toBeNull();
   });
 });

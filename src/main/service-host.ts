@@ -24,9 +24,11 @@ import type {
   RemoteAction,
   RemotePointerInput,
   RemotePointerResult,
+  RemoteTextInput,
   ServiceQuitRequest
 } from "./contracts";
 import { dispatchPrecisionPointer } from "./precision-pointer";
+import { buildRemoteTextEntryScript } from "./remote-text-entry";
 import {
   serviceConsumedBack,
   type ServiceBackState
@@ -956,6 +958,42 @@ export class ServiceHost {
     } catch {
       this.#pointerSnapKey = null;
       return { snapChanged: false, snapped: false, textEntryAvailable: false };
+    }
+  }
+
+  async sendRemoteText(input: RemoteTextInput): Promise<boolean> {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+
+    if (
+      view === null ||
+      definition === null ||
+      definition.remoteTextEntrySelectors.length === 0 ||
+      view.webContents.isDestroyed() ||
+      this.#quitPromptVisible ||
+      (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+    ) {
+      return false;
+    }
+
+    try {
+      const accepted = await view.webContents.executeJavaScript(
+        buildRemoteTextEntryScript(input.text, definition.remoteTextEntrySelectors),
+        true
+      ) as unknown;
+      if (accepted !== true) {
+        return false;
+      }
+
+      if (input.submit) {
+        this.#window.focus();
+        view.webContents.focus();
+        view.webContents.sendInputEvent({ keyCode: "Enter", type: "keyDown" });
+        view.webContents.sendInputEvent({ keyCode: "Enter", type: "keyUp" });
+      }
+      return true;
+    } catch {
+      return false;
     }
   }
 

@@ -26,6 +26,7 @@ import {
   type RemotePointerInput,
   type RemotePointerResult,
   type RemoteStatus,
+  type RemoteTextInput,
   type WidevineState
 } from "./contracts";
 import {
@@ -539,7 +540,11 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
     serviceHost.activeServiceId !== null &&
     (input.phase === "hide" || !serviceHost.isQuitPromptVisible)
   ) {
-    return serviceHost.sendRemotePointer(input);
+    const result = await serviceHost.sendRemotePointer(input);
+    if (result.snapChanged && mainWindow !== null && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.remotePrecisionMoved);
+    }
+    return result;
   }
 
   if (mainWindow === null || mainWindow.isDestroyed()) {
@@ -554,6 +559,9 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
       shellPointerSnapKey
     );
     shellPointerSnapKey = result.snapKey;
+    if (result.snapChanged) {
+      mainWindow.webContents.send(IPC_CHANNELS.remotePrecisionMoved);
+    }
     return {
       snapChanged: result.snapChanged,
       snapped: result.snapped,
@@ -563,6 +571,18 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
     shellPointerSnapKey = null;
     return { snapChanged: false, snapped: false, textEntryAvailable: false };
   }
+}
+
+async function handleRemoteText(input: RemoteTextInput): Promise<boolean> {
+  if (
+    serviceHost === null ||
+    serviceHost.activeServiceId === null ||
+    serviceHost.isQuitPromptVisible
+  ) {
+    return false;
+  }
+
+  return serviceHost.sendRemoteText(input);
 }
 
 function registerShellProtocol(): void {
@@ -962,6 +982,7 @@ async function createMainWindow(): Promise<void> {
     onPointer: handleRemotePointer,
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus,
+    onText: handleRemoteText,
     shouldAutoApproveFirstRemote: () =>
       localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
   });

@@ -15,6 +15,10 @@ import {
 describe("phone remote boundary", () => {
   const expectedOrigin = "http://192.0.2.10:43123";
 
+  it("serves syntactically valid standalone JavaScript", () => {
+    expect(() => new Function(REMOTE_JS)).not.toThrow();
+  });
+
   it("requires JSON from the exact QR-code origin", () => {
     expect(remotePostHeadersAreAllowed({
       "content-type": "application/json",
@@ -50,6 +54,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).not.toContain("innerHTML");
     expect(REMOTE_JS).not.toMatch(/https?:\/\//);
     expect(REMOTE_JS).toContain('await jsonRequest("/api/search"');
+    expect(REMOTE_JS).toContain('await jsonRequest("/api/text"');
+    expect(REMOTE_JS).toContain('body: JSON.stringify({ submit, text })');
     expect(REMOTE_JS).toContain('fetch("/api/disconnect"');
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
   });
@@ -119,6 +125,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('precisionTextEntryAvailable = result.textEntryAvailable === true');
     expect(REMOTE_JS).toContain('phase === "tap" && precisionTextEntryAvailable');
     expect(REMOTE_JS).toContain("searchQuery.focus()");
+    expect(REMOTE_JS).toContain("searchQuery.focus({ preventScroll: true })");
+    expect(REMOTE_JS).toContain('searchQuery.addEventListener("input"');
+    expect(REMOTE_JS).toContain('if (precisionTextEntryAvailable) openProviderKeyboard()');
     expect(REMOTE_JS).toContain('result.throttled !== true');
     expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
     expect(REMOTE_JS).not.toContain("renderPointerPoint");

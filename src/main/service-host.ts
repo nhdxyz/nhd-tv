@@ -8,7 +8,13 @@ import { isAllowedServiceUrl, type ServiceDefinition } from "./security/navigati
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 
+const configuredSessions = new WeakSet<Session>();
+
 function configureServiceSession(serviceSession: Session, definition: ServiceDefinition): void {
+  if (configuredSessions.has(serviceSession)) {
+    return;
+  }
+
   serviceSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     const requestingUrl = details.requestingUrl || webContents.getURL();
     const allowMediaKeySystem =
@@ -21,6 +27,8 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
   serviceSession.on("will-download", (event) => {
     event.preventDefault();
   });
+
+  configuredSessions.add(serviceSession);
 }
 
 export class ServiceHost {

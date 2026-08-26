@@ -673,6 +673,44 @@ export class ServiceHost {
     this.close();
   }
 
+  async navigate(url: string): Promise<void> {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+
+    if (
+      view === null ||
+      definition === null ||
+      view.webContents.isDestroyed() ||
+      !isAllowedServiceUrl(url, definition.allowedOrigins)
+    ) {
+      throw new Error("The active service cannot open that search destination.");
+    }
+
+    if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
+      this.#popupWindow.close();
+    }
+
+    if (this.#quitPromptVisible) {
+      this.cancelQuit();
+    }
+
+    await this.#checkpointPlayback();
+
+    try {
+      await view.webContents.loadURL(url);
+    } catch (error) {
+      if (
+        !isExpectedAllowedNavigationAbort(
+          error,
+          view.webContents.getURL(),
+          definition.allowedOrigins
+        )
+      ) {
+        throw error;
+      }
+    }
+  }
+
   cancelQuit(): void {
     const view = this.#view;
 

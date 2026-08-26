@@ -35,6 +35,24 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('await jsonRequest("/api/search"');
   });
 
+  it("uses the compact arrow layout without decorative system glyphs or room copy", () => {
+    expect(REMOTE_HTML).toContain('<span>↑</span>');
+    expect(REMOTE_HTML).toContain('<span>←</span>');
+    expect(REMOTE_HTML).toContain('<span>→</span>');
+    expect(REMOTE_HTML).toContain('<span>↓</span>');
+    expect(REMOTE_HTML).not.toContain("Living room");
+    expect(REMOTE_HTML).not.toContain(">OK<");
+    expect(REMOTE_HTML).not.toContain("↩");
+    expect(REMOTE_HTML).not.toContain("⌂");
+  });
+
+  it("prevents accidental viewport and trackpad zoom on the appliance remote", () => {
+    expect(REMOTE_HTML).toContain("maximum-scale=1");
+    expect(REMOTE_HTML).toContain("user-scalable=no");
+    expect(REMOTE_JS).toContain('"gesturestart"');
+    expect(REMOTE_JS).toContain("event.ctrlKey");
+  });
+
   it("confirms accepted commands with optional haptic feedback", () => {
     const commandRequest = REMOTE_JS.indexOf('await jsonRequest("/api/command"');
     const confirmation = REMOTE_JS.indexOf("confirmCommand(button);", commandRequest);

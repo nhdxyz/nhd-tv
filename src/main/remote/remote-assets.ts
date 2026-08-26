@@ -2,7 +2,7 @@ export const REMOTE_HTML = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#05070b" />
     <title>NHD-TV Remote</title>
     <link rel="stylesheet" href="/remote.css" />
@@ -12,32 +12,26 @@ export const REMOTE_HTML = `<!doctype html>
       <header class="remote-header">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">N</span>
-          <span><strong>NHD</strong><small>REMOTE</small></span>
+          <strong>NHD Remote</strong>
         </div>
         <p id="connection-state" role="status"><span aria-hidden="true"></span>Requesting approval</p>
       </header>
 
       <section class="remote-card" aria-label="Television remote">
-        <div class="remote-title">
-          <p class="eyebrow">NHD-TV</p>
-          <h1>Living room</h1>
-          <p>Tap to move the focus shown on your TV.</p>
-        </div>
-
         <div class="dpad" aria-label="Directional pad">
-          <span class="dpad-surface" aria-hidden="true"></span>
-          <button class="up" data-action="up" type="button" disabled aria-label="Up"><span>▲</span></button>
-          <button class="left" data-action="left" type="button" disabled aria-label="Left"><span>◀</span></button>
-          <button class="select" data-action="select" type="button" disabled aria-label="Select"><span>OK</span></button>
-          <button class="right" data-action="right" type="button" disabled aria-label="Right"><span>▶</span></button>
-          <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>▼</span></button>
+          <button class="up" data-action="up" type="button" disabled aria-label="Up"><span>↑</span></button>
+          <button class="left" data-action="left" type="button" disabled aria-label="Left"><span>←</span></button>
+          <button class="select" data-action="select" type="button" disabled aria-label="Select"><span aria-hidden="true"></span></button>
+          <button class="right" data-action="right" type="button" disabled aria-label="Right"><span>→</span></button>
+          <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
         </div>
 
         <div class="system-actions">
-          <button data-action="back" type="button" disabled><span aria-hidden="true">↩</span> Back</button>
-          <button data-action="home" type="button" disabled><span aria-hidden="true">⌂</span> NHD Home</button>
-          <button class="search-toggle" id="search-toggle" type="button" disabled><span aria-hidden="true">⌕</span> Search</button>
+          <button data-action="back" type="button" disabled>Back</button>
+          <button data-action="home" type="button" disabled>NHD Home</button>
         </div>
+
+        <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
 
         <form class="search-panel" id="search-panel" hidden>
           <label for="search-query">Search your services</label>
@@ -76,13 +70,16 @@ export const REMOTE_CSS = `:root {
 body {
   min-height: 100dvh;
   margin: 0;
-  padding: max(1.2rem, env(safe-area-inset-top)) 1.15rem max(1.4rem, env(safe-area-inset-bottom));
-  overflow-x: hidden;
+  padding: max(0.65rem, env(safe-area-inset-top)) 0.7rem max(0.75rem, env(safe-area-inset-bottom));
+  overflow: hidden auto;
   background:
     radial-gradient(circle at 78% -8%, rgb(22 107 255 / 38%), transparent 23rem),
     radial-gradient(circle at -12% 76%, rgb(126 34 206 / 24%), transparent 22rem),
     linear-gradient(180deg, #0a0e17 0%, #05070b 72%);
 }
+
+html,
+body { touch-action: manipulation; overscroll-behavior: none; }
 
 button {
   touch-action: manipulation;
@@ -90,31 +87,29 @@ button {
   user-select: none;
 }
 
-.remote-shell { width: min(100%, 31rem); margin: 0 auto; }
+.remote-shell { width: min(100%, 25rem); margin: 0 auto; }
 
 .remote-header {
   display: flex;
-  min-height: 2.8rem;
+  min-height: 2.25rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.brand { display: flex; align-items: center; gap: 0.65rem; }
+.brand { display: flex; align-items: center; gap: 0.5rem; }
 .brand-mark {
   display: grid;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 1.9rem;
+  height: 1.9rem;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 0.78rem;
+  border-radius: 0.58rem;
   background: linear-gradient(145deg, #1685ff, #6d28d9);
   box-shadow: inset 0 1px rgb(255 255 255 / 28%), 0 0.6rem 1.8rem rgb(26 92 255 / 25%);
   font-weight: 900;
 }
-.brand > span:last-child { display: grid; line-height: 1; }
-.brand strong { font-size: 0.98rem; letter-spacing: 0.04em; }
-.brand small { margin-top: 0.2rem; color: #8996ab; font-size: 0.55rem; font-weight: 850; letter-spacing: 0.18em; }
+.brand strong { font-size: 0.8rem; letter-spacing: 0.02em; }
 
 #connection-state {
   display: flex;
@@ -122,7 +117,7 @@ button {
   align-items: center;
   gap: 0.4rem;
   color: #fcd34d;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
   text-align: right;
 }
@@ -138,99 +133,96 @@ button {
 #connection-state.error { color: #fda4af; }
 
 .remote-card {
-  margin-top: 1.15rem;
-  padding: 1.5rem clamp(1.1rem, 5vw, 1.65rem) 1.2rem;
+  margin-top: 0.65rem;
+  padding: 1rem;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 2rem;
+  border-radius: 1.45rem;
   background: linear-gradient(155deg, rgb(25 31 45 / 92%), rgb(10 13 20 / 92%));
   box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 2rem 5rem rgb(0 0 0 / 42%);
   backdrop-filter: blur(24px);
 }
 
-.remote-title { text-align: center; }
-.eyebrow { margin: 0; color: #7dbbff; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
-h1 { margin: 0.28rem 0 0; font-size: clamp(2.05rem, 10vw, 3rem); letter-spacing: -0.055em; line-height: 1; }
-.remote-title > p:last-child { margin: 0.55rem 0 0; color: #98a5b9; font-size: 0.78rem; }
-
 .dpad {
-  position: relative;
   display: grid;
-  width: min(78vw, 20rem);
+  width: min(76vw, 16.5rem);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
-  margin: 1.55rem auto 1.25rem;
-  padding: 0.5rem;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 50%;
-  background: linear-gradient(145deg, #222a39, #111621);
-  box-shadow: inset 0 1px 1px rgb(255 255 255 / 16%), inset 0 -1rem 2.2rem rgb(0 0 0 / 18%), 0 1.5rem 3rem rgb(0 0 0 / 34%);
-}
-
-.dpad-surface {
-  position: absolute;
-  inset: 30%;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 50%;
-  background: #0d121c;
-  box-shadow: inset 0 0.25rem 0.8rem rgb(0 0 0 / 45%);
+  gap: 0.42rem;
+  margin: 0 auto 0.85rem;
 }
 
 .dpad button {
-  position: relative;
-  z-index: 1;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, #252e3f, #151b27);
   color: #e7edf7;
+  box-shadow: inset 0 1px rgb(255 255 255 / 11%), 0 0.55rem 1rem rgb(0 0 0 / 20%);
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.75rem;
   font-weight: 900;
 }
-.dpad button span { display: grid; min-width: 2.8rem; min-height: 2.8rem; place-items: center; border-radius: 50%; }
+.dpad button span { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; }
 .dpad .up { grid-area: up; }
 .dpad .left { grid-area: left; }
 .dpad .select { grid-area: select; }
 .dpad .right { grid-area: right; }
 .dpad .down { grid-area: down; }
 .dpad .select span {
-  background: linear-gradient(145deg, #f8fafc, #cbd5e1);
-  color: #101521;
-  box-shadow: inset 0 1px #fff, 0 0.55rem 1.2rem rgb(0 0 0 / 38%);
-  font-size: 0.8rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: auto;
+  border: 0.18rem solid #dbeafe;
+  border-radius: 0.38rem;
+  background: #93c5fd;
+  box-shadow: 0 0 1rem rgb(96 165 250 / 55%);
 }
 
 .dpad button:not(:disabled).is-pressed span,
 .dpad button:not(:disabled):active span {
-  transform: scale(0.88);
-  background-color: rgb(255 255 255 / 9%);
+  transform: scale(0.9);
+  background-color: rgb(255 255 255 / 10%);
   filter: brightness(1.25);
 }
+.dpad button:not(:disabled):active { transform: scale(0.94); }
 .dpad .select:not(:disabled).is-pressed span,
 .dpad .select:not(:disabled):active span { background: #fff; }
 
 button:disabled { opacity: 0.3; }
 
-.system-actions { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 0.72rem; }
+.system-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .system-actions button {
   display: flex;
-  min-height: 3.55rem;
+  min-height: 3.15rem;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
   border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 1.1rem;
-  background: linear-gradient(145deg, #242c3c, #171c28);
+  border-radius: 0.9rem;
+  background: #151b26;
   color: #f8fafc;
   box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 0.65rem 1.3rem rgb(0 0 0 / 19%);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 850;
 }
-.system-actions button span { color: #9cc9ff; font-size: 1.15rem; }
 .system-actions button:not(:disabled).is-pressed,
 .system-actions button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
+
+.search-toggle {
+  width: 100%;
+  min-height: 3.15rem;
+  margin-top: 0.6rem;
+  border: 1px solid rgb(125 187 255 / 30%);
+  border-radius: 0.9rem;
+  background: linear-gradient(145deg, #18345e, #15223a);
+  color: #eff6ff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+.search-toggle:not(:disabled).is-pressed,
+.search-toggle:not(:disabled):active { transform: scale(0.97); filter: brightness(1.2); }
 
 .search-panel {
   margin-top: 0.8rem;
@@ -269,14 +261,12 @@ button:disabled { opacity: 0.3; }
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
 
-.privacy-note { margin: 1.05rem 0 0; color: #7d899d; font-size: 0.67rem; text-align: center; }
+.privacy-note { margin: 0.8rem 0 0; color: #7d899d; font-size: 0.64rem; text-align: center; }
 .privacy-note span { margin-right: 0.25rem; color: #4ade80; font-size: 0.48rem; vertical-align: 0.08rem; }
-.footnote { margin: 0.9rem 0 0; color: #677287; font-size: 0.68rem; text-align: center; }
+.footnote { margin: 0.6rem 0 0; color: #677287; font-size: 0.63rem; text-align: center; }
 
 @media (max-height: 700px) {
-  .remote-card { padding-top: 1rem; }
-  .remote-title > p:last-child { display: none; }
-  .dpad { width: min(65vh, 18rem); margin-block: 1rem; }
+  .dpad { width: min(61vh, 15rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -293,6 +283,13 @@ export const REMOTE_JS = `(() => {
   const searchSubmit = document.querySelector("#search-submit");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
+
+  for (const gestureEvent of ["gesturestart", "gesturechange"]) {
+    document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
+  }
+  document.addEventListener("wheel", (event) => {
+    if (event.ctrlKey) event.preventDefault();
+  }, { passive: false });
 
   function setState(message, kind) {
     const dot = document.createElement("span");

@@ -24,10 +24,10 @@ import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { getServiceDefinition, getServiceSummaries } from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
+import { resolveRemoteSearchDestination } from "./search-routing";
 import {
   buildServiceSearchUrl,
   isAllowedArtworkUrl,
-  normalizeSearchQuery,
   sanitizePlaybackUrl
 } from "./security/navigation-policy";
 
@@ -225,15 +225,23 @@ async function handlePlaybackObservation(observation: PlaybackObservation): Prom
 }
 
 async function handleRemoteSearch(query: string): Promise<void> {
-  const normalizedQuery = normalizeSearchQuery(query);
-  if (normalizedQuery === null) {
+  const destination = resolveRemoteSearchDestination(
+    serviceHost?.activeServiceId ?? null,
+    query
+  );
+  if (destination === null) {
+    return;
+  }
+
+  if (destination.kind === "active-service" && serviceHost !== null) {
+    await serviceHost.navigate(destination.url);
     return;
   }
 
   await serviceHost?.closeWithCheckpoint();
 
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_CHANNELS.remoteSearchRequested, normalizedQuery);
+    mainWindow.webContents.send(IPC_CHANNELS.remoteSearchRequested, destination.query);
   }
 }
 

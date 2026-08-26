@@ -31,6 +31,10 @@ import {
   parseTvmazeSearchPayload
 } from "./catalog-search";
 import { ContinueWatchingStore } from "./continue-watching-store";
+import {
+  buildRasterTranscodeScript,
+  validateJpegDataUrl
+} from "./image-transcode";
 import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import {
@@ -51,6 +55,7 @@ import {
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
 const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
+const MAX_CACHED_ARTWORK_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
@@ -258,15 +263,32 @@ async function cacheArtwork(
     }
 
     const source = nativeImage.createFromBuffer(buffer);
-    if (source.isEmpty()) {
-      return;
-    }
+    let artworkDataUrl: string | null;
 
-    const size = source.getSize();
-    const resized = size.width > 640
-      ? source.resize({ quality: "good", width: 640 })
-      : source;
-    const artworkDataUrl = `data:image/jpeg;base64,${resized.toJPEG(78).toString("base64")}`;
+    if (source.isEmpty()) {
+      const script = buildRasterTranscodeScript(buffer, contentType, 640, 0.78);
+      const window = mainWindow;
+      if (script === null || window === null || window.isDestroyed()) {
+        return;
+      }
+      const converted = await window.webContents.executeJavaScript(script, true) as unknown;
+      artworkDataUrl = validateJpegDataUrl(converted, MAX_CACHED_ARTWORK_BYTES);
+      if (
+        artworkDataUrl === null ||
+        nativeImage.createFromDataURL(artworkDataUrl).isEmpty()
+      ) {
+        return;
+      }
+    } else {
+      const size = source.getSize();
+      const resized = Math.max(size.width, size.height) > 640
+        ? source.resize({
+          quality: "good",
+          width: Math.max(1, Math.round(size.width * 640 / Math.max(size.width, size.height)))
+        })
+        : source;
+      artworkDataUrl = `data:image/jpeg;base64,${resized.toJPEG(78).toString("base64")}`;
+    }
 
     if (await store.updateArtwork(item.id, artworkDataUrl)) {
       publishContinueWatching();

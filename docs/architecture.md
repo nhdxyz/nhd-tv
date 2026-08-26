@@ -26,6 +26,8 @@ Service pages never receive direct access to the application database, filesyste
 
 Keyboard, controller, and phone adapters emit normalized actions such as `up`, `down`, `left`, `right`, `select`, and `back`.
 
+The shell's Gamepad API adapter polls connected standard-mapped controllers, applies a left-stick dead zone and bounded directional repeat, and submits only the normalized action vocabulary over a sender-validated IPC channel. The main process then applies the same overlay, shell, and active-service routing used by phone commands. It does not expose raw controller state to a service page.
+
 The host decides whether an action belongs to the shell, the service, or an NHD-TV overlay. Back handling is stateful:
 
 1. Let active fullscreen or service UI consume Back when appropriate.
@@ -60,7 +62,7 @@ Service popup policy never creates an unrestricted child window. A popup URL on 
 
 ## Local data
 
-The first Continue Watching slice uses a versioned, owner-readable JSON document in Electron's application-data directory. Version two adds optional episode/subtitle metadata while migrating version-one history in place. Writes use a temporary file and atomic rename. Private watch URLs never cross renderer IPC; service, title/subtitle, progress, duration, timestamp, and cached JPEG artwork form the renderer-safe view. Artwork is downloaded only over HTTPS from per-adapter host suffixes, checked again after redirects, size-limited, decoded, resized, and re-encoded before storage. Manual removal uses a narrow item-ID IPC action and never touches the service partition.
+The first Continue Watching slice uses a versioned, owner-readable JSON document in Electron's application-data directory. Version two adds optional episode/subtitle metadata while migrating version-one history in place. Writes use a temporary file and atomic rename. Private watch URLs never cross renderer IPC; service, title/subtitle, progress, duration, timestamp, and cached JPEG artwork form the renderer-safe view. The passive page observer remembers artwork from the most recently activated browse tile before a single-page transition to playback. Artwork is downloaded only over HTTPS from per-adapter host suffixes, checked again after redirects, size-limited, decoded, resized, and re-encoded before storage. Manual removal uses a narrow item-ID IPC action and never touches the service partition.
 
 SQLite remains the target once profiles, ordering, migrations, manual removal, and larger libraries justify it. Browser cookies and other service session state remain in the runtime's session storage rather than being copied into application tables.
 

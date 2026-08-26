@@ -10,6 +10,7 @@ export const IPC_CHANNELS = {
   getHostStatus: "nhd:host:status:get",
   getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
+  inputAction: "nhd:input:action",
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
   remoteSearchRequested: "nhd:remote:search:requested",

@@ -6,6 +6,7 @@ import type {
   RemoteStatus,
   ServiceSummary
 } from "../main/contracts";
+import { GamepadInput, type GamepadLike } from "./gamepad-input";
 import { NavigationSounds } from "./navigation-sounds";
 import { createServiceLockup, createServiceMark } from "./service-branding";
 import {
@@ -38,6 +39,8 @@ const elements = {
   featuredSection: requireElement<HTMLElement>(".featured", "featured"),
   featuredTitle: requireElement<HTMLHeadingElement>("#featured-title", "featured-title"),
   feedback: requireElement<HTMLParagraphElement>("#feedback", "feedback"),
+  gamepadCard: requireElement<HTMLButtonElement>("#gamepad-card", "gamepad-card"),
+  gamepadCopy: requireElement<HTMLElement>("#gamepad-copy", "gamepad-copy"),
   healthPill: requireElement<HTMLSpanElement>("#health-pill", "health-pill"),
   heroOpenButton: requireElement<HTMLButtonElement>("#hero-open", "hero-open"),
   lineupCount: requireElement<HTMLSpanElement>("#lineup-count", "lineup-count"),
@@ -874,6 +877,29 @@ function handleShellRemoteAction(action: RemoteAction): void {
   returnHome(true);
 }
 
+function renderGamepadStatus(gamepads: readonly GamepadLike[]): void {
+  const connected = gamepads.length;
+  elements.gamepadCard.dataset.connected = String(connected > 0);
+  elements.gamepadCopy.textContent = connected === 0
+    ? "Connect an Xbox-style controller"
+    : connected === 1
+      ? gamepads[0]?.id || "1 controller connected"
+      : `${connected} controllers connected`;
+}
+
+const gamepadInput = new GamepadInput(
+  (action) => {
+    void window.nhd.sendInputAction(action).catch((error: unknown) => {
+      showFeedback(error instanceof Error ? error.message : String(error));
+    });
+  },
+  renderGamepadStatus
+);
+
+elements.gamepadCard.addEventListener("click", () => {
+  showFeedback("Controller: D-pad or left stick to move, A to select, B to go back, Guide for Home.");
+});
+
 async function cancelServiceQuit(): Promise<void> {
   if (elements.quitDialog.open) {
     elements.quitDialog.close();
@@ -933,6 +959,7 @@ window.nhd.onServiceQuitRequested((request) => {
 
   elements.quitCancel.focus();
 });
+gamepadInput.start();
 void refreshStatus();
 void initializeContinueWatching();
 void initializeServices();

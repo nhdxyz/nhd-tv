@@ -28,6 +28,8 @@ The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may o
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
 
+The current controller foundation maps a standard Gamepad API layout: D-pad or left stick moves focus, A selects, B goes back, and Guide returns Home. View plus Menu is the Home fallback where Guide is unavailable. Physical Windows validation and nonstandard controller mappings remain release qualification work.
+
 ## Home
 
 The first home experience contains:

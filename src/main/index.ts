@@ -12,6 +12,7 @@ import {
 } from "electron";
 import {
   IPC_CHANNELS,
+  REMOTE_ACTIONS,
   type HostStatus,
   type ContinueWatchingItem,
   type ProcessDiagnostics,
@@ -322,6 +323,20 @@ function registerIpc(): void {
   ipcMain.handle(IPC_CHANNELS.getRemoteStatus, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return phoneRemote?.status ?? inactiveRemoteStatus();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.inputAction, (event, action: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+
+    if (
+      typeof action !== "string" ||
+      !(REMOTE_ACTIONS as readonly string[]).includes(action)
+    ) {
+      throw new TypeError("Input action is not supported.");
+    }
+
+    handleRemoteAction(action as RemoteAction);
+    return true;
   });
 
   ipcMain.handle(IPC_CHANNELS.startRemotePairing, async (event) => {

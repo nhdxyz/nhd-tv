@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, Settings, passive Continue Watching with cached artwork, federated service search, branded service rails, row-aware spatial focus, configurable navigation sounds, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its full-bleed TV shell includes Home, a local Store, Settings, passive Continue Watching with cached artwork, federated service search, branded service rails, row-aware spatial focus, configurable navigation sounds, Xbox-style Gamepad API input, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, service-aware Back/quit behavior, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 
@@ -44,6 +44,8 @@ In the feasibility shell, select a service from Home or the Store. The Shaka ent
 To use a phone as a session-only remote, choose **Pair a phone** in the top bar or Settings, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The compact controller sends directional, Select, Back, and Home actions plus one bounded search phrase. While Netflix or YouTube is open, phone search stays in that service and opens its prefilled search results; Disney+ opens its search page. From Home, search uses the enabled-service chooser. Routing cannot target credential or payment fields. Use the microphone on the phone's native keyboard for voice dictation. Supported phones provide light haptic confirmation after the TV accepts an action. Restarting NHD-TV revokes all paired phones.
 
 Continue Watching qualifies recognized, visible long-form playback from actual played media ranges, then checkpoints after initial engagement, every ten seconds, and on key lifecycle events. It stores progress and sanitized resume links only in local application data; the shell never receives the private link. Home cards can be resumed through the provider or removed locally without clearing the provider session. Home search opens the selected enabled service. Netflix and YouTube accept a prefilled query; Disney+ opens its own search page.
+
+An Xbox-style controller uses the D-pad or left stick for navigation, A for Select, B for Back, and Guide for Home. If a browser does not expose Guide, pressing View and Menu together provides the Home fallback. Directional holds have a bounded repeat delay and use the same host action router as the phone remote.
 
 ### Production Widevine signing
 

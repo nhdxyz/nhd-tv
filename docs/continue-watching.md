@@ -4,7 +4,7 @@
 
 NHD-TV observes rather than controls the service player. On a declared playback route, the host selects the largest visible, healthy video that is at least 60 seconds long. Qualification requires at least five seconds in the element's actual `played` ranges; a provider cloud-resume seek or merely loading at a later timestamp does not qualify. The host checks shortly after playback begins, every ten seconds, and on pause, same-service navigation, service exit, and normal window shutdown. It never invokes play, pause, seek, or skip.
 
-The stored watch URL is rebuilt from the service origin and path. Only adapter-declared query keys survive; fragments and all other parameters are removed. Renderer IPC omits the watch URL completely. Artwork is optional and is stored only after an HTTPS host/redirect check, a five-megabyte input limit, image decoding, resizing, and JPEG re-encoding.
+The stored watch URL is rebuilt from the service origin and path. Only adapter-declared query keys survive; fragments and all other parameters are removed. Renderer IPC omits the watch URL completely. Before a service's single-page navigation enters playback, the observer remembers the nearest visible artwork from the activated browse tile for a short window. Artwork is optional and is stored only after an HTTPS host/redirect check, a five-megabyte input limit, image decoding, resizing, and JPEG re-encoding.
 
 An item is removed when playback reports `ended`, reaches 95%, or the user chooses the controller-accessible Remove action on Home. Manual removal changes only NHD-TV's local history; it does not clear service cookies, account history, or provider data. The service—not NHD-TV—decides where playback resumes after the watch URL opens.
 
@@ -17,7 +17,7 @@ An item is removed when playback reports `ended`, reaches 95%, or the user choos
 - Artwork hosts: `nflximg.net` and `nflxso.net`, including subdomains
 - Title candidates: adapter-declared Netflix player title and episode selectors, Open Graph title, then document title
 - Automated macOS check: Netflix Test Patterns decoded, accumulated real played time, and qualified through the same passive observer and sanitized watch-route policy
-- Remaining validation: confirm episode-level title quality, poster availability, pause checkpoints, completion, manual removal, and cloud resume with ordinary account content on Windows
+- Remaining validation: confirm activated-tile poster capture, episode-level title quality, pause checkpoints, completion, manual removal, and cloud resume with ordinary account content on Windows
 
 ### YouTube
 

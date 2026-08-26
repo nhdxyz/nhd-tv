@@ -19,7 +19,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Controller-first home navigation foundation
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
-- [ ] Xbox-style Gamepad API adapter (#20)
+- [x] Xbox-style Gamepad API adapter foundation (#20; physical Windows validation remains)
 - [x] Service hosting and root-level quit overlay foundation
 - Crash, reload, offline, and emergency-return behavior
 

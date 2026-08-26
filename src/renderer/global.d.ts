@@ -19,6 +19,7 @@ declare global {
       getServices: () => Promise<readonly ServiceSummary[]>;
       getHostStatus: () => Promise<HostStatus>;
       getRemoteStatus: () => Promise<RemoteStatus>;
+      sendInputAction: (action: RemoteAction) => Promise<boolean>;
       onHostStatusChanged: (callback: (status: HostStatus) => void) => void;
       onContinueWatchingChanged: (
         callback: (items: readonly ContinueWatchingItem[]) => void

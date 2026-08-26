@@ -23,6 +23,7 @@ const IPC_CHANNELS = {
   getHostStatus: "nhd:host:status:get",
   getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
+  inputAction: "nhd:input:action",
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
   remoteSearchRequested: "nhd:remote:search:requested",
@@ -51,6 +52,8 @@ contextBridge.exposeInMainWorld("nhd", {
   getHostStatus: (): Promise<HostStatus> => ipcRenderer.invoke(IPC_CHANNELS.getHostStatus),
   getRemoteStatus: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.getRemoteStatus),
+  sendInputAction: (action: RemoteAction): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.inputAction, action),
   onHostStatusChanged: (callback: (status: HostStatus) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.hostStatusChanged, (_event, status: HostStatus) => {
       callback(status);

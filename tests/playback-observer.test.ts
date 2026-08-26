@@ -72,6 +72,8 @@ describe("passive playback observer", () => {
     expect(script).toContain('document.addEventListener("keydown"');
     expect(script).toContain("sessionStorage.setItem(storageKey");
     expect(script).toContain("rememberVisibleDetail");
+    expect(script).toContain("image.naturalWidth * image.naturalHeight");
+    expect(script).toContain("candidate.artworkPixelArea >= state.artworkPixelArea");
     expect(script).toContain('[class*="tracked-card"]');
     expect(script).toContain('element.querySelectorAll("picture source")');
     expect(script).toContain("candidate.area >= 80 * 45");

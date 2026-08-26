@@ -215,6 +215,9 @@ export function buildPlaybackActivationTrackerScript(): string {
     })();
     const state = {
       artworkUrl: typeof restored?.artworkUrl === "string" ? restored.artworkUrl : null,
+      artworkPixelArea: Number.isFinite(restored?.artworkPixelArea)
+        ? restored.artworkPixelArea
+        : 0,
       installed: true,
       title: typeof restored?.title === "string" ? restored.title : null,
       updatedAt: Number.isFinite(restored?.updatedAt) ? restored.updatedAt : 0
@@ -251,6 +254,7 @@ export function buildPlaybackActivationTrackerScript(): string {
     };
 
     const imageUrl = (image) => httpsUrl(
+      image.getAttribute("srcset") ||
       image.currentSrc ||
       image.getAttribute("src") ||
       image.getAttribute("data-src") ||
@@ -265,6 +269,7 @@ export function buildPlaybackActivationTrackerScript(): string {
       for (const image of images) {
         results.push({
           area: visibleArea(image),
+          pixelArea: Math.max(0, image.naturalWidth * image.naturalHeight),
           title: image.alt || null,
           url: imageUrl(image)
         });
@@ -273,6 +278,7 @@ export function buildPlaybackActivationTrackerScript(): string {
         const picture = source.closest("picture");
         results.push({
           area: picture === null ? 0 : visibleArea(picture),
+          pixelArea: 0,
           title: null,
           url: httpsUrl(source.getAttribute("srcset"))
         });
@@ -285,25 +291,27 @@ export function buildPlaybackActivationTrackerScript(): string {
       for (let depth = 0; element instanceof Element && depth < 10; depth += 1) {
         const candidates = imageCandidates(element);
         for (const url of backgroundUrls(element)) {
-          candidates.push({ area: visibleArea(element), title: null, url });
+          candidates.push({ area: visibleArea(element), pixelArea: 0, title: null, url });
         }
         for (const child of element.querySelectorAll('[style*="background"], [class*="image"], [class*="artwork"], [class*="boxart"], [class*="tracked-card"], [class*="standard-card"], [class*="continue-watching-card"], [data-uia*="card"]')) {
           candidates.push(...imageCandidates(child));
           for (const url of backgroundUrls(child)) {
-            candidates.push({ area: visibleArea(child), title: null, url });
+            candidates.push({ area: visibleArea(child), pixelArea: 0, title: null, url });
           }
         }
 
         const best = candidates
           .filter((candidate) => candidate.url !== null && candidate.area >= 80 * 45)
-          .sort((left, right) => right.area - left.area)[0];
+          .sort((left, right) =>
+            Math.max(right.area, right.pixelArea) - Math.max(left.area, left.pixelArea)
+          )[0];
         if (best !== undefined) {
           const labelled = element.closest('[aria-label], [title]');
           const title = labelled?.getAttribute("aria-label") ||
             labelled?.getAttribute("title") ||
             best.title ||
             null;
-          return { artworkUrl: best.url, title };
+          return { artworkPixelArea: best.pixelArea, artworkUrl: best.url, title };
         }
         element = element.parentElement;
       }
@@ -313,7 +321,10 @@ export function buildPlaybackActivationTrackerScript(): string {
     const remember = (target) => {
       const candidate = target instanceof Element ? candidateFrom(target) : null;
       if (candidate === null) return;
-      state.artworkUrl = candidate.artworkUrl;
+      if (state.artworkUrl === null || candidate.artworkPixelArea >= state.artworkPixelArea) {
+        state.artworkUrl = candidate.artworkUrl;
+        state.artworkPixelArea = candidate.artworkPixelArea;
+      }
       const title = typeof candidate.title === "string"
         ? candidate.title.replace(/\\s+/g, " ").trim().slice(0, ${MAX_METADATA_LENGTH})
         : "";
@@ -322,6 +333,7 @@ export function buildPlaybackActivationTrackerScript(): string {
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({
           artworkUrl: state.artworkUrl,
+          artworkPixelArea: state.artworkPixelArea,
           title: state.title,
           updatedAt: state.updatedAt
         }));

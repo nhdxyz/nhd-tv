@@ -55,7 +55,7 @@ import {
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
 const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
-const MAX_CACHED_ARTWORK_BYTES = 2 * 1024 * 1024;
+const MAX_CACHED_ARTWORK_BYTES = 3 * 1024 * 1024;
 const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
@@ -82,12 +82,31 @@ let serviceHost: ServiceHost | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
-const artworkRequests = new Set<string>();
+interface ArtworkCacheState {
+  readonly requests: Set<string>;
+  readonly sourceUrls: Map<string, string>;
+}
+
+const artworkCacheStates = new WeakMap<ContinueWatchingStore, ArtworkCacheState>();
 const catalogCache = new Map<string, {
   expiresAt: number;
   results: readonly CatalogSearchResult[];
 }>();
 const catalogImageCache = new Map<string, string | null>();
+
+function artworkCacheState(store: ContinueWatchingStore): ArtworkCacheState {
+  const existing = artworkCacheStates.get(store);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const state: ArtworkCacheState = {
+    requests: new Set<string>(),
+    sourceUrls: new Map<string, string>()
+  };
+  artworkCacheStates.set(store, state);
+  return state;
+}
 
 async function initializeContinueWatchingForProfile(
   profileId: string,
@@ -229,17 +248,19 @@ async function cacheArtwork(
 ): Promise<void> {
   const definition = getServiceDefinition(serviceId);
   const store = continueWatchingStore;
+  const cacheState = store === null ? null : artworkCacheState(store);
   if (
     definition === null ||
     store === null ||
-    item.artworkDataUrl !== null ||
-    artworkRequests.has(item.id) ||
+    cacheState === null ||
+    cacheState.requests.has(item.id) ||
+    cacheState.sourceUrls.get(item.id) === artworkUrl ||
     !isAllowedArtworkUrl(artworkUrl, definition.artworkHosts)
   ) {
     return;
   }
 
-  artworkRequests.add(item.id);
+  cacheState.requests.add(item.id);
 
   try {
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
@@ -266,38 +287,46 @@ async function cacheArtwork(
     let artworkDataUrl: string | null;
 
     if (source.isEmpty()) {
-      const script = buildRasterTranscodeScript(buffer, contentType, 640, 0.78);
+      const script = buildRasterTranscodeScript(buffer, contentType, 1_280, 0.9);
       const window = mainWindow;
       if (script === null || window === null || window.isDestroyed()) {
         return;
       }
       const converted = await window.webContents.executeJavaScript(script, true) as unknown;
       artworkDataUrl = validateJpegDataUrl(converted, MAX_CACHED_ARTWORK_BYTES);
+      const convertedImage = artworkDataUrl === null
+        ? nativeImage.createEmpty()
+        : nativeImage.createFromDataURL(artworkDataUrl);
       if (
         artworkDataUrl === null ||
-        nativeImage.createFromDataURL(artworkDataUrl).isEmpty()
+        convertedImage.isEmpty()
       ) {
         return;
       }
     } else {
       const size = source.getSize();
-      const resized = Math.max(size.width, size.height) > 640
+      const resized = Math.max(size.width, size.height) > 1_280
         ? source.resize({
           quality: "good",
-          width: Math.max(1, Math.round(size.width * 640 / Math.max(size.width, size.height)))
+          width: Math.max(1, Math.round(size.width * 1_280 / Math.max(size.width, size.height)))
         })
         : source;
-      artworkDataUrl = `data:image/jpeg;base64,${resized.toJPEG(78).toString("base64")}`;
+      artworkDataUrl = `data:image/jpeg;base64,${resized.toJPEG(90).toString("base64")}`;
     }
 
-    if (await store.updateArtwork(item.id, artworkDataUrl)) {
+    const cachedImage = nativeImage.createFromDataURL(artworkDataUrl);
+    if (cachedImage.isEmpty()) {
+      return;
+    }
+    cacheState.sourceUrls.set(item.id, artworkUrl);
+    if (await store.updateArtwork(item.id, artworkDataUrl, cachedImage.getSize().width)) {
       publishContinueWatching();
     }
   } catch {
     // Artwork is optional. Playback progress remains useful if a provider
     // rejects, redirects, or removes an image.
   } finally {
-    artworkRequests.delete(item.id);
+    cacheState.requests.delete(item.id);
   }
 }
 

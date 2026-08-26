@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ContinueWatchingItem } from "./contracts";
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const MAX_ITEMS = 18;
 const MAX_TITLE_LENGTH = 180;
 
@@ -19,6 +19,7 @@ export interface PlaybackCheckpoint {
 }
 
 interface StoredContinueWatchingItem extends ContinueWatchingItem {
+  artworkPixelWidth: number;
   watchUrl: string;
 }
 
@@ -72,6 +73,9 @@ function storedItem(value: unknown): StoredContinueWatchingItem | null {
 
   return {
     artworkDataUrl: item.artworkDataUrl,
+    artworkPixelWidth: finiteNonNegative(item.artworkPixelWidth)
+      ? item.artworkPixelWidth
+      : 0,
     durationSeconds: item.durationSeconds,
     id: item.id,
     positionSeconds: item.positionSeconds,
@@ -85,7 +89,11 @@ function storedItem(value: unknown): StoredContinueWatchingItem | null {
 }
 
 function publicItem(item: StoredContinueWatchingItem): ContinueWatchingItem {
-  const { watchUrl: _watchUrl, ...safeItem } = item;
+  const {
+    artworkPixelWidth: _artworkPixelWidth,
+    watchUrl: _watchUrl,
+    ...safeItem
+  } = item;
   return safeItem;
 }
 
@@ -105,8 +113,9 @@ export class ContinueWatchingStore {
       if (
         typeof parsed === "object" &&
         parsed !== null &&
-        ((parsed as Partial<StoredContinueWatchingDocument>).version === 1 ||
-          (parsed as Partial<StoredContinueWatchingDocument>).version === STORE_VERSION) &&
+        ([1, 2, STORE_VERSION] as readonly unknown[]).includes(
+          (parsed as Partial<StoredContinueWatchingDocument>).version
+        ) &&
         Array.isArray((parsed as Partial<StoredContinueWatchingDocument>).items)
       ) {
         this.#items = (parsed as StoredContinueWatchingDocument).items
@@ -177,6 +186,7 @@ export class ContinueWatchingStore {
       : null;
     const item: StoredContinueWatchingItem = {
       artworkDataUrl: existing?.artworkDataUrl ?? null,
+      artworkPixelWidth: existing?.artworkPixelWidth ?? 0,
       durationSeconds,
       id,
       positionSeconds,
@@ -194,14 +204,24 @@ export class ContinueWatchingStore {
     return publicItem(item);
   }
 
-  async updateArtwork(id: string, artworkDataUrl: string): Promise<boolean> {
+  async updateArtwork(
+    id: string,
+    artworkDataUrl: string,
+    artworkPixelWidth: number
+  ): Promise<boolean> {
     const item = this.#items.find((candidate) => candidate.id === id);
 
-    if (item === undefined || item.artworkDataUrl !== null) {
+    if (
+      item === undefined ||
+      !Number.isInteger(artworkPixelWidth) ||
+      artworkPixelWidth < 1 ||
+      (item.artworkDataUrl !== null && artworkPixelWidth <= item.artworkPixelWidth)
+    ) {
       return false;
     }
 
     item.artworkDataUrl = artworkDataUrl;
+    item.artworkPixelWidth = artworkPixelWidth;
     await this.#persist();
     return true;
   }

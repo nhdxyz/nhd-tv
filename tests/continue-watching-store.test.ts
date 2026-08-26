@@ -70,12 +70,25 @@ describe("Continue Watching store", () => {
     expect(first).not.toBeNull();
 
     const image = "data:image/jpeg;base64,ZmFrZQ==";
-    expect(await store.updateArtwork(first?.id ?? "", image)).toBe(true);
+    expect(await store.updateArtwork(first?.id ?? "", image, 341)).toBe(true);
     await store.upsert(checkpoint({ positionSeconds: 1_200 }));
     expect(store.list()[0]).toMatchObject({ artworkDataUrl: image, positionSeconds: 1_200 });
 
     await store.upsert(checkpoint({ positionSeconds: 2_300 }));
     expect(store.list()).toEqual([]);
+  });
+
+  it("replaces cached artwork only with a higher-resolution image", async () => {
+    const { store } = await testStore();
+    const item = await store.upsert(checkpoint());
+    const lowResolution = "data:image/jpeg;base64,bG93";
+    const highResolution = "data:image/jpeg;base64,aGlnaA==";
+
+    expect(await store.updateArtwork(item?.id ?? "", lowResolution, 341)).toBe(true);
+    expect(await store.updateArtwork(item?.id ?? "", highResolution, 320)).toBe(false);
+    expect(await store.updateArtwork(item?.id ?? "", highResolution, 848)).toBe(true);
+    expect(store.list()[0]).toMatchObject({ artworkDataUrl: highResolution });
+    expect(store.list()[0]).not.toHaveProperty("artworkPixelWidth");
   });
 
   it("does not replace a real title with a generic provider title", async () => {

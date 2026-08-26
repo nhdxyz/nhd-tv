@@ -37,6 +37,25 @@ describe("phone remote pairing", () => {
     }
   });
 
+  it("tracks recent live presence without expiring a session token", () => {
+    let now = 1_000;
+    const manager = new PairingManager({ controllerActiveMs: 100, now: () => now });
+    const offer = manager.beginPairing();
+    const request = manager.requestPairing(offer.token);
+    manager.approvePending();
+    const decision = manager.pairingDecision(request?.requestId);
+
+    expect(decision.state).toBe("approved");
+    expect(manager.connectedControllers).toBe(1);
+    now += 101;
+    expect(manager.connectedControllers).toBe(0);
+
+    if (decision.state === "approved") {
+      expect(manager.authorize(decision.token)).toBe(true);
+      expect(manager.connectedControllers).toBe(1);
+    }
+  });
+
   it("never authorizes denied pairing requests", () => {
     const manager = new PairingManager();
     const offer = manager.beginPairing();

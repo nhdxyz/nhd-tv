@@ -573,6 +573,7 @@ export const REMOTE_JS = `(() => {
         history.replaceState(null, "", location.pathname);
         setEnabled(true);
         setState("Connected", "connected");
+        void sendHeartbeat();
         return;
       }
       if (result.state === "denied" || result.state === "expired" || result.state === "unknown") {
@@ -588,6 +589,7 @@ export const REMOTE_JS = `(() => {
     if (controllerToken) {
       setEnabled(true);
       setState("Connected", "connected");
+      void sendHeartbeat();
       return;
     }
 
@@ -641,6 +643,25 @@ export const REMOTE_JS = `(() => {
         body: JSON.stringify({ action })
       });
       confirmCommand(button);
+    } catch (error) {
+      controllerToken = null;
+      sessionStorage.removeItem("nhd-controller-token");
+      setEnabled(false);
+      setState(error instanceof Error ? error.message : "Remote disconnected", "error");
+    }
+  }
+
+  async function sendHeartbeat() {
+    if (!controllerToken) return;
+    try {
+      await jsonRequest("/api/heartbeat", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: "{}"
+      });
     } catch (error) {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
@@ -909,5 +930,6 @@ export const REMOTE_JS = `(() => {
   setEnabled(false);
   usePrecisionMode(false);
   window.addEventListener("pagehide", disconnectRemote);
+  setInterval(() => void sendHeartbeat(), 10_000);
   beginPairing();
 })();`;

@@ -57,6 +57,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('await jsonRequest("/api/text"');
     expect(REMOTE_JS).toContain('body: JSON.stringify({ submit, text })');
     expect(REMOTE_JS).toContain('fetch("/api/disconnect"');
+    expect(REMOTE_JS).toContain('await jsonRequest("/api/heartbeat"');
+    expect(REMOTE_JS).toContain('setInterval(() => void sendHeartbeat(), 10_000)');
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
   });
 

@@ -386,7 +386,7 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      if (!this.#manager.authorize(token)) {
+      if (!this.#authorize(token)) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -415,7 +415,7 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      if (!this.#manager.authorize(token)) {
+      if (!this.#authorize(token)) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -443,7 +443,7 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      if (!this.#manager.authorize(token)) {
+      if (!this.#authorize(token)) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -484,7 +484,7 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      if (!this.#manager.authorize(token)) {
+      if (!this.#authorize(token)) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -498,6 +498,32 @@ export class PhoneRemoteServer {
 
       if (!await this.#onText(input)) {
         writeJson(response, 409, { error: "Select a supported search box on the TV first" });
+        return;
+      }
+
+      writeJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/heartbeat") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "Heartbeat origin rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      if (body === null || Object.keys(body).length !== 0) {
+        writeJson(response, 400, { error: "Heartbeat body must be empty" });
         return;
       }
 
@@ -532,5 +558,22 @@ export class PhoneRemoteServer {
 
   #publishStatus(): void {
     this.#onStatusChanged(this.status);
+  }
+
+  #authorize(token: unknown): boolean {
+    const before = this.#manager.connectedControllers;
+    if (!this.#manager.authorize(token)) {
+      return false;
+    }
+
+    if (before === 0 && this.#manager.connectedControllers > 0) {
+      if (!this.#manager.hasPendingRequest) {
+        this.#manager.cancelPairingOffer();
+        this.#expiresAt = null;
+        this.#qrDataUrl = null;
+      }
+      this.#publishStatus();
+    }
+    return true;
   }
 }

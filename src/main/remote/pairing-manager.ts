@@ -33,7 +33,13 @@ interface PairingRequest {
   id: string;
 }
 
+interface ControllerSession {
+  lastSeenAt: number;
+  tokenHash: Buffer;
+}
+
 export interface PairingManagerOptions {
+  controllerActiveMs?: number;
   now?: () => number;
   offerLifetimeMs?: number;
   requestLifetimeMs?: number;
@@ -117,21 +123,26 @@ export function parseRemoteTextInput(value: unknown): RemoteTextInput | null {
 }
 
 export class PairingManager {
+  readonly #controllerActiveMs: number;
   readonly #now: () => number;
   readonly #offerLifetimeMs: number;
   readonly #requestLifetimeMs: number;
-  readonly #controllerTokenHashes = new Map<string, Buffer>();
+  readonly #controllerSessions = new Map<string, ControllerSession>();
   #offer: PairingOffer | null = null;
   #request: PairingRequest | null = null;
 
   constructor(options: PairingManagerOptions = {}) {
+    this.#controllerActiveMs = options.controllerActiveMs ?? 30_000;
     this.#now = options.now ?? Date.now;
     this.#offerLifetimeMs = options.offerLifetimeMs ?? 2 * 60_000;
     this.#requestLifetimeMs = options.requestLifetimeMs ?? 60_000;
   }
 
   get connectedControllers(): number {
-    return this.#controllerTokenHashes.size;
+    const activeAfter = this.#now() - this.#controllerActiveMs;
+    return [...this.#controllerSessions.values()].filter(
+      (session) => session.lastSeenAt >= activeAfter
+    ).length;
   }
 
   get hasPendingRequest(): boolean {
@@ -145,6 +156,10 @@ export class PairingManager {
     this.#offer = { expiresAt, tokenHash: hashToken(token) };
     this.#request = null;
     return { expiresAt, token };
+  }
+
+  cancelPairingOffer(): void {
+    this.#offer = null;
   }
 
   requestPairing(token: unknown): { expiresAt: number; requestId: string } | null {
@@ -183,7 +198,10 @@ export class PairingManager {
 
     request.controllerToken = token;
     request.decision = "approved";
-    this.#controllerTokenHashes.set(tokenId, hashToken(token));
+    this.#controllerSessions.set(tokenId, {
+      lastSeenAt: this.#now(),
+      tokenHash: hashToken(token)
+    });
     return true;
   }
 
@@ -228,8 +246,9 @@ export class PairingManager {
       return false;
     }
 
-    for (const expectedHash of this.#controllerTokenHashes.values()) {
-      if (tokensMatch(token, expectedHash)) {
+    for (const session of this.#controllerSessions.values()) {
+      if (tokensMatch(token, session.tokenHash)) {
+        session.lastSeenAt = this.#now();
         return true;
       }
     }
@@ -242,9 +261,9 @@ export class PairingManager {
       return false;
     }
 
-    for (const [tokenId, expectedHash] of this.#controllerTokenHashes) {
-      if (tokensMatch(token, expectedHash)) {
-        this.#controllerTokenHashes.delete(tokenId);
+    for (const [tokenId, session] of this.#controllerSessions) {
+      if (tokensMatch(token, session.tokenHash)) {
+        this.#controllerSessions.delete(tokenId);
         return true;
       }
     }
@@ -255,6 +274,6 @@ export class PairingManager {
   revokeAll(): void {
     this.#offer = null;
     this.#request = null;
-    this.#controllerTokenHashes.clear();
+    this.#controllerSessions.clear();
   }
 }

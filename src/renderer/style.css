@@ -1551,7 +1551,7 @@ h2 {
 }
 
 .search-dialog {
-  width: min(92vw, 66rem);
+  width: min(94vw, 78rem);
   border-radius: 1.6rem;
 }
 
@@ -1600,7 +1600,7 @@ h2 {
 
 .tv-search-form > div {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem;
@@ -1641,9 +1641,14 @@ h2 {
 }
 
 .search-result-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.85rem;
+}
+
+.search-history-section .search-result-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .search-result-card {
@@ -1657,6 +1662,11 @@ h2 {
   border-radius: 1.1rem;
   background: #141923;
   text-align: left;
+}
+
+.search-history-card {
+  min-height: 9rem;
+  background: linear-gradient(145deg, rgb(29 37 52 / 96%), rgb(16 20 29 / 96%));
 }
 
 .search-result-card[data-service-id="netflix"] { background: linear-gradient(145deg, #26090d, #141217); }
@@ -1681,6 +1691,81 @@ h2 {
 .search-result-card small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .search-result-card:hover,
 .search-result-card:focus-visible { border-color: rgb(147 197 253 / 55%); background-color: #1d2635; }
+
+.search-provider-chip {
+  display: inline-grid;
+  min-width: 12rem;
+  min-height: 4.8rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 6%);
+  text-align: left;
+}
+
+.search-provider-chip .service-logo,
+.search-provider-chip .service-monogram {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.search-provider-chip .service-wordmark {
+  max-width: 5.5rem;
+  font-size: 1rem;
+}
+
+.search-provider-chip > span:last-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.search-provider-chip small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.search-provider-chip:hover,
+.search-provider-chip:focus-visible {
+  border-color: rgb(147 197 253 / 55%);
+  background: rgb(30 58 102 / 48%);
+}
+
+.search-empty-state {
+  display: flex;
+  min-height: 9rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px dashed rgb(255 255 255 / 18%);
+  border-radius: 1.1rem;
+  background: rgb(255 255 255 / 3%);
+}
+
+.search-empty-state > span {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgb(59 130 246 / 16%);
+  color: #93c5fd;
+  font-size: 1.7rem;
+}
+
+.search-empty-state strong {
+  font-size: 1.05rem;
+}
+
+.search-empty-state p {
+  max-width: 46rem;
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
 
 .remote-dialog-shell {
   padding: 1.65rem;

@@ -89,11 +89,16 @@ const elements = {
   serviceStatus: requireElement<HTMLParagraphElement>("#service-status", "service-status"),
   searchClose: requireElement<HTMLButtonElement>("#search-close", "search-close"),
   searchDialog: requireElement<HTMLDialogElement>("#search-dialog", "search-dialog"),
+  searchEmptyCopy: requireElement<HTMLParagraphElement>("#search-empty-copy", "search-empty-copy"),
+  searchEmptyState: requireElement<HTMLDivElement>("#search-empty-state", "search-empty-state"),
+  searchEmptyTitle: requireElement<HTMLElement>("#search-empty-title", "search-empty-title"),
   searchForm: requireElement<HTMLFormElement>("#search-form", "search-form"),
   searchHistoryCount: requireElement<HTMLSpanElement>("#search-history-count", "search-history-count"),
   searchHistoryResults: requireElement<HTMLDivElement>("#search-history-results", "search-history-results"),
   searchHistorySection: requireElement<HTMLElement>("#search-history-section", "search-history-section"),
+  searchHistoryTitle: requireElement<HTMLHeadingElement>("#search-history-title", "search-history-title"),
   searchInput: requireElement<HTMLInputElement>("#search-input", "search-input"),
+  searchProviderSection: requireElement<HTMLElement>("#search-provider-section", "search-provider-section"),
   searchResultCount: requireElement<HTMLSpanElement>("#search-result-count", "search-result-count"),
   searchResults: requireElement<HTMLDivElement>("#search-results", "search-results"),
   settingsRemoteButton: requireElement<HTMLButtonElement>("#settings-remote-button", "settings-remote-button"),
@@ -647,20 +652,12 @@ function renderSearchResults(rawQuery: string): void {
     (service) => enabledServiceIds.has(service.id) && service.searchMode !== "none"
   );
 
-  if (query.length === 0) {
-    elements.searchHistoryResults.replaceChildren();
-    elements.searchHistorySection.hidden = true;
-    elements.searchResults.replaceChildren();
-    elements.searchResultCount.textContent = "Enter a search above";
-    return;
-  }
-
-  const historyMatches = matchContinueWatching(
-    continueWatchingItems,
-    enabledServiceIds,
-    query
-  );
-  const historyButtons = historyMatches.map((item) => {
+  const localResults = query.length === 0
+    ? continueWatchingItems
+      .filter((item) => enabledServiceIds.has(item.serviceId))
+      .slice(0, 6)
+    : matchContinueWatching(continueWatchingItems, enabledServiceIds, query);
+  const historyButtons = localResults.map((item) => {
     const button = document.createElement("button");
     button.className = "search-result-card search-history-card";
     button.type = "button";
@@ -693,12 +690,30 @@ function renderSearchResults(rawQuery: string): void {
     return button;
   });
   elements.searchHistoryResults.replaceChildren(...historyButtons);
-  elements.searchHistorySection.hidden = historyButtons.length === 0;
-  elements.searchHistoryCount.textContent = `${historyButtons.length} ${historyButtons.length === 1 ? "match" : "matches"}`;
+  elements.searchHistorySection.hidden = false;
+  elements.searchHistoryTitle.textContent = query.length === 0
+    ? "Pick up where you left off"
+    : "Matches on this TV";
+  elements.searchHistoryCount.textContent = historyButtons.length === 0
+    ? ""
+    : `${historyButtons.length} ${historyButtons.length === 1 ? "title" : "titles"}`;
+  elements.searchEmptyState.hidden = historyButtons.length > 0;
+  elements.searchEmptyTitle.textContent = query.length === 0
+    ? "Your search starts here"
+    : `No local match for “${query}”`;
+  elements.searchEmptyCopy.textContent = query.length === 0
+    ? "Start watching in one of your apps and NHD-TV will make that local history searchable."
+    : "NHD-TV can search local viewing history today. Use an app below for its full catalog.";
+
+  if (query.length === 0) {
+    elements.searchProviderSection.hidden = true;
+    elements.searchResults.replaceChildren();
+    return;
+  }
 
   const buttons = searchable.map((service) => {
     const button = document.createElement("button");
-    button.className = "search-result-card";
+    button.className = "search-provider-chip";
     button.dataset.serviceId = service.id;
     button.type = "button";
     button.setAttribute("aria-label", service.searchMode === "query"
@@ -708,13 +723,9 @@ function renderSearchResults(rawQuery: string): void {
 
     const copy = document.createElement("span");
     const title = document.createElement("strong");
-    title.textContent = service.searchMode === "query"
-      ? `Search ${service.name}`
-      : `Open ${service.name} Search`;
+    title.textContent = service.name;
     const detail = document.createElement("small");
-    detail.textContent = service.searchMode === "query"
-      ? `“${query}”`
-      : "Continue your search inside the service";
+    detail.textContent = service.searchMode === "query" ? "Search this app" : "Open app search";
     copy.append(title, detail);
     button.append(copy);
     button.addEventListener("click", async () => {
@@ -730,9 +741,10 @@ function renderSearchResults(rawQuery: string): void {
   });
 
   elements.searchResults.replaceChildren(...buttons);
+  elements.searchProviderSection.hidden = false;
   elements.searchResultCount.textContent = buttons.length === 0
-    ? "Add a searchable service from Apps"
-    : `${buttons.length} ${buttons.length === 1 ? "service" : "services"}`;
+    ? "Add Netflix, YouTube, or Disney+ from Apps"
+    : "The selected app owns its catalog and availability";
 }
 
 function openSearchDialog(query = "", remote = false): void {

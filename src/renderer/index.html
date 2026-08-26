@@ -321,8 +321,8 @@
       <div class="search-dialog-shell">
         <header class="search-dialog-header">
           <div>
-            <p class="eyebrow">Search your lineup</p>
-            <h2 id="search-title">What do you want to watch?</h2>
+            <p class="eyebrow">NHD-TV Search</p>
+            <h2 id="search-title">Find something to watch.</h2>
           </div>
           <button class="dialog-close" id="search-close" type="button" aria-label="Close search">×</button>
         </header>
@@ -336,23 +336,29 @@
               maxlength="120"
               autocomplete="off"
               enterkeyhint="search"
-              placeholder="Search Netflix, YouTube, and more"
+              placeholder="Try a title, actor, genre, or topic"
             />
-            <button class="primary-action" type="submit">Search</button>
           </div>
         </form>
-        <p class="search-privacy">Your query stays local until you choose a service. NHD-TV does not save search history.</p>
-        <section class="search-results" id="search-history-section" aria-labelledby="search-history-title" hidden>
+        <p class="search-privacy">Results update as you type. Your query stays on this TV until you open an app, and it is never saved.</p>
+        <section class="search-results search-history-section" id="search-history-section" aria-labelledby="search-history-title">
           <div class="section-heading">
-            <h2 id="search-history-title">From Continue Watching</h2>
+            <h2 id="search-history-title">Pick up where you left off</h2>
             <span class="section-hint" id="search-history-count"></span>
           </div>
           <div class="search-result-row" id="search-history-results" data-nav-group="search-history"></div>
+          <div class="search-empty-state" id="search-empty-state" hidden>
+            <span aria-hidden="true">⌕</span>
+            <div>
+              <strong id="search-empty-title">Your search starts here</strong>
+              <p id="search-empty-copy">Start watching in one of your apps and NHD-TV will make that local history searchable.</p>
+            </div>
+          </div>
         </section>
-        <section class="search-results" aria-labelledby="search-results-title">
+        <section class="search-results search-provider-section" id="search-provider-section" aria-labelledby="search-results-title" hidden>
           <div class="section-heading">
-            <h2 id="search-results-title">Choose a service</h2>
-            <span class="section-hint" id="search-result-count">Enter a search above</span>
+            <h2 id="search-results-title">Search in your apps</h2>
+            <span class="section-hint" id="search-result-count">The app owns its catalog and results</span>
           </div>
           <div class="search-result-row" id="search-results" data-nav-group="search-results"></div>
         </section>

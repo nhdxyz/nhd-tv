@@ -1,0 +1,30 @@
+{
+  "name": "nhd-tv",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A controller-friendly desktop TV environment with embedded streaming services.",
+  "main": "dist/main/index.js",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24.3.0"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build": "pnpm clean && pnpm build:main && pnpm build:renderer && pnpm verify:build",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "verify:build": "node scripts/verify-build.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "start": "electron .",
+    "dev": "pnpm build && electron . --devtools"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "electron": "github:castlabs/electron-releases#v43.2.0+wvcus",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

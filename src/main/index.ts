@@ -40,6 +40,7 @@ import {
 import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { dispatchPrecisionPointer } from "./precision-pointer";
+import { providerArtworkFallbackUrls } from "./provider-artwork";
 import {
   getServiceDefinition,
   getServiceDefinitions,
@@ -136,6 +137,7 @@ async function initializeContinueWatchingForProfile(
   const nextStore = new ContinueWatchingStore(profilePath);
   await nextStore.initialize();
   continueWatchingStore = nextStore;
+  void backfillMissingArtwork(nextStore);
 }
 
 async function activateProfile(
@@ -331,6 +333,36 @@ async function cacheArtwork(
     // rejects, redirects, or removes an image.
   } finally {
     cacheState.requests.delete(item.id);
+  }
+}
+
+async function backfillMissingArtwork(store: ContinueWatchingStore): Promise<void> {
+  for (const item of store.list()) {
+    if (continueWatchingStore !== store) {
+      return;
+    }
+    if (item.artworkDataUrl !== null) {
+      continue;
+    }
+
+    const resumeTarget = store.resumeTarget(item.id);
+    if (resumeTarget === null) {
+      continue;
+    }
+
+    for (const artworkUrl of providerArtworkFallbackUrls(
+      resumeTarget.serviceId,
+      resumeTarget.watchUrl
+    )) {
+      if (continueWatchingStore !== store) {
+        return;
+      }
+
+      await cacheArtwork(item, artworkUrl, resumeTarget.serviceId);
+      if (store.list().find((candidate) => candidate.id === item.id)?.artworkDataUrl != null) {
+        break;
+      }
+    }
   }
 }
 

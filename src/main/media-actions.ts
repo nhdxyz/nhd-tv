@@ -67,6 +67,9 @@ export function mediaActionForKeyInput(input: MediaKeyInput): MediaAction | null
   return FALLBACK_MEDIA_KEYS[input.key] ?? null;
 }
 
-export function nativeMediaKeyCode(action: MediaAction): string {
+export function nativeMediaKeyCode(action: MediaAction, serviceId: string | null = null): string {
+  if (action === "play-pause" && serviceId === "netflix") {
+    return "Space";
+  }
   return NATIVE_MEDIA_KEYS[action];
 }

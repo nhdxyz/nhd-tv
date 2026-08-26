@@ -37,7 +37,9 @@ const REMOTE_CSP = [
 ].join("; ");
 
 export interface PhoneRemoteServerOptions {
-  onAction: (action: RemoteAction) => void;
+  onAction: (action: RemoteAction) =>
+    { detail?: string; handled: boolean } |
+    Promise<{ detail?: string; handled: boolean }>;
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
@@ -408,8 +410,8 @@ export class PhoneRemoteServer {
         return;
       }
 
-      this.#onAction(action);
-      writeJson(response, 200, { ok: true });
+      const result = await this.#onAction(action);
+      writeJson(response, 200, { ok: true, ...result });
       return;
     }
 

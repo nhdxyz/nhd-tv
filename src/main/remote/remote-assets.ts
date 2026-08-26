@@ -756,7 +756,7 @@ export const REMOTE_JS = `(() => {
     if (!controllerToken) return;
 
     try {
-      await jsonRequest("/api/command", {
+      const result = await jsonRequest("/api/command", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -764,8 +764,9 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ action })
       });
-      confirmCommand(button);
-      if (button.dataset.feedback) setState(button.dataset.feedback, "connected");
+      if (result.handled !== false) confirmCommand(button);
+      const feedback = result.detail || button.dataset.feedback;
+      if (feedback) setState(feedback, result.handled === false ? "error" : "connected");
     } catch (error) {
       if (error && error.status === 401) {
         controllerToken = null;

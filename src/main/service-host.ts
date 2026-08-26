@@ -51,6 +51,10 @@ import {
   type ServiceBackState
 } from "./service-navigation";
 import { scoreSpatialCandidate } from "./spatial-navigation";
+import {
+  isSystemVolumeAction,
+  type SystemVolumeAction
+} from "./system-volume";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -67,6 +71,7 @@ export interface PlaybackObservation {
   watchUrl: string;
 }
 export type PlaybackListener = (observation: PlaybackObservation) => void | Promise<void>;
+export type SystemVolumeListener = (action: SystemVolumeAction) => void | Promise<void>;
 
 type ServiceSpatialAction = "down" | "left" | "right" | "select" | "up";
 type ServiceKeyAction = "back" | ServiceSpatialAction;
@@ -167,7 +172,7 @@ function shouldUseDomSpatialNavigation(
   }
 }
 
-function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
+export function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
   return `(() => {
     const action = ${JSON.stringify(action)};
     const scoreCandidate = (${scoreSpatialCandidate.toString()});
@@ -198,6 +203,7 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       '[role="link"]',
       '[tabindex]:not([tabindex="-1"])'
     ].join(',');
+    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     let candidates = [...document.querySelectorAll(selectors)].filter((element) => {
       if (
         !(element instanceof HTMLElement) ||
@@ -218,6 +224,32 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         rect.left <= innerWidth + 24
       );
     });
+
+    const modalSelector = [
+      'dialog[open]',
+      '[role="dialog"]',
+      '[aria-modal="true"]',
+      '[data-uia*="modal"]',
+      '[class*="previewModal"]',
+      '[class*="detail-modal"]'
+    ].join(',');
+    const visibleModalRoots = [...document.querySelectorAll(modalSelector)].filter((element) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) > 0.05 && rect.width >= 40 && rect.height >= 40 &&
+        rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+    });
+    const modalRoot = visibleModalRoots
+      .filter((candidate) => !visibleModalRoots.some((other) => other !== candidate && other.contains(candidate)))
+      .at(-1) || null;
+    if (modalRoot instanceof HTMLElement) {
+      const modalCandidates = candidates.filter((element) =>
+        element !== modalRoot && modalRoot.contains(element)
+      );
+      if (modalCandidates.length > 0) candidates = modalCandidates;
+    }
 
     const youtubeCardTargets = new Set();
     if (location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com')) {
@@ -279,16 +311,32 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
     };
 
     if (!(current instanceof HTMLElement)) {
-      const initialTargets = [...youtubeCardTargets]
+      const primaryModalTargets = modalRoot instanceof HTMLElement && netflix
+        ? candidates.filter((element) => {
+          const label = [
+            element.getAttribute('aria-label') || '',
+            element.getAttribute('data-uia') || '',
+            element.textContent || ''
+          ].join(' ').trim();
+          return /(?:^|\\b)(?:play|resume|watch now|continue watching)(?:\\b|$)/i.test(label);
+        })
+        : [];
+      const youtubeInitialTargets = [...youtubeCardTargets]
         .filter((element) =>
           candidates.includes(element) && element.closest('ytd-ad-slot-renderer') === null
         );
+      const initialTargets = primaryModalTargets.length > 0
+        ? primaryModalTargets
+        : youtubeInitialTargets;
       current = (initialTargets.length > 0 ? initialTargets : candidates).sort((left, right) => {
         const leftRect = left.getBoundingClientRect();
         const rightRect = right.getBoundingClientRect();
         return leftRect.top - rightRect.top || leftRect.left - rightRect.left;
       })[0];
       applyFocus(current);
+      if (action === 'select' && primaryModalTargets.includes(current)) {
+        current.click();
+      }
       return true;
     }
 
@@ -442,6 +490,7 @@ export class ServiceHost {
   readonly #onQuitRequested: ServiceQuitListener;
   readonly #onRecoveryRequested: ServiceRecoveryListener;
   readonly #onPlayback: PlaybackListener;
+  readonly #onSystemVolume: SystemVolumeListener;
   #activeDefinition: ServiceDefinition | null = null;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
@@ -461,13 +510,15 @@ export class ServiceHost {
     onStateChanged: ServiceStateListener,
     onQuitRequested: ServiceQuitListener,
     onRecoveryRequested: ServiceRecoveryListener,
-    onPlayback: PlaybackListener = () => undefined
+    onPlayback: PlaybackListener = () => undefined,
+    onSystemVolume: SystemVolumeListener = () => undefined
   ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
     this.#onQuitRequested = onQuitRequested;
     this.#onRecoveryRequested = onRecoveryRequested;
     this.#onPlayback = onPlayback;
+    this.#onSystemVolume = onSystemVolume;
     this.#window.on("resize", () => this.#resize());
   }
 
@@ -615,7 +666,11 @@ export class ServiceHost {
       });
       if (mediaAction !== null) {
         event.preventDefault();
-        this.#sendMediaKey(mediaAction);
+        if (isSystemVolumeAction(mediaAction)) {
+          void this.#onSystemVolume(mediaAction);
+        } else {
+          this.#sendMediaKey(mediaAction);
+        }
         return;
       }
 
@@ -1046,7 +1101,11 @@ export class ServiceHost {
     }
 
     if (isMediaAction(action)) {
-      this.#sendMediaKey(action);
+      if (isSystemVolumeAction(action)) {
+        await this.#onSystemVolume(action);
+      } else {
+        this.#sendMediaKey(action);
+      }
       return true;
     }
 
@@ -1551,7 +1610,7 @@ export class ServiceHost {
       return;
     }
 
-    const keyCode = nativeMediaKeyCode(action);
+    const keyCode = nativeMediaKeyCode(action, this.#activeDefinition?.id ?? null);
     this.#window.focus();
     view.webContents.focus();
     this.#replayingInput = true;

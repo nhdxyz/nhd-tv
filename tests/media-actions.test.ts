@@ -35,6 +35,7 @@ describe("shared media actions", () => {
 
   it("dispatches only native Electron accelerator or provider keyboard keys", () => {
     expect(nativeMediaKeyCode("play-pause")).toBe("MediaPlayPause");
+    expect(nativeMediaKeyCode("play-pause", "netflix")).toBe("Space");
     expect(nativeMediaKeyCode("rewind")).toBe("Left");
     expect(nativeMediaKeyCode("fast-forward")).toBe("Right");
     expect(nativeMediaKeyCode("volume-down")).toBe("VolumeDown");
@@ -53,7 +54,7 @@ describe("shared media actions", () => {
     expect(source).toContain("mediaActionForKeyInput({");
     expect(source).toContain("if (isMediaAction(action))");
     expect(source).toContain("this.#sendMediaKey(mediaAction)");
-    expect(source).toContain("const keyCode = nativeMediaKeyCode(action)");
+    expect(source).toContain("const keyCode = nativeMediaKeyCode(action,");
     expect(source).toContain('sendInputEvent({ keyCode, type: "keyDown" })');
     expect(source).toContain('sendInputEvent({ keyCode, type: "keyUp" })');
     const dispatchBody = source.slice(

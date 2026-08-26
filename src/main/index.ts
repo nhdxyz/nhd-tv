@@ -42,6 +42,7 @@ import {
   validateJpegDataUrl
 } from "./image-transcode";
 import { LocalStateStore } from "./local-state-store";
+import { isMediaAction } from "./media-actions";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import { buildRemoteTextEntryScript } from "./remote-text-entry";
@@ -53,6 +54,10 @@ import {
   setCustomServiceManifests
 } from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
+import {
+  isSystemVolumeAction,
+  SystemVolumeController
+} from "./system-volume";
 import { isTrustedShellUrl } from "./security/sender-policy";
 import { resolveRemoteSearchDestination } from "./search-routing";
 import {
@@ -96,6 +101,7 @@ let shellPointerSnapKey: string | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
+const systemVolumeController = new SystemVolumeController();
 interface ArtworkCacheState {
   readonly requests: Set<string>;
   readonly sourceUrls: Map<string, string>;
@@ -525,17 +531,26 @@ async function handleRemoteSearch(query: string): Promise<void> {
   }
 }
 
-function handleRemoteAction(action: RemoteAction): void {
+interface RemoteActionOutcome {
+  detail?: string;
+  handled: boolean;
+}
+
+async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOutcome> {
   if (action === "force-home") {
     if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
-      void serviceHost.forceReturnHome();
+      await serviceHost.forceReturnHome();
     } else if (serviceHost?.hasRecoveryTarget) {
-      void serviceHost.recover("home");
+      await serviceHost.recover("home");
     }
     if (mainWindow !== null && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
     }
-    return;
+    return { handled: true };
+  }
+
+  if (isMediaAction(action) && isSystemVolumeAction(action)) {
+    return systemVolumeController.apply(action);
   }
 
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
@@ -543,21 +558,23 @@ function handleRemoteAction(action: RemoteAction): void {
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
       }
-      return;
+      return { detail: "Close the app prompt before using playback controls", handled: false };
     }
 
     if (action === "home") {
-      void serviceHost.closeWithCheckpoint();
-      return;
+      await serviceHost.closeWithCheckpoint();
+      return { handled: true };
     }
 
-    void serviceHost.sendRemoteAction(action);
-    return;
+    return { handled: await serviceHost.sendRemoteAction(action) };
   }
 
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
   }
+  return isMediaAction(action)
+    ? { detail: "Open an app to use playback controls", handled: false }
+    : { handled: true };
 }
 
 async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
@@ -809,7 +826,7 @@ function registerIpc(): void {
       : phoneRemote.ensurePairing();
   });
 
-  ipcMain.handle(IPC_CHANNELS.inputAction, (event, action: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.inputAction, async (event, action: unknown) => {
     validateShellSender(event.senderFrame?.url ?? "");
 
     if (
@@ -819,8 +836,7 @@ function registerIpc(): void {
       throw new TypeError("Input action is not supported.");
     }
 
-    handleRemoteAction(action as RemoteAction);
-    return true;
+    return (await handleRemoteAction(action as RemoteAction)).handled;
   });
 
   ipcMain.handle(IPC_CHANNELS.startRemotePairing, async (event) => {
@@ -1038,7 +1054,8 @@ async function createMainWindow(): Promise<void> {
       }
     },
     publishServiceRecovery,
-    handlePlaybackObservation
+    handlePlaybackObservation,
+    (action) => void systemVolumeController.apply(action)
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,

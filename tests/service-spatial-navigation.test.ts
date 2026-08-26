@@ -3,6 +3,7 @@ import {
   scoreSpatialCandidate,
   type SpatialRectangle
 } from "../src/main/spatial-navigation";
+import { serviceSpatialNavigationScript } from "../src/main/service-host";
 
 function rect(left: number, top: number, width = 220, height = 124): SpatialRectangle {
   return {
@@ -16,6 +17,18 @@ function rect(left: number, top: number, width = 220, height = 124): SpatialRect
 }
 
 describe("service spatial navigation", () => {
+  it("confines Netflix detail navigation to the visible modal and prioritizes Play", () => {
+    const script = serviceSpatialNavigationScript("down");
+
+    expect(script).toContain("visibleModalRoots");
+    expect(script).toContain("modalRoot.contains(element)");
+    expect(script).toContain("element !== modalRoot");
+    expect(script).toContain("primaryModalTargets");
+    expect(script).toContain("primaryModalTargets.includes(current)");
+    expect(script).toContain("play|resume|watch now|continue watching");
+    expect(script).toContain("location.hostname === 'www.netflix.com'");
+  });
+
   it("keeps horizontal movement in the current visual row", () => {
     const current = rect(320, 200);
     const sameRow = rect(560, 205);

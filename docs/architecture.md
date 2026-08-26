@@ -60,7 +60,7 @@ Service popup policy never creates an unrestricted child window. A popup URL on 
 
 ## Local data
 
-The first Continue Watching slice uses a versioned, owner-readable JSON document in Electron's application-data directory. Writes use a temporary file and atomic rename. Private watch URLs never cross renderer IPC; service, title, progress, duration, timestamp, and cached JPEG artwork form the renderer-safe view. Artwork is downloaded only over HTTPS from per-adapter host suffixes, checked again after redirects, size-limited, decoded, resized, and re-encoded before storage.
+The first Continue Watching slice uses a versioned, owner-readable JSON document in Electron's application-data directory. Version two adds optional episode/subtitle metadata while migrating version-one history in place. Writes use a temporary file and atomic rename. Private watch URLs never cross renderer IPC; service, title/subtitle, progress, duration, timestamp, and cached JPEG artwork form the renderer-safe view. Artwork is downloaded only over HTTPS from per-adapter host suffixes, checked again after redirects, size-limited, decoded, resized, and re-encoded before storage. Manual removal uses a narrow item-ID IPC action and never touches the service partition.
 
 SQLite remains the target once profiles, ordering, migrations, manual removal, and larger libraries justify it. Browser cookies and other service session state remain in the runtime's session storage rather than being copied into application tables.
 

@@ -77,9 +77,9 @@ For recognized playback, store:
 - Observed playback position and duration
 - Last engagement time
 
-The listener checkpoints active playback periodically and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful playback from previews and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position.
+The listener qualifies actual played ranges, then checkpoints active playback shortly after engagement, periodically, and immediately on pause, navigation, service exit, shutdown, and completion. Service adapters distinguish meaningful visible playback from previews, cloud-position seeks, and background media. Reopening an item returns to its service URL and allows the service to apply its cloud-saved resume position. A local Remove action deletes only the NHD-TV history item and does not affect the service session or provider account.
 
-The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a long-form media element and at least five seconds of engagement, strips undeclared URL parameters, and checkpoints every ten seconds plus pause, navigation, service exit, and window shutdown. It removes items observed at 95% completion. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
+The current foundation recognizes declared Netflix, YouTube, and Disney+ watch routes, requires a visible long-form media element and at least five seconds in its actual played ranges, strips undeclared URL parameters, and checkpoints shortly after qualification plus every ten seconds, pause, navigation, service exit, and window shutdown. It removes items observed at 95% completion or manually removed on Home. Resume URLs remain in the main process; the shell receives only display metadata and locally cached artwork.
 
 ## Phone remote
 

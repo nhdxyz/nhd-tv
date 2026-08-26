@@ -25,7 +25,7 @@ The ECS dependency is pinned in `package.json` rather than floating on a release
 
 `pnpm install` installs the JavaScript dependency graph. `pnpm runtime:install` explicitly downloads the matching ECS native application bundle. On the first application launch, ECS installs or discovers the Widevine component. NHD-TV now awaits `components.whenReady()` before creating its first browser window or service session, as required by ECS.
 
-The downloaded ECS runtime begins with a development-only VMP signature. The project-local `evs:*` commands set up, production-sign, and verify that runtime without committing EVS tooling or credentials. After EVS signing, Castlabs' official production VMP Lab returned `PLATFORM_SOFTWARE_VERIFIED`, and the Netflix Test Patterns smoke test decoded and advanced beyond two seconds without E100.
+The downloaded ECS runtime begins with a development-only VMP signature. The project-local `evs:*` commands set up, production-sign, and verify that runtime without committing EVS tooling or credentials. After EVS signing, Castlabs' official production VMP Lab returned `PLATFORM_SOFTWARE_VERIFIED`, and the Netflix Test Patterns smoke test decoded, accumulated real played time, and qualified the passive Continue Watching observer without E100.
 
 The shell applies a 30-second component-readiness timeout and displays the resulting status. The verified first launch reported Widevine as `new` and ready. Later launches may report a different lifecycle status while keeping the same installed version.
 

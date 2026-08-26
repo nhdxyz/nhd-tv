@@ -38,8 +38,10 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Title and allowlisted artwork capture foundation
 - [x] Periodic, pause, navigation, exit, and window-shutdown checkpoints
 - [x] Observed completion rule
-- [ ] Manual removal and per-profile history controls (#22)
+- [x] Manual local removal
+- [ ] Per-profile history and persistent hide controls (#22)
 - [ ] Per-service adapter qualification tests (#18)
+- [x] Automated Netflix passive-observer qualification (#24)
 - [x] Resume through service-owned watch URLs
 
 ## Milestone 4: Phone remote

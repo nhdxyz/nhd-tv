@@ -43,7 +43,7 @@ In the feasibility shell, select a service from Home or the Store. The Shaka ent
 
 To use a phone as a session-only remote, choose **Pair a phone** in the top bar or Settings, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The compact controller sends directional, Select, Back, and Home actions plus one bounded search phrase. While Netflix or YouTube is open, phone search stays in that service and opens its prefilled search results; Disney+ opens its search page. From Home, search uses the enabled-service chooser. Routing cannot target credential or payment fields. Use the microphone on the phone's native keyboard for voice dictation. Supported phones provide light haptic confirmation after the TV accepts an action. Restarting NHD-TV revokes all paired phones.
 
-Continue Watching observes recognized long-form playback every ten seconds and on key lifecycle events. It stores progress and sanitized resume links only in local application data; the shell never receives the private link. Home search opens the selected enabled service. Netflix and YouTube accept a prefilled query; Disney+ opens its own search page.
+Continue Watching qualifies recognized, visible long-form playback from actual played media ranges, then checkpoints after initial engagement, every ten seconds, and on key lifecycle events. It stores progress and sanitized resume links only in local application data; the shell never receives the private link. Home cards can be resumed through the provider or removed locally without clearing the provider session. Home search opens the selected enabled service. Netflix and YouTube accept a prefilled query; Disney+ opens its own search page.
 
 ### Production Widevine signing
 

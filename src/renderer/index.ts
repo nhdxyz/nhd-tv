@@ -5,9 +5,11 @@ const runtimeStatus = document.querySelector<HTMLParagraphElement>("#runtime-sta
 const widevineStatus = document.querySelector<HTMLParagraphElement>("#widevine-status");
 const serviceStatus = document.querySelector<HTMLParagraphElement>("#service-status");
 const diagnosticsStatus = document.querySelector<HTMLParagraphElement>("#diagnostics-status");
+const healthPill = document.querySelector<HTMLSpanElement>("#health-pill");
 const feedback = document.querySelector<HTMLParagraphElement>("#feedback");
 const closeServiceButton = document.querySelector<HTMLButtonElement>("#close-service");
 const serviceActions = document.querySelector<HTMLDivElement>("#service-actions");
+const heroOpenButton = document.querySelector<HTMLButtonElement>("#hero-open");
 
 function requireElement<T>(element: T | null, name: string): T {
   if (element === null) {
@@ -21,6 +23,8 @@ const elements = {
   closeServiceButton: requireElement(closeServiceButton, "close-service"),
   diagnosticsStatus: requireElement(diagnosticsStatus, "diagnostics-status"),
   feedback: requireElement(feedback, "feedback"),
+  healthPill: requireElement(healthPill, "health-pill"),
+  heroOpenButton: requireElement(heroOpenButton, "hero-open"),
   runtimeStatus: requireElement(runtimeStatus, "runtime-status"),
   serviceActions: requireElement(serviceActions, "service-actions"),
   serviceStatus: requireElement(serviceStatus, "service-status"),
@@ -35,6 +39,10 @@ function renderStatus(status: HostStatus): void {
   ].join(" · ");
   elements.widevineStatus.textContent = `${status.widevine.state}: ${status.widevine.details}`;
   elements.serviceStatus.textContent = status.activeServiceId ?? "None";
+  elements.healthPill.textContent = status.widevine.state === "ready"
+    ? "Host ready"
+    : `Widevine ${status.widevine.state}`;
+  elements.healthPill.dataset.state = status.widevine.state === "ready" ? "ready" : "warning";
   const serviceProcess = status.diagnostics.serviceRenderer;
   const gpuProcess = status.diagnostics.gpuProcess;
   const lastBlocked = status.navigation.lastBlocked;
@@ -62,25 +70,45 @@ async function refreshStatus(): Promise<void> {
 async function renderServices(): Promise<void> {
   const services = await window.nhd.getServices();
 
+  async function openService(serviceId: string, serviceName: string): Promise<void> {
+    elements.feedback.textContent = `Opening ${serviceName}…`;
+
+    try {
+      await window.nhd.openService(serviceId);
+      elements.feedback.textContent = `${serviceName} opened.`;
+    } catch (error) {
+      elements.feedback.textContent = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   for (const service of services) {
     const option = document.createElement("article");
     option.className = "service-option";
+    option.dataset.serviceId = service.id;
 
     const button = document.createElement("button");
-    button.classList.toggle("secondary", service.kind === "test");
+    button.className = "service-tile";
     button.dataset.serviceId = service.id;
-    button.textContent = service.kind === "test" ? `${service.name} (test)` : service.name;
     button.type = "button";
-    button.addEventListener("click", async () => {
-      elements.feedback.textContent = `Opening ${service.name}…`;
+    button.setAttribute("aria-label", `Open ${service.name}`);
 
-      try {
-        await window.nhd.openService(service.id);
-        elements.feedback.textContent = `${service.name} opened.`;
-      } catch (error) {
-        elements.feedback.textContent = error instanceof Error ? error.message : String(error);
-      }
-    });
+    const kind = document.createElement("span");
+    kind.className = "service-kind";
+    kind.textContent = service.kind === "test" ? "DRM test" : "Streaming";
+
+    const name = document.createElement("span");
+    name.className = "service-name";
+
+    const nameText = document.createElement("span");
+    nameText.textContent = service.name;
+    const arrow = document.createElement("span");
+    arrow.className = "service-arrow";
+    arrow.textContent = "→";
+    arrow.setAttribute("aria-hidden", "true");
+
+    name.append(nameText, arrow);
+    button.append(kind, name);
+    button.addEventListener("click", () => void openService(service.id, service.name));
     option.append(button);
 
     if (service.authenticationNote !== undefined) {
@@ -92,7 +120,41 @@ async function renderServices(): Promise<void> {
 
     elements.serviceActions.append(option);
   }
+
+  const featured = services.find((service) => service.id === "netflix") ?? services[0];
+
+  if (featured !== undefined) {
+    elements.heroOpenButton.disabled = false;
+    elements.heroOpenButton.textContent = `Open ${featured.name}`;
+    elements.heroOpenButton.addEventListener("click", () =>
+      void openService(featured.id, featured.name)
+    );
+  }
 }
+
+function showPlannedFeature(message: string): void {
+  elements.feedback.textContent = message;
+}
+
+for (const id of ["store-nav", "hero-store", "store-card"]) {
+  document.querySelector<HTMLButtonElement>(`#${id}`)?.addEventListener("click", () => {
+    showPlannedFeature("The Service Store foundation is planned for Milestone 2.");
+  });
+}
+
+for (const id of ["profile-button", "profile-card"]) {
+  document.querySelector<HTMLButtonElement>(`#${id}`)?.addEventListener("click", () => {
+    showPlannedFeature("Local profiles are planned for Milestone 2.");
+  });
+}
+
+document.querySelector<HTMLButtonElement>("#settings-nav")?.addEventListener("click", () => {
+  showPlannedFeature("Display, input, and privacy settings arrive with the TV shell milestone.");
+});
+
+document.querySelector<HTMLButtonElement>("#remote-card")?.addEventListener("click", () => {
+  showPlannedFeature("QR phone pairing is planned for Milestone 4.");
+});
 
 elements.closeServiceButton.addEventListener("click", async () => {
   await window.nhd.closeService();

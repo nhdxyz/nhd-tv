@@ -7,46 +7,147 @@
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NHD-TV Feasibility Host</title>
+    <title>NHD-TV</title>
   </head>
   <body>
-    <main class="shell">
-      <p class="eyebrow">Milestone 0 · Feasibility</p>
-      <h1>NHD-TV</h1>
-      <p class="lede">
-        Secure service-host spike for DRM, session, navigation, and performance testing.
-      </p>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
 
-      <section class="status-card" aria-labelledby="runtime-title">
-        <div>
-          <p class="status-label" id="runtime-title">Runtime</p>
-          <p id="runtime-status">Loading runtime information…</p>
-        </div>
-        <div>
-          <p class="status-label">Widevine</p>
-          <p id="widevine-status">Checking component status…</p>
-        </div>
-        <div>
-          <p class="status-label">Active service</p>
-          <p id="service-status">None</p>
-        </div>
-        <div>
-          <p class="status-label">Diagnostics</p>
-          <p id="diagnostics-status">Waiting for GPU and process metrics…</p>
-        </div>
-      </section>
+    <header class="topbar">
+      <div class="brand" aria-label="NHD-TV">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span>NHD</span>
+      </div>
 
-      <section aria-labelledby="services-title">
-        <p class="status-label" id="services-title">Service matrix</p>
-        <div class="actions" id="service-actions"></div>
-      </section>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <span class="nav-current" aria-current="page">Home</span>
+        <button class="nav-button" id="store-nav" type="button">Store</button>
+        <button class="nav-button" id="settings-nav" type="button">Settings</button>
+      </nav>
 
-      <button class="secondary close-service" id="close-service" type="button">
-        Close active service
+      <button class="profile-chip" id="profile-button" type="button">
+        <span class="profile-copy">
+          <span class="profile-label">Watching as</span>
+          <span>Local profile</span>
+        </span>
+        <span class="avatar" aria-hidden="true">N</span>
       </button>
+    </header>
 
-      <p class="feedback" id="feedback" role="status"></p>
+    <main class="tv-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">NHD-TV · Your home</p>
+          <h1 id="hero-title">Everything you watch,<br />one quiet place.</h1>
+          <p class="lede">
+            Open your services without leaving the television experience. NHD-TV keeps
+            each account local, isolated, and ready for the next time you sit down.
+          </p>
+          <div class="hero-actions">
+            <button class="primary-action" id="hero-open" type="button" disabled>
+              Loading services…
+            </button>
+            <button class="glass-action" id="hero-store" type="button">Browse services</button>
+          </div>
+        </div>
+
+        <div class="hero-art" aria-hidden="true">
+          <div class="hero-orbit orbit-one"></div>
+          <div class="hero-orbit orbit-two"></div>
+          <div class="hero-monogram">N</div>
+          <div class="hero-caption">
+            <span class="live-dot"></span>
+            <span>Local-first television</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="rail" aria-labelledby="continue-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Pick up where you left off</p>
+            <h2 id="continue-title">Continue Watching</h2>
+          </div>
+          <span class="status-pill">Listener planned · Issue #5</span>
+        </div>
+
+        <div class="continue-placeholder">
+          <div class="continue-art" aria-hidden="true">
+            <span>N</span>
+          </div>
+          <div class="continue-copy">
+            <p class="placeholder-label">Ready when you are</p>
+            <p>
+              Start a show in any supported service. Recognized playback will appear here
+              without replacing that service’s own resume behavior.
+            </p>
+            <div class="placeholder-progress" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rail" aria-labelledby="services-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Your lineup</p>
+            <h2 id="services-title">Services</h2>
+          </div>
+          <span class="section-hint">Select a tile to open it inside NHD-TV</span>
+        </div>
+        <div class="service-grid" id="service-actions"></div>
+      </section>
+
+      <section class="quick-grid" aria-label="Home shortcuts">
+        <button class="quick-card" id="store-card" type="button">
+          <span class="quick-icon" aria-hidden="true">＋</span>
+          <span><strong>Service Store</strong><small>Choose what appears at home</small></span>
+        </button>
+        <button class="quick-card" id="remote-card" type="button">
+          <span class="quick-icon" aria-hidden="true">⌁</span>
+          <span><strong>Pair a phone</strong><small>Remote control is coming later</small></span>
+        </button>
+        <button class="quick-card" id="profile-card" type="button">
+          <span class="quick-icon" aria-hidden="true">◎</span>
+          <span><strong>Profiles</strong><small>Local viewing spaces</small></span>
+        </button>
+      </section>
+
+      <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+
+      <details class="developer-panel">
+        <summary>
+          <span>
+            <span class="section-kicker">Advanced</span>
+            <strong>Host diagnostics</strong>
+          </span>
+          <span class="health-pill" id="health-pill">Checking host…</span>
+        </summary>
+
+        <section class="status-card" aria-label="Runtime diagnostics">
+          <div>
+            <p class="status-label">Runtime</p>
+            <p id="runtime-status">Loading runtime information…</p>
+          </div>
+          <div>
+            <p class="status-label">Widevine</p>
+            <p id="widevine-status">Checking component status…</p>
+          </div>
+          <div>
+            <p class="status-label">Active service</p>
+            <p id="service-status">None</p>
+          </div>
+          <div>
+            <p class="status-label">Performance and security</p>
+            <p id="diagnostics-status">Waiting for GPU and process metrics…</p>
+          </div>
+        </section>
+
+        <button class="close-service" id="close-service" type="button">
+          Close active service
+        </button>
+      </details>
     </main>
+
     <script type="module" src="/index.ts"></script>
   </body>
 </html>

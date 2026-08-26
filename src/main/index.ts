@@ -324,8 +324,13 @@ app.whenReady().then(async () => {
   configureShellSession();
   registerIpc();
 
+  // ECS requires Widevine component initialization to finish before any
+  // BrowserWindow or service session is created. Creating the host first can
+  // leave commercial services with an unusable media-key-system context even
+  // after the component updater later reports ready.
+  await initializeWidevine();
   await createMainWindow();
-  void initializeWidevine();
+  publishHostStatus();
 });
 
 app.on("gpu-info-update", () => {

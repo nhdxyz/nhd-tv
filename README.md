@@ -43,6 +43,19 @@ In the feasibility shell, select a service from the matrix and press Escape to r
 
 To use a phone as a session-only remote, choose **Pair a phone**, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The local controller sends only directional, Select, Back, and Home actions; it cannot send credentials or arbitrary text. Restarting NHD-TV revokes all paired phones.
 
+### Production Widevine signing
+
+The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but Netflix's production license service rejects it. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password.
+
+```sh
+pnpm evs:setup
+pnpm evs:signup
+pnpm evs:sign:dev
+pnpm evs:verify:dev
+```
+
+Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. Packaged releases will run the same production VMP-signing step at the platform-appropriate point in the packaging pipeline.
+
 ## Project documents
 
 - [Product specification](docs/product-spec.md)

@@ -19,7 +19,11 @@
     "verify:build": "node scripts/verify-build.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "start": "electron .",
-    "dev": "pnpm build && electron . --devtools"
+    "dev": "pnpm build && electron . --devtools",
+    "evs:setup": "node scripts/evs-vmp.mjs setup",
+    "evs:signup": "node scripts/evs-vmp.mjs signup",
+    "evs:sign:dev": "node scripts/evs-vmp.mjs sign",
+    "evs:verify:dev": "node scripts/evs-vmp.mjs verify"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

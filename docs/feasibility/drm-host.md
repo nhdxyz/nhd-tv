@@ -23,7 +23,9 @@ The ECS dependency is pinned in `package.json` rather than floating on a release
 
 ## First-launch behavior
 
-`pnpm install` installs the JavaScript dependency graph. `pnpm runtime:install` explicitly downloads the matching ECS native application bundle. On the first application launch, ECS installs or discovers the Widevine component and `components.whenReady()` waits for component initialization before the shell reports readiness.
+`pnpm install` installs the JavaScript dependency graph. `pnpm runtime:install` explicitly downloads the matching ECS native application bundle. On the first application launch, ECS installs or discovers the Widevine component. NHD-TV now awaits `components.whenReady()` before creating its first browser window or service session, as required by ECS.
+
+The downloaded ECS runtime is VMP-signed for development only. The official Castlabs VMP Lab passes against Widevine UAT, but production license requests require a production signature from Castlabs EVS. The project-local `evs:*` commands set up, sign, and verify that runtime without committing EVS tooling or credentials.
 
 The shell applies a 30-second component-readiness timeout and displays the resulting status. The verified first launch reported Widevine as `new` and ready. Later launches may report a different lifecycle status while keeping the same installed version.
 
@@ -60,7 +62,7 @@ The host shell also uses sandboxing, context isolation, disabled Node.js integra
 ## Known limits
 
 - This verification is macOS-only. Windows 11 is the primary product target and remains mandatory for the service playback matrix.
-- The spike is not packaged or signed.
+- The spike is not packaged or application code-signed. Its downloaded ECS runtime has only a development VMP signature until the user completes EVS signup and runs the production signing command.
 - Because the macOS spike is unsigned, Electron's app-specific Touch ID WebAuthn integration is not configured. Google sign-in remains available through its `Try another way` password fallback.
 - Popup handling is intentionally denied pending an explicit OAuth and service-popup policy.
 - Escape immediately removes the service for this spike. Nested Back detection, a quit prompt at the service root, and emergency return behavior are tracked in Issue #4.

@@ -29,7 +29,7 @@ Verified 2026-08-25 on Apple silicon (`darwin arm64`). These results exercise th
 
 | Service | Entry page | Login flow reached | Playback | Fullscreen | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Netflix | Pass | Pass; restart persistence confirmed | Pending profile selection | Pending | The user-controlled login survived multiple complete NHD-TV restarts and now opens Netflix's profile chooser directly. Playback is waiting for the user to choose which profile may receive test history. |
+| Netflix | Pass | Pass; restart persistence confirmed | Fail: E100 with development VMP signature | Blocked on playback | The selected profile reaches playback, but Netflix's production license service rejects the development-only ECS signature. Castlabs' official VMP Lab passes UAT with `PLATFORM_SECURE_STORAGE_SOFTWARE_VERIFIED` and fails its production request. EVS production signing is the required next step. |
 | YouTube | Pass | Incomplete | Pass, signed out | Retest pending | Google sign-in loaded through its explicit navigation-only origin. The passkey challenge rendered, and Google's `Try another way` path exposed password sign-in. A later password plus phone one-time-verification attempt returned to signed-out YouTube without a visible error. Origin-only blocked-navigation diagnostics were added for a clean retry; supported TV device activation is tracked in Issue #11. A public 10:35 video rendered and advanced in the embedded view. |
 | Disney+ | Pass | Pass | Pending user login | Pending | The isolated service reached the MyDisney login page without a renderer error. |
 
@@ -57,7 +57,7 @@ For each service:
 
 ## Current limitations
 
-- Netflix authentication persistence is verified through its profile chooser; playback is pending the user's profile choice. Disney+ authentication remains pending.
+- Netflix authentication persistence is verified. Playback reaches E100 because the downloaded ECS binary is VMP-signed for development only; the included EVS workflow is ready, but account signup and email verification must be completed by the user before production signing. Disney+ authentication remains pending.
 - Google password plus phone verification did not produce a durable YouTube session. The host now records only a blocked navigation's service, event type, and origin so the allowlist can be evaluated without retaining tokenized URLs or account data. Google's supported television activation investigation is tracked in Issue #11.
 - macOS platform passkeys are unavailable in the unsigned feasibility build. Electron requires app-specific WebAuthn configuration plus a matching code-signing keychain entitlement, and its Touch ID credentials are device-bound rather than inherited from an existing browser. The shell shows Google's tested password fallback; Windows Hello remains part of the Windows 11 acceptance run. Production macOS support is tracked in Issue #9.
 - NHD-TV's built-in video-decode value reports Chromium capability, not proof that a particular frame was hardware-decoded. Confirm active use with Windows Task Manager's Video Decode engine.

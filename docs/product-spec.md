@@ -24,7 +24,7 @@ NHD-TV supports multiple input adapters that produce a shared set of application
 - Xbox-style and compatible game controllers
 - QR-paired phone remote over the local network
 
-The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a visible host-provided focus ring. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and a phone trackpad can be added later.
+The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a fixed host-provided focus overlay that remains visible above clipped carousels. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and a phone trackpad can be added later.
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
 

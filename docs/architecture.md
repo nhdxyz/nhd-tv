@@ -35,7 +35,9 @@ The host decides whether an action belongs to the shell, the service, or an NHD-
 3. At an adapter-defined root state, display the host-owned quit confirmation.
 4. Provide a hold-to-force-return escape path.
 
-The shell locks horizontal movement to the current labeled rail while vertical movement can cross sections. Curated service adapters can add a DOM-spatial layer on browse routes; it applies a visible focus marker and falls back to native key events when no safe target is found. Watch/player routes and HTML fullscreen bypass that layer.
+The shell locks horizontal movement to the current labeled rail while vertical movement can cross sections. Curated service adapters can add a DOM-spatial layer on browse routes; it applies both an element marker and a fixed, pointer-transparent overlay so provider carousel clipping cannot hide focus. It falls back to native key events when no safe target is found. Watch/player routes and HTML fullscreen bypass and clear that layer.
+
+On a non-root browse route, Back first sends one native Escape to the service. NHD-TV treats it as consumed when an editable field had focus, an in-service dialog/menu closes, or the service changes its route. Only otherwise does the host traverse Chromium navigation history. Declared roots still open the host-owned quit confirmation immediately.
 
 The current phone-remote slice starts an HTTP server on a random port only when pairing is requested. Its QR secret is 256-bit random data held in memory and expires quickly. Scanning creates a pending request; the TV must approve it before the server returns a separate session-only controller token. Pairing and controller tokens are stored as hashes in the host, never logged, and revoked at app shutdown. The local page has a restrictive Content Security Policy and accepts a fixed action vocabulary plus one authenticated, same-origin, length-bounded search message. Search is routed to the trusted shell overlay and cannot target arbitrary service fields.
 

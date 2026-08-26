@@ -19,6 +19,10 @@ import {
   qualifyPlaybackSnapshot
 } from "./playback-observer";
 import type { NavigationDiagnostic, RemoteAction } from "./contracts";
+import {
+  serviceConsumedBack,
+  type ServiceBackState
+} from "./service-navigation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: {
@@ -70,14 +74,51 @@ const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SERVICE_FOCUS_STYLE = `
   [data-nhd-tv-focus="true"] {
-    outline: 4px solid #63e6ff !important;
-    outline-offset: 5px !important;
+    outline: 2px solid rgb(99 230 255 / 58%) !important;
+    outline-offset: -2px !important;
+  }
+  html[data-nhd-tv-has-focus="true"]::after {
+    position: fixed !important;
+    z-index: 2147483647 !important;
+    top: var(--nhd-tv-focus-top) !important;
+    left: var(--nhd-tv-focus-left) !important;
+    width: var(--nhd-tv-focus-width) !important;
+    height: var(--nhd-tv-focus-height) !important;
+    box-sizing: border-box !important;
+    border: 4px solid #63e6ff !important;
+    border-radius: 10px !important;
     box-shadow: 0 0 0 2px rgb(2 8 23 / 88%), 0 0 28px rgb(34 211 238 / 82%) !important;
-    border-radius: 8px !important;
+    content: "" !important;
+    pointer-events: none !important;
     transform: scale(1.025) !important;
-    transition: outline-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
+    transform-origin: center !important;
   }
 `;
+
+const serviceBackStateScript = `(() => {
+  const visible = (element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' &&
+      Number(style.opacity) > 0.05 && rect.width > 0 && rect.height > 0;
+  };
+  const active = document.activeElement;
+  return {
+    editable: active instanceof HTMLElement &&
+      (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)),
+    expanded: [...document.querySelectorAll('[aria-expanded="true"]')].filter(visible).length,
+    overlays: [...document.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"]')].filter(visible).length,
+    url: location.href
+  };
+})()`;
+
+const serviceClearSpatialFocusScript = `(() => {
+  document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
+    element.removeAttribute('data-nhd-tv-focus');
+  });
+  document.documentElement.removeAttribute('data-nhd-tv-has-focus');
+})()`;
 
 function shouldUseDomSpatialNavigation(
   definition: ServiceDefinition,
@@ -99,13 +140,23 @@ function shouldUseDomSpatialNavigation(
 function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
   return `(() => {
     const action = ${JSON.stringify(action)};
-    if (document.fullscreenElement !== null) return false;
+    const clearFocus = () => {
+      document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
+        element.removeAttribute('data-nhd-tv-focus');
+      });
+      document.documentElement.removeAttribute('data-nhd-tv-has-focus');
+    };
+    if (document.fullscreenElement !== null) {
+      clearFocus();
+      return false;
+    }
 
     const active = document.activeElement;
     if (
       active instanceof HTMLElement &&
       (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))
     ) {
+      clearFocus();
       return false;
     }
 
@@ -139,7 +190,10 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       otherIndex < index && other.contains(element) && other.getBoundingClientRect().width === element.getBoundingClientRect().width
     ));
 
-    if (candidates.length === 0) return false;
+    if (candidates.length === 0) {
+      clearFocus();
+      return false;
+    }
 
     let current = candidates.includes(active)
       ? active
@@ -151,7 +205,17 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       });
       element.dataset.nhdTvFocus = 'true';
       element.focus({ preventScroll: true });
-      element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      element.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+      const updateOverlay = () => {
+        const rect = element.getBoundingClientRect();
+        document.documentElement.dataset.nhdTvHasFocus = 'true';
+        document.documentElement.style.setProperty('--nhd-tv-focus-top', rect.top + 'px');
+        document.documentElement.style.setProperty('--nhd-tv-focus-left', rect.left + 'px');
+        document.documentElement.style.setProperty('--nhd-tv-focus-width', rect.width + 'px');
+        document.documentElement.style.setProperty('--nhd-tv-focus-height', rect.height + 'px');
+      };
+      updateOverlay();
+      setTimeout(updateOverlay, 80);
     };
 
     if (!(current instanceof HTMLElement)) {
@@ -524,6 +588,16 @@ export class ServiceHost {
 
     view.webContents.on("did-navigate-in-page", () => {
       if (this.#view === view) {
+        if (!shouldUseDomSpatialNavigation(
+          definition,
+          view.webContents.getURL(),
+          this.#htmlFullscreen
+        )) {
+          void view.webContents.executeJavaScript(
+            serviceClearSpatialFocusScript,
+            true
+          ).catch(() => undefined);
+        }
         void this.#checkpointPlayback();
       }
     });
@@ -748,6 +822,38 @@ export class ServiceHost {
     }
 
     await this.#checkpointPlayback();
+
+    const beforeBackUrl = view.webContents.getURL();
+    let beforeBack: ServiceBackState | null = null;
+    try {
+      beforeBack = await view.webContents.executeJavaScript(
+        serviceBackStateScript,
+        true
+      ) as ServiceBackState;
+    } catch {
+      // A native key fallback still works when the document cannot be sampled.
+    }
+
+    this.#sendKey("back");
+    await delay(120);
+
+    if (!view.webContents.isDestroyed() && view.webContents.getURL() !== beforeBackUrl) {
+      return true;
+    }
+
+    if (beforeBack !== null && !view.webContents.isDestroyed()) {
+      try {
+        const afterBack = await view.webContents.executeJavaScript(
+          serviceBackStateScript,
+          true
+        ) as ServiceBackState;
+        if (serviceConsumedBack(beforeBack, afterBack)) {
+          return true;
+        }
+      } catch {
+        // Continue to navigation history if the service did not visibly consume Back.
+      }
+    }
 
     if (view.webContents.navigationHistory.canGoBack()) {
       view.webContents.navigationHistory.goBack();

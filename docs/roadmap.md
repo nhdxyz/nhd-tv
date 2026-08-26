@@ -21,6 +21,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Shared input-action router
 - [x] Xbox-style Gamepad API adapter foundation (#20; physical Windows validation remains)
 - [x] Service hosting and root-level quit overlay foundation
+- [x] In-service Back consumption and unclipped focus-overlay foundation (#18)
 - Crash, reload, offline, and emergency-return behavior
 
 ## Milestone 2: Profiles, Store, and sessions

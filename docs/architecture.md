@@ -8,7 +8,7 @@ These notes record the current direction, not a final framework commitment. The 
 
 Castlabs Electron for Content Security is the leading candidate because it provides a consistent Chromium runtime and a supported path for installing Widevine. Stock Electron is not assumed to satisfy commercial DRM requirements. Tauri remains unattractive for this product because it uses different system webviews across Windows, macOS, and Linux.
 
-The host must await `components.whenReady()` before creating any browser window or service session. ECS downloads are development VMP-signed and can prove the media pipeline against Widevine UAT, but production services require a production VMP signature. NHD-TV uses Castlabs EVS for that signing step. On macOS it must run before application code-signing; on Windows it must run after application code-signing.
+The host must await `components.whenReady()` before creating any browser window or service session. ECS downloads are development VMP-signed and can prove the media pipeline against Widevine UAT, but production services require a production VMP signature. NHD-TV uses Castlabs EVS for that signing step. On macOS it must run before application code-signing; on Windows it must run after application code-signing. The local development bundle is not re-signed with an ad-hoc Apple identity; application code-signing belongs to the packaged-build pipeline.
 
 ## Process and view boundaries
 

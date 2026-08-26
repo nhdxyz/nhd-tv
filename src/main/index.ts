@@ -331,6 +331,32 @@ app.whenReady().then(async () => {
   await initializeWidevine();
   await createMainWindow();
   publishHostStatus();
+
+  if (process.argv.includes("--netflix-smoke-test")) {
+    const netflix = getServiceDefinition("netflix");
+
+    if (netflix === null || serviceHost === null) {
+      console.log(JSON.stringify({
+        detail: "Netflix is not registered in the service host.",
+        status: "inconclusive"
+      }));
+      app.exit(2);
+      return;
+    }
+
+    try {
+      await serviceHost.open(netflix);
+      const result = await serviceHost.runNetflixSmokeTest();
+      console.log(`[netflix-smoke] ${JSON.stringify(result)}`);
+      app.exit(result.status === "passed" ? 0 : 2);
+    } catch {
+      console.log(`[netflix-smoke] ${JSON.stringify({
+        detail: "The playback check failed unexpectedly.",
+        status: "failed"
+      })}`);
+      app.exit(2);
+    }
+  }
 });
 
 app.on("gpu-info-update", () => {

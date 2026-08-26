@@ -45,7 +45,7 @@ To use a phone as a session-only remote, choose **Pair a phone**, scan the short
 
 ### Production Widevine signing
 
-The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but Netflix's production license service rejects it. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password.
+The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but commercial production license services require a production signature. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password. The current macOS development runtime has been EVS-signed and passes both Castlabs' production VMP endpoint and Netflix Test Patterns playback.
 
 ```sh
 pnpm evs:setup
@@ -54,7 +54,7 @@ pnpm evs:sign:dev
 pnpm evs:verify:dev
 ```
 
-Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. Packaged releases will run the same production VMP-signing step at the platform-appropriate point in the packaging pipeline.
+Run signup yourself in a private terminal; do not share the account password or verification code. Re-run `evs:sign:dev` after reinstalling or updating the ECS runtime. The optional `pnpm start -- --netflix-smoke-test` command uses the saved Netflix service session to play Netflix's official Test Patterns title and emits only a sanitized pass/fail result. Packaged releases will run production VMP signing before application code-signing on macOS and after application code-signing on Windows.
 
 ## Project documents
 

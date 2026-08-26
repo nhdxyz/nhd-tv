@@ -14,7 +14,75 @@ import type { NavigationDiagnostic, RemoteAction } from "./contracts";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 
+export interface NetflixSmokeResult {
+  detail: string;
+  status: "auth-required" | "failed" | "inconclusive" | "passed" | "profile-required";
+}
+
+interface NetflixSmokeSnapshot {
+  currentTime: number;
+  errorCode: number | null;
+  hasE100: boolean;
+  hasPardonInterruption: boolean;
+  hasPlayControl: boolean;
+  isLogin: boolean;
+  isPlaying: boolean;
+  isProfileGate: boolean;
+  readyState: number;
+}
+
 const configuredSessions = new WeakSet<Session>();
+const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
+const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+const netflixSnapshotScript = `(() => {
+  const bodyText = document.body?.innerText ?? "";
+  const video = document.querySelector("video");
+  const playControl = [...document.querySelectorAll("button, a")].find((element) => {
+    const label = [
+      element.getAttribute("aria-label") ?? "",
+      element.getAttribute("data-uia") ?? "",
+      element.textContent ?? ""
+    ].join(" ").trim();
+
+    return /(^|\\s)play(\\s|$)|play-button/i.test(label);
+  });
+
+  return {
+    currentTime: video?.currentTime ?? 0,
+    errorCode: video?.error?.code ?? null,
+    hasE100: /(^|\\s)E100(\\s|$)/i.test(bodyText),
+    hasPardonInterruption: /pardon the interruption/i.test(bodyText),
+    hasPlayControl: Boolean(playControl),
+    isLogin: location.pathname.includes("/login"),
+    isPlaying: Boolean(video && !video.paused && !video.ended),
+    isProfileGate: /who(?:'|’)s watching/i.test(bodyText),
+    readyState: video?.readyState ?? 0
+  };
+})()`;
+
+const netflixClickPlayScript = `(() => {
+  const playControl = [...document.querySelectorAll("button, a")].find((element) => {
+    const label = [
+      element.getAttribute("aria-label") ?? "",
+      element.getAttribute("data-uia") ?? "",
+      element.textContent ?? ""
+    ].join(" ").trim();
+
+    return /(^|\\s)play(\\s|$)|play-button/i.test(label);
+  });
+
+  if (!(playControl instanceof HTMLElement)) {
+    return false;
+  }
+
+  playControl.click();
+  return true;
+})()`;
 
 function configureServiceSession(serviceSession: Session, definition: ServiceDefinition): void {
   if (configuredSessions.has(serviceSession)) {
@@ -214,6 +282,103 @@ export class ServiceHost {
     view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyDown" });
     view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyUp" });
     return true;
+  }
+
+  async runNetflixSmokeTest(): Promise<NetflixSmokeResult> {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed() || this.activeServiceId !== "netflix") {
+      return {
+        detail: "Netflix is not open in the service host.",
+        status: "inconclusive"
+      };
+    }
+
+    try {
+      await view.webContents.loadURL(NETFLIX_TEST_TITLE_URL);
+    } catch (error) {
+      if (
+        !isExpectedAllowedNavigationAbort(
+          error,
+          view.webContents.getURL(),
+          this.#activeDefinition?.allowedOrigins ?? []
+        )
+      ) {
+        return {
+          detail: "The Netflix test title could not be loaded.",
+          status: "failed"
+        };
+      }
+    }
+
+    const deadline = Date.now() + NETFLIX_SMOKE_TIMEOUT_MS;
+    let clickedPlay = false;
+    let lastSnapshot: NetflixSmokeSnapshot | null = null;
+
+    while (Date.now() < deadline && !view.webContents.isDestroyed()) {
+      let snapshot: NetflixSmokeSnapshot;
+
+      try {
+        snapshot = await view.webContents.executeJavaScript(
+          netflixSnapshotScript,
+          true
+        ) as NetflixSmokeSnapshot;
+      } catch {
+        await delay(500);
+        continue;
+      }
+
+      lastSnapshot = snapshot;
+
+      if (snapshot.hasE100 || snapshot.hasPardonInterruption) {
+        return {
+          detail: "Netflix returned the E100 playback interruption page.",
+          status: "failed"
+        };
+      }
+
+      if (snapshot.isLogin) {
+        return {
+          detail: "The saved Netflix session requires sign-in.",
+          status: "auth-required"
+        };
+      }
+
+      if (snapshot.isProfileGate) {
+        return {
+          detail: "Netflix requires a profile selection before playback can be tested.",
+          status: "profile-required"
+        };
+      }
+
+      if (snapshot.isPlaying && snapshot.readyState >= 3 && snapshot.currentTime >= 2) {
+        return {
+          detail: "Netflix test video decoded and advanced beyond two seconds.",
+          status: "passed"
+        };
+      }
+
+      if (!clickedPlay && snapshot.hasPlayControl) {
+        clickedPlay = await view.webContents.executeJavaScript(
+          netflixClickPlayScript,
+          true
+        ) as boolean;
+      }
+
+      await delay(1_000);
+    }
+
+    if (lastSnapshot?.errorCode !== null && lastSnapshot?.errorCode !== undefined) {
+      return {
+        detail: `The video element reported media error ${lastSnapshot.errorCode}.`,
+        status: "failed"
+      };
+    }
+
+    return {
+      detail: "Playback did not start before the smoke-test timeout.",
+      status: "inconclusive"
+    };
   }
 
   #resize(): void {

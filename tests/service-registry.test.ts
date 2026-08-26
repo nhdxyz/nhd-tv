@@ -35,8 +35,8 @@ describe("service registry", () => {
   it("surfaces Google sign-in recovery without exposing service URLs", () => {
     const youtube = getServiceSummaries().find((service) => service.id === "youtube");
 
-    expect(youtube?.authenticationNote).toContain("Try another way");
-    expect(youtube?.authenticationNote).toContain("Enter your password");
+    expect(youtube?.authenticationNote).toContain("feasibility-only");
+    expect(youtube?.authenticationNote).toContain("TV activation");
     expect(youtube).not.toHaveProperty("startUrl");
     expect(youtube).not.toHaveProperty("allowedOrigins");
   });

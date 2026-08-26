@@ -66,6 +66,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Declarative Netflix and YouTube query routes
 - [x] Disney+ browse-search fallback
 - [x] Contextual Netflix and YouTube search from the phone remote
+- [ ] Supported YouTube television activation or external OAuth path (#11)
 - [ ] Licensed cross-service metadata and regional availability (#19)
 - [ ] Trusted local HTTPS and opt-in direct microphone capture (#21)
 - [ ] Watchlist, favorites, and recommendation controls

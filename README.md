@@ -75,6 +75,7 @@ Run signup yourself in a private terminal; do not share the account password or 
 - [DRM host feasibility result](docs/feasibility/drm-host.md)
 - [Commercial-service compatibility matrix](docs/feasibility/service-matrix.md)
 - [Search design and research](docs/search-design.md)
+- [YouTube authentication decision](docs/youtube-auth.md)
 
 Streaming-service credentials and cookies stay in per-service persistent Electron session partitions and must never be committed.
 

@@ -60,7 +60,7 @@ const services: readonly ServiceDefinition[] = [
     ],
     artworkHosts: ["i.ytimg.com"],
     authenticationNote:
-      "If Google asks for a passkey but no system prompt appears, choose Try another way, then Enter your password. Native macOS passkeys require a signed, entitled app build.",
+      "Embedded Google sign-in is feasibility-only and may stall after passkey or OTP. Supported TV activation is under evaluation; signed-out playback remains available.",
     id: "youtube",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.youtube.com"],

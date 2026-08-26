@@ -19,7 +19,7 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
     const requestingUrl = details.requestingUrl || webContents.getURL();
     const allowMediaKeySystem =
       permission === "mediaKeySystem" &&
-      isAllowedServiceUrl(requestingUrl, definition.allowedOrigins);
+      isAllowedServiceUrl(requestingUrl, definition.mediaKeySystemOrigins);
 
     callback(allowMediaKeySystem);
   });

@@ -5,8 +5,8 @@ const runtimeStatus = document.querySelector<HTMLParagraphElement>("#runtime-sta
 const widevineStatus = document.querySelector<HTMLParagraphElement>("#widevine-status");
 const serviceStatus = document.querySelector<HTMLParagraphElement>("#service-status");
 const feedback = document.querySelector<HTMLParagraphElement>("#feedback");
-const openServiceButton = document.querySelector<HTMLButtonElement>("#open-service");
 const closeServiceButton = document.querySelector<HTMLButtonElement>("#close-service");
+const serviceActions = document.querySelector<HTMLDivElement>("#service-actions");
 
 function requireElement<T>(element: T | null, name: string): T {
   if (element === null) {
@@ -19,8 +19,8 @@ function requireElement<T>(element: T | null, name: string): T {
 const elements = {
   closeServiceButton: requireElement(closeServiceButton, "close-service"),
   feedback: requireElement(feedback, "feedback"),
-  openServiceButton: requireElement(openServiceButton, "open-service"),
   runtimeStatus: requireElement(runtimeStatus, "runtime-status"),
+  serviceActions: requireElement(serviceActions, "service-actions"),
   serviceStatus: requireElement(serviceStatus, "service-status"),
   widevineStatus: requireElement(widevineStatus, "widevine-status")
 };
@@ -39,16 +39,28 @@ async function refreshStatus(): Promise<void> {
   renderStatus(await window.nhd.getHostStatus());
 }
 
-elements.openServiceButton.addEventListener("click", async () => {
-  elements.feedback.textContent = "Opening secure service view…";
+async function renderServices(): Promise<void> {
+  const services = await window.nhd.getServices();
 
-  try {
-    await window.nhd.openService("shaka-demo");
-    elements.feedback.textContent = "Service view opened.";
-  } catch (error) {
-    elements.feedback.textContent = error instanceof Error ? error.message : String(error);
+  for (const service of services) {
+    const button = document.createElement("button");
+    button.classList.toggle("secondary", service.kind === "test");
+    button.dataset.serviceId = service.id;
+    button.textContent = service.kind === "test" ? `${service.name} (test)` : service.name;
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      elements.feedback.textContent = `Opening ${service.name}…`;
+
+      try {
+        await window.nhd.openService(service.id);
+        elements.feedback.textContent = `${service.name} opened.`;
+      } catch (error) {
+        elements.feedback.textContent = error instanceof Error ? error.message : String(error);
+      }
+    });
+    elements.serviceActions.append(button);
   }
-});
+}
 
 elements.closeServiceButton.addEventListener("click", async () => {
   await window.nhd.closeService();
@@ -57,3 +69,4 @@ elements.closeServiceButton.addEventListener("click", async () => {
 
 window.nhd.onHostStatusChanged(renderStatus);
 void refreshStatus();
+void renderServices();

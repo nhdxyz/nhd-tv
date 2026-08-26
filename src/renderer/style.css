@@ -105,6 +105,10 @@ h1 {
   margin-top: 2rem;
 }
 
+.close-service {
+  margin-top: 1rem;
+}
+
 .feedback {
   min-height: 1.5rem;
   color: #a5b4fc;

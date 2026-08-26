@@ -10,7 +10,7 @@ import {
   session
 } from "electron";
 import { IPC_CHANNELS, type HostStatus, type WidevineState } from "./contracts";
-import { getServiceDefinition } from "./service-registry";
+import { getServiceDefinition, getServiceSummaries } from "./service-registry";
 import { ServiceHost } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
 
@@ -93,6 +93,11 @@ function validateShellSender(senderUrl: string): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle(IPC_CHANNELS.getServices, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return getServiceSummaries();
+  });
+
   ipcMain.handle(IPC_CHANNELS.getHostStatus, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return hostStatus();

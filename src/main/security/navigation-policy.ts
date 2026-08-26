@@ -1,6 +1,8 @@
 export interface ServiceDefinition {
   allowedOrigins: readonly string[];
   id: string;
+  kind: "commercial" | "test";
+  mediaKeySystemOrigins: readonly string[];
   name: string;
   partition: string;
   startUrl: string;
@@ -44,6 +46,24 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
 
   if (definition.allowedOrigins.length === 0) {
     throw new Error(`Service must declare at least one allowed origin: ${definition.id}`);
+  }
+
+  if (definition.allowedOrigins.some((origin) => normalizeOrigin(origin) !== origin)) {
+    throw new Error(`Service navigation origins must be canonical HTTPS origins: ${definition.id}`);
+  }
+
+  if (definition.mediaKeySystemOrigins.length === 0) {
+    throw new Error(`Service must declare a media-key-system origin: ${definition.id}`);
+  }
+
+  if (
+    definition.mediaKeySystemOrigins.some(
+      (origin) =>
+        normalizeOrigin(origin) !== origin ||
+        !definition.allowedOrigins.includes(origin)
+    )
+  ) {
+    throw new Error(`Service media-key-system origins must be allowed HTTPS origins: ${definition.id}`);
   }
 
   if (!isAllowedServiceUrl(definition.startUrl, definition.allowedOrigins)) {

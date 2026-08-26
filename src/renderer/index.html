@@ -32,10 +32,14 @@
         </div>
       </section>
 
-      <div class="actions">
-        <button id="open-service" type="button">Open Shaka DRM demo</button>
-        <button class="secondary" id="close-service" type="button">Close service</button>
-      </div>
+      <section aria-labelledby="services-title">
+        <p class="status-label" id="services-title">Service matrix</p>
+        <div class="actions" id="service-actions"></div>
+      </section>
+
+      <button class="secondary close-service" id="close-service" type="button">
+        Close active service
+      </button>
 
       <p class="feedback" id="feedback" role="status"></p>
     </main>

@@ -25,6 +25,8 @@ describe("service navigation policy", () => {
       assertValidServiceDefinition({
         allowedOrigins: ["https://example.com"],
         id: "Example Service",
+        kind: "test",
+        mediaKeySystemOrigins: ["https://example.com"],
         name: "Example",
         partition: "persist:service-example",
         startUrl: "https://example.com"
@@ -35,10 +37,26 @@ describe("service navigation policy", () => {
       assertValidServiceDefinition({
         allowedOrigins: ["https://example.com"],
         id: "example",
+        kind: "test",
+        mediaKeySystemOrigins: ["https://example.com"],
         name: "Example",
         partition: "default",
         startUrl: "https://example.com"
       })
     ).toThrow(/persistent and isolated/);
+  });
+
+  it("limits media-key-system permission to declared navigation origins", () => {
+    expect(() =>
+      assertValidServiceDefinition({
+        allowedOrigins: ["https://example.com"],
+        id: "example",
+        kind: "commercial",
+        mediaKeySystemOrigins: ["https://login.example.com"],
+        name: "Example",
+        partition: "persist:service-example",
+        startUrl: "https://example.com"
+      })
+    ).toThrow(/media-key-system origins/);
   });
 });

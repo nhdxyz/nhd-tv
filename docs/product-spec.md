@@ -24,7 +24,7 @@ NHD-TV supports multiple input adapters that produce a shared set of application
 - Xbox-style and compatible game controllers
 - QR-paired phone remote over the local network
 
-The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a fixed host-provided focus overlay that remains visible above clipped carousels. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and a phone trackpad can be added later.
+The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may opt into a conservative DOM focus layer for browse screens, with a fixed host-provided focus overlay that remains visible above clipped carousels. Playback routes and fullscreen players retain the service's native keyboard behavior. Pointer input remains available through a mouse, and the phone remote provides an optional bounded precision pad.
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
 
@@ -89,9 +89,9 @@ The current foundation recognizes declared Netflix, YouTube, and Disney+ watch r
 
 The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
 
-The first remote slice provides directional navigation, Select, Back, Home, and a single bounded Search field. It is session-only and requires television approval. Search text is delivered only to trusted main-process routing; it opens the active service's declared search destination or returns to the Home chooser. It cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback only after an action is accepted when the browser supports vibration.
+The first remote slice provides directional navigation, Select, Back, Home, a single bounded Search field, and an optional precision pad. It is session-only and requires television approval. Search text is delivered only to trusted main-process routing; it opens the active service's declared search destination or returns to the Home chooser. It cannot target a service login, password, payment, or arbitrary form field. The phone gives haptic feedback after an action is accepted or the precision pad snaps to a new target when the browser supports vibration.
 
-Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. The current optional swipe pad converts a tap or completed cardinal swipe into the same narrow actions as the arrow buttons; free cursor control and raw coordinate forwarding remain out of scope.
+Voice search initially uses the phone keyboard's native dictation button. Direct browser microphone capture requires a trusted HTTPS origin and a separate permission/privacy design; the LAN remote intentionally denies microphone, camera, and location access. The optional precision pad sends throttled normalized coordinates and a bounded edge-scroll direction. The host snaps only to visible non-editable controls and performs a native tap only after a safe snap; arbitrary selectors, target metadata, credential/payment fields, popup windows, and permission surfaces remain out of scope.
 
 ## Desktop behavior
 

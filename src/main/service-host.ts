@@ -18,7 +18,13 @@ import {
   buildPlaybackSnapshotScript,
   qualifyPlaybackSnapshot
 } from "./playback-observer";
-import type { NavigationDiagnostic, RemoteAction } from "./contracts";
+import type {
+  NavigationDiagnostic,
+  RemoteAction,
+  RemotePointerInput,
+  RemotePointerResult
+} from "./contracts";
+import { dispatchPrecisionPointer } from "./precision-pointer";
 import {
   serviceConsumedBack,
   type ServiceBackState
@@ -409,6 +415,7 @@ export class ServiceHost {
   #playbackCheckpoint: Promise<void> | null = null;
   #playbackQualificationTimer: NodeJS.Timeout | null = null;
   #playbackTimer: NodeJS.Timeout | null = null;
+  #pointerSnapKey: string | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
 
@@ -457,6 +464,7 @@ export class ServiceHost {
 
     await this.closeWithCheckpoint();
     this.#lastBlockedNavigation = null;
+    this.#pointerSnapKey = null;
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
 
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
@@ -574,6 +582,7 @@ export class ServiceHost {
     });
 
     view.webContents.on("did-finish-load", () => {
+      this.#pointerSnapKey = null;
       if (this.#view === view && definition.spatialNavigation === "dom") {
         void view.webContents.insertCSS(SERVICE_FOCUS_STYLE).catch(() => undefined);
       }
@@ -713,6 +722,7 @@ export class ServiceHost {
 
     this.#view = null;
     this.#activeDefinition = null;
+    this.#pointerSnapKey = null;
     this.#popupWindow = null;
     this.#quitPromptVisible = false;
 
@@ -896,6 +906,35 @@ export class ServiceHost {
 
     this.#sendKey(action);
     return true;
+  }
+
+  async sendRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
+    const view = this.#view;
+
+    if (
+      view === null ||
+      view.webContents.isDestroyed() ||
+      this.#quitPromptVisible ||
+      (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+    ) {
+      return { snapChanged: false, snapped: false };
+    }
+
+    try {
+      const result = await dispatchPrecisionPointer(
+        view.webContents,
+        input,
+        this.#pointerSnapKey
+      );
+      this.#pointerSnapKey = result.snapKey;
+      return {
+        snapChanged: result.snapChanged,
+        snapped: result.snapped
+      };
+    } catch {
+      this.#pointerSnapKey = null;
+      return { snapChanged: false, snapped: false };
+    }
   }
 
   async runNetflixSmokeTest(): Promise<NetflixSmokeResult> {

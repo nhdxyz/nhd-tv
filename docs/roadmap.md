@@ -57,8 +57,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Directional, Select, Back, and Home controls
 - [x] Bounded phone search with native keyboard dictation
 - [x] Active-service contextual search routing
-- [x] Optional bounded swipe-pad navigation (#25)
-- [ ] Free-cursor trackpad evaluation (#25)
+- [x] Optional bounded precision-pad navigation with target snapping and edge scrolling (#25)
+- [ ] Remembered-phone credentials and device management (#25)
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session
 

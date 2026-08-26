@@ -62,13 +62,16 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("navigator.vibrate(10)");
   });
 
-  it("keeps arrows as the default and offers bounded swipe navigation", () => {
+  it("keeps arrows as the default and offers a bounded precision pad", () => {
     expect(REMOTE_HTML).toContain('class="dpad"');
-    expect(REMOTE_HTML).toContain('id="swipe-pad"');
+    expect(REMOTE_HTML).toContain('id="precision-pad"');
+    expect(REMOTE_HTML).toContain('class="precision-dot"');
     expect(REMOTE_HTML).toContain('id="control-mode"');
-    expect(REMOTE_JS).toContain("useSwipeMode(false)");
-    expect(REMOTE_JS).toContain("distance < 18");
-    expect(REMOTE_JS).toContain('void sendAction(action, swipePad)');
+    expect(REMOTE_JS).toContain("usePrecisionMode(false)");
+    expect(REMOTE_JS).toContain("POINTER_INTERVAL_MS = 40");
+    expect(REMOTE_JS).toContain('await jsonRequest("/api/pointer"');
+    expect(REMOTE_JS).toContain("distance < 14");
+    expect(REMOTE_JS).toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
     expect(REMOTE_JS).not.toContain("movementX");
     expect(REMOTE_JS).not.toContain("movementY");
   });

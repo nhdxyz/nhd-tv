@@ -3,7 +3,11 @@ import {
   randomBytes,
   timingSafeEqual
 } from "node:crypto";
-import { REMOTE_ACTIONS, type RemoteAction } from "../contracts";
+import {
+  REMOTE_ACTIONS,
+  type RemoteAction,
+  type RemotePointerInput
+} from "../contracts";
 
 const PAIRING_TOKEN_BYTES = 32;
 const REQUEST_ID_BYTES = 18;
@@ -47,6 +51,43 @@ export function parseRemoteAction(value: unknown): RemoteAction | null {
   return typeof value === "string" && (REMOTE_ACTIONS as readonly string[]).includes(value)
     ? value as RemoteAction
     : null;
+}
+
+export function parseRemotePointerInput(value: unknown): RemotePointerInput | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const allowedKeys = new Set(["phase", "scroll", "x", "y"]);
+  if (Object.keys(candidate).some((key) => !allowedKeys.has(key))) {
+    return null;
+  }
+
+  if (
+    (candidate.phase !== "move" && candidate.phase !== "tap") ||
+    typeof candidate.x !== "number" ||
+    !Number.isFinite(candidate.x) ||
+    candidate.x < 0 ||
+    candidate.x > 1 ||
+    typeof candidate.y !== "number" ||
+    !Number.isFinite(candidate.y) ||
+    candidate.y < 0 ||
+    candidate.y > 1 ||
+    typeof candidate.scroll !== "number" ||
+    !Number.isFinite(candidate.scroll) ||
+    candidate.scroll < -1 ||
+    candidate.scroll > 1
+  ) {
+    return null;
+  }
+
+  return {
+    phase: candidate.phase,
+    scroll: candidate.scroll,
+    x: candidate.x,
+    y: candidate.y
+  };
 }
 
 export class PairingManager {

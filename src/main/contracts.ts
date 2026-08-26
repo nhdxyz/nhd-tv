@@ -44,6 +44,18 @@ export const REMOTE_ACTIONS = [
 
 export type RemoteAction = (typeof REMOTE_ACTIONS)[number];
 
+export interface RemotePointerInput {
+  phase: "move" | "tap";
+  scroll: number;
+  x: number;
+  y: number;
+}
+
+export interface RemotePointerResult {
+  snapChanged: boolean;
+  snapped: boolean;
+}
+
 export type RemoteState = "awaiting-approval" | "inactive" | "pairing" | "ready";
 
 export interface RemoteStatus {

@@ -23,6 +23,8 @@ import {
   type ProfilePreferences,
   type ProcessDiagnostics,
   type RemoteAction,
+  type RemotePointerInput,
+  type RemotePointerResult,
   type RemoteStatus,
   type WidevineState
 } from "./contracts";
@@ -37,6 +39,7 @@ import {
 } from "./image-transcode";
 import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
+import { dispatchPrecisionPointer } from "./precision-pointer";
 import {
   getServiceDefinition,
   getServiceDefinitions,
@@ -79,6 +82,7 @@ let continueWatchingStore: ContinueWatchingStore | null = null;
 let localStateStore: LocalStateStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
+let shellPointerSnapKey: string | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
@@ -497,6 +501,36 @@ function handleRemoteAction(action: RemoteAction): void {
   }
 }
 
+async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
+  if (
+    serviceHost !== null &&
+    serviceHost.activeServiceId !== null &&
+    !serviceHost.isQuitPromptVisible
+  ) {
+    return serviceHost.sendRemotePointer(input);
+  }
+
+  if (mainWindow === null || mainWindow.isDestroyed()) {
+    return { snapChanged: false, snapped: false };
+  }
+
+  try {
+    const result = await dispatchPrecisionPointer(
+      mainWindow.webContents,
+      input,
+      shellPointerSnapKey
+    );
+    shellPointerSnapKey = result.snapKey;
+    return {
+      snapChanged: result.snapChanged,
+      snapped: result.snapped
+    };
+  } catch {
+    shellPointerSnapKey = null;
+    return { snapChanged: false, snapped: false };
+  }
+}
+
 function registerShellProtocol(): void {
   const rendererRoot = path.resolve(__dirname, "../renderer");
 
@@ -889,6 +923,7 @@ async function createMainWindow(): Promise<void> {
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
+    onPointer: handleRemotePointer,
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus
   });

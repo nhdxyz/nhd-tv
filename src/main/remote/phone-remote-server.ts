@@ -7,12 +7,22 @@ import {
 } from "node:http";
 import { networkInterfaces } from "node:os";
 import QRCode from "qrcode";
-import type { RemoteAction, RemoteStatus } from "../contracts";
+import type {
+  RemoteAction,
+  RemotePointerInput,
+  RemotePointerResult,
+  RemoteStatus
+} from "../contracts";
 import { normalizeSearchQuery } from "../security/navigation-policy";
-import { PairingManager, parseRemoteAction } from "./pairing-manager";
+import {
+  PairingManager,
+  parseRemoteAction,
+  parseRemotePointerInput
+} from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 
 const MAX_JSON_BYTES = 4_096;
+const MIN_POINTER_INTERVAL_MS = 16;
 const REMOTE_CSP = [
   "default-src 'none'",
   "script-src 'self'",
@@ -25,6 +35,7 @@ const REMOTE_CSP = [
 
 export interface PhoneRemoteServerOptions {
   onAction: (action: RemoteAction) => void;
+  onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
 }
@@ -119,9 +130,11 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
+  readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   #expiresAt: number | null = null;
+  #lastPointerAt = 0;
   #networkAddress: string | null = null;
   #qrDataUrl: string | null = null;
   #remoteOrigin: string | null = null;
@@ -129,6 +142,7 @@ export class PhoneRemoteServer {
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
+    this.#onPointer = options.onPointer;
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
   }
@@ -379,6 +393,41 @@ export class PhoneRemoteServer {
 
       await this.#onSearch(query);
       writeJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/pointer") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "Pointer origin rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+
+      if (!this.#manager.authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      const input = parseRemotePointerInput(body);
+      if (input === null) {
+        writeJson(response, 400, { error: "Pointer input is outside the safe boundary" });
+        return;
+      }
+
+      const now = Date.now();
+      if (now - this.#lastPointerAt < MIN_POINTER_INTERVAL_MS) {
+        writeJson(response, 200, { ok: true, snapChanged: false, snapped: false, throttled: true });
+        return;
+      }
+      this.#lastPointerAt = now;
+
+      const result = await this.#onPointer(input);
+      writeJson(response, 200, { ok: true, ...result });
       return;
     }
 

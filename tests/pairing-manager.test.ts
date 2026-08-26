@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { PairingManager, parseRemoteAction } from "../src/main/remote/pairing-manager";
+import {
+  PairingManager,
+  parseRemoteAction,
+  parseRemotePointerInput
+} from "../src/main/remote/pairing-manager";
 
 describe("phone remote pairing", () => {
   it("requires the current short-lived pairing token", () => {
@@ -47,5 +51,25 @@ describe("phone remote pairing", () => {
     expect(parseRemoteAction("select")).toBe("select");
     expect(parseRemoteAction("launch-shell-command")).toBeNull();
     expect(parseRemoteAction({ action: "left" })).toBeNull();
+  });
+
+  it("accepts only bounded normalized precision-pointer input", () => {
+    expect(parseRemotePointerInput({
+      phase: "move",
+      scroll: -1,
+      x: 0.25,
+      y: 0.75
+    })).toEqual({ phase: "move", scroll: -1, x: 0.25, y: 0.75 });
+    expect(parseRemotePointerInput({ phase: "tap", scroll: 0, x: 1, y: 0 })).not.toBeNull();
+    expect(parseRemotePointerInput({ phase: "drag", scroll: 0, x: 0.5, y: 0.5 })).toBeNull();
+    expect(parseRemotePointerInput({ phase: "move", scroll: 0, x: 1.01, y: 0.5 })).toBeNull();
+    expect(parseRemotePointerInput({ phase: "move", scroll: 2, x: 0.5, y: 0.5 })).toBeNull();
+    expect(parseRemotePointerInput({
+      phase: "move",
+      scroll: 0,
+      selector: "input",
+      x: 0.5,
+      y: 0.5
+    })).toBeNull();
   });
 });

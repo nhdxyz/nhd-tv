@@ -26,12 +26,12 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
         </div>
 
-        <div class="swipe-pad" id="swipe-pad" role="button" tabindex="0" aria-label="Swipe to navigate and tap to select" hidden>
-          <span>Swipe to move</span>
-          <small>Tap to select</small>
+        <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Move freely, edge-scroll, and tap a highlighted item" hidden>
+          <span class="precision-dot" aria-hidden="true"></span>
+          <span class="precision-copy">Move freely<small>Edges scroll · Tap selects</small></span>
         </div>
 
-        <button class="control-mode" id="control-mode" type="button" disabled>Use swipe pad</button>
+        <button class="control-mode" id="control-mode" type="button" disabled>Use precision pad</button>
 
         <div class="system-actions">
           <button data-action="back" type="button" disabled>Back</button>
@@ -196,27 +196,71 @@ button {
 .dpad .select:not(:disabled).is-pressed span,
 .dpad .select:not(:disabled):active span { background: #fff; }
 
-.swipe-pad {
+.precision-pad {
+  position: relative;
   display: grid;
   width: min(76vw, 16.5rem);
   aspect-ratio: 1;
   margin: 0 auto 0.85rem;
   place-content: center;
+  overflow: hidden;
   border: 1px solid rgb(125 187 255 / 24%);
   border-radius: 2rem;
   outline: 0;
   background:
-    radial-gradient(circle at center, rgb(96 165 250 / 18%), transparent 8rem),
+    radial-gradient(circle at center, rgb(37 99 235 / 19%), transparent 8rem),
+    linear-gradient(rgb(125 187 255 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(125 187 255 / 5%) 1px, transparent 1px),
     linear-gradient(145deg, #202a3b, #111722);
+  background-size: auto, 2rem 2rem, 2rem 2rem, auto;
   color: #eaf2ff;
   text-align: center;
   touch-action: none;
   user-select: none;
 }
-.swipe-pad[hidden] { display: none; }
-.swipe-pad span { font-size: 1rem; font-weight: 900; }
-.swipe-pad small { margin-top: 0.35rem; color: #8491a6; font-size: 0.72rem; }
-.swipe-pad.is-pressed { border-color: #7dbbff; filter: brightness(1.16); transform: scale(0.985); }
+.precision-pad[hidden] { display: none; }
+.precision-pad::after {
+  position: absolute;
+  inset: 0.55rem;
+  border: 1px solid rgb(125 187 255 / 8%);
+  border-radius: 1.5rem;
+  content: "";
+  pointer-events: none;
+}
+.precision-copy {
+  display: grid;
+  position: relative;
+  z-index: 1;
+  color: rgb(234 242 255 / 58%);
+  font-size: 0.82rem;
+  font-weight: 900;
+  pointer-events: none;
+}
+.precision-copy small { margin-top: 0.35rem; color: #75839a; font-size: 0.65rem; }
+.precision-dot {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid rgb(219 234 254 / 88%);
+  border-radius: 50%;
+  background: #1685ff;
+  box-shadow:
+    0 0 0 0.42rem rgb(22 133 255 / 18%),
+    0 0 1.8rem 0.7rem rgb(37 99 235 / 52%);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: box-shadow 100ms ease, transform 100ms ease;
+}
+.precision-pad.is-tracking { border-color: #7dbbff; }
+.precision-pad.is-tracking .precision-dot {
+  box-shadow:
+    0 0 0 0.52rem rgb(22 133 255 / 22%),
+    0 0 2.2rem 0.85rem rgb(37 99 235 / 64%);
+  transform: translate(-50%, -50%) scale(1.12);
+}
 
 .control-mode {
   width: 100%;
@@ -324,11 +368,17 @@ export const REMOTE_JS = `(() => {
   const searchQuery = document.querySelector("#search-query");
   const searchSubmit = document.querySelector("#search-submit");
   const dpad = document.querySelector(".dpad");
-  const swipePad = document.querySelector("#swipe-pad");
+  const precisionPad = document.querySelector("#precision-pad");
+  const precisionDot = document.querySelector(".precision-dot");
   const controlMode = document.querySelector("#control-mode");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
-  let swipeStart = null;
+  let pointerGesture = null;
+  let pendingPointer = null;
+  let pointerFlushTimer = null;
+  let pointerRequestInFlight = false;
+  let lastPointerSentAt = 0;
+  const POINTER_INTERVAL_MS = 40;
 
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
     document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
@@ -458,43 +508,91 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  function useSwipeMode(enabled) {
+  function usePrecisionMode(enabled) {
     dpad.hidden = enabled;
-    swipePad.hidden = !enabled;
-    controlMode.textContent = enabled ? "Use arrow buttons" : "Use swipe pad";
+    precisionPad.hidden = !enabled;
+    controlMode.textContent = enabled ? "Use arrow buttons" : "Use precision pad";
   }
 
-  controlMode.addEventListener("click", () => useSwipeMode(!dpad.hidden));
+  async function flushPointer() {
+    pointerFlushTimer = null;
+    if (pointerRequestInFlight || !pendingPointer || !controllerToken) return;
+    const input = pendingPointer;
+    pendingPointer = null;
+    pointerRequestInFlight = true;
+    lastPointerSentAt = performance.now();
+    try {
+      const result = await jsonRequest("/api/pointer", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(input)
+      });
+      if (result.snapChanged && navigator.vibrate) navigator.vibrate(7);
+    } catch (error) {
+      controllerToken = null;
+      sessionStorage.removeItem("nhd-controller-token");
+      setEnabled(false);
+      setState(error instanceof Error ? error.message : "Remote disconnected", "error");
+    } finally {
+      pointerRequestInFlight = false;
+      if (pendingPointer) queuePointer(pendingPointer);
+    }
+  }
 
-  swipePad.addEventListener("pointerdown", (event) => {
-    swipeStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    swipePad.setPointerCapture(event.pointerId);
-    swipePad.classList.add("is-pressed");
+  function queuePointer(input, immediate) {
+    pendingPointer = input;
+    if (pointerRequestInFlight || pointerFlushTimer !== null) return;
+    const elapsed = performance.now() - lastPointerSentAt;
+    const wait = immediate ? 0 : Math.max(0, POINTER_INTERVAL_MS - elapsed);
+    pointerFlushTimer = setTimeout(flushPointer, wait);
+  }
+
+  function pointerInput(event, phase) {
+    const rect = precisionPad.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const scroll = phase === "move" ? y < 0.12 ? -1 : y > 0.88 ? 1 : 0 : 0;
+    precisionDot.style.left = (x * 100) + "%";
+    precisionDot.style.top = (y * 100) + "%";
+    return { phase, scroll, x, y };
+  }
+
+  controlMode.addEventListener("click", () => usePrecisionMode(!dpad.hidden));
+
+  precisionPad.addEventListener("pointerdown", (event) => {
+    pointerGesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    precisionPad.setPointerCapture(event.pointerId);
+    precisionPad.classList.add("is-tracking");
+    queuePointer(pointerInput(event, "move"), true);
   });
-  swipePad.addEventListener("pointercancel", () => {
-    swipeStart = null;
-    swipePad.classList.remove("is-pressed");
+  precisionPad.addEventListener("pointermove", (event) => {
+    if (!pointerGesture || pointerGesture.id !== event.pointerId) return;
+    queuePointer(pointerInput(event, "move"), false);
   });
-  swipePad.addEventListener("pointerup", (event) => {
-    if (!swipeStart || swipeStart.id !== event.pointerId) return;
-    const x = event.clientX - swipeStart.x;
-    const y = event.clientY - swipeStart.y;
-    const distance = Math.hypot(x, y);
-    const action = distance < 18
-      ? "select"
-      : Math.abs(x) > Math.abs(y)
-        ? x < 0 ? "left" : "right"
-        : y < 0 ? "up" : "down";
-    swipeStart = null;
-    swipePad.classList.remove("is-pressed");
-    void sendAction(action, swipePad);
+  precisionPad.addEventListener("pointercancel", () => {
+    pointerGesture = null;
+    precisionPad.classList.remove("is-tracking");
   });
-  swipePad.addEventListener("keydown", (event) => {
+  precisionPad.addEventListener("pointerup", (event) => {
+    if (!pointerGesture || pointerGesture.id !== event.pointerId) return;
+    const distance = Math.hypot(
+      event.clientX - pointerGesture.x,
+      event.clientY - pointerGesture.y
+    );
+    const phase = distance < 14 ? "tap" : "move";
+    pointerGesture = null;
+    precisionPad.classList.remove("is-tracking");
+    queuePointer(pointerInput(event, phase), true);
+  });
+  precisionPad.addEventListener("keydown", (event) => {
     const actions = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "select", " ": "select" };
     const action = actions[event.key];
     if (!action) return;
     event.preventDefault();
-    void sendAction(action, swipePad);
+    void sendAction(action, precisionPad);
   });
 
   searchToggle.addEventListener("click", () => {
@@ -519,6 +617,6 @@ export const REMOTE_JS = `(() => {
   });
 
   setEnabled(false);
-  useSwipeMode(false);
+  usePrecisionMode(false);
   beginPairing();
 })();`;

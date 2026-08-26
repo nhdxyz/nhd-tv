@@ -90,7 +90,7 @@ export const REMOTE_HTML = `<!doctype html>
 
           <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
             <span class="precision-copy">Swipe to move<small>Follow the cursor on your TV · Tap anywhere</small></span>
-            <span class="precision-status" aria-hidden="true"><i></i> Target locked</span>
+            <span class="precision-status" aria-hidden="true"><i></i><span id="precision-status-copy">Target locked</span></span>
           </div>
         </div>
 
@@ -99,7 +99,7 @@ export const REMOTE_HTML = `<!doctype html>
         <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
 
         <form class="search-panel" id="search-panel" hidden>
-          <label for="search-query">Search your services</label>
+          <label id="search-label" for="search-query">Search your services</label>
           <div>
             <input
               id="search-query"
@@ -507,7 +507,9 @@ export const REMOTE_JS = `(() => {
   const searchSubmit = document.querySelector("#search-submit");
   const dpad = document.querySelector(".dpad");
   const precisionPad = document.querySelector("#precision-pad");
+  const precisionStatusCopy = document.querySelector("#precision-status-copy");
   const controlMode = document.querySelector("#control-mode");
+  const searchLabel = document.querySelector("#search-label");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
   let pointerGesture = null;
@@ -516,6 +518,7 @@ export const REMOTE_JS = `(() => {
   let pointerRequestInFlight = false;
   let lastPointerSentAt = 0;
   let virtualPointer = { x: 0.5, y: 0.5 };
+  let precisionTextEntryAvailable = false;
   const POINTER_INTERVAL_MS = 32;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
@@ -658,6 +661,9 @@ export const REMOTE_JS = `(() => {
       }
     } else {
       pointerGesture = null;
+      precisionTextEntryAvailable = false;
+      precisionPad.dataset.textEntryAvailable = "false";
+      precisionStatusCopy.textContent = "Target locked";
       precisionPad.classList.remove("has-snap", "is-tracking");
       if (controllerToken) {
         queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true);
@@ -682,13 +688,19 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify(input)
       });
-      precisionPad.classList.toggle("has-snap", result.snapped === true);
+      if (result.throttled !== true) {
+        precisionTextEntryAvailable = result.textEntryAvailable === true;
+        precisionPad.dataset.textEntryAvailable = String(precisionTextEntryAvailable);
+        precisionStatusCopy.textContent = precisionTextEntryAvailable ? "Tap to type" : "Target locked";
+        precisionPad.classList.toggle("has-snap", result.snapped === true);
+      }
       if (result.snapChanged && navigator.vibrate) navigator.vibrate(7);
     } catch (error) {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
       setEnabled(false);
       pointerGesture = null;
+      precisionTextEntryAvailable = false;
       precisionPad.classList.remove("has-snap", "is-tracking");
       setState(error instanceof Error ? error.message : "Remote disconnected", "error");
     } finally {
@@ -723,6 +735,13 @@ export const REMOTE_JS = `(() => {
 
   function pointerInput(point, phase, scroll) {
     return { phase, scroll: scroll || 0, x: point.x, y: point.y };
+  }
+
+  function openProviderKeyboard() {
+    searchLabel.textContent = "Type your search";
+    searchQuery.placeholder = "Search this service";
+    searchPanel.hidden = false;
+    searchQuery.focus({ preventScroll: true });
   }
 
   function latestPointerEvent(event) {
@@ -782,6 +801,7 @@ export const REMOTE_JS = `(() => {
       : moveVirtualPointer(horizontalDelta, verticalDelta);
     pointerGesture = null;
     precisionPad.classList.remove("is-tracking");
+    if (phase === "tap" && precisionTextEntryAvailable) openProviderKeyboard();
     queuePointer(pointerInput(point, phase, 0), true);
   });
   precisionPad.addEventListener("keydown", (event) => {
@@ -794,6 +814,8 @@ export const REMOTE_JS = `(() => {
 
   searchToggle.addEventListener("click", () => {
     if (searchToggle.disabled) return;
+    searchLabel.textContent = "Search your services";
+    searchQuery.placeholder = "Title, person, or topic";
     searchPanel.hidden = !searchPanel.hidden;
     if (!searchPanel.hidden) searchQuery.focus();
   });

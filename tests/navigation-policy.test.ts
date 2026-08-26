@@ -30,6 +30,7 @@ const validDefinition: ServiceDefinition = {
     subtitleSelectors: [".episode"],
     titleSelectors: ["h1"]
   },
+  remoteTextEntrySelectors: ['input[type="search"]'],
   rootUrls: ["https://example.com"],
   search: {
     baseUrl: "https://example.com/search",
@@ -151,5 +152,16 @@ describe("service navigation policy", () => {
         fullscreenOrigins: ["https://login.example.com"],
       })
     ).toThrow(/fullscreen origins/);
+  });
+
+  it("rejects empty or unbounded remote text-entry selectors", () => {
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      remoteTextEntrySelectors: [" "]
+    })).toThrow(/remote text-entry selectors/);
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      remoteTextEntrySelectors: ["x".repeat(201)]
+    })).toThrow(/remote text-entry selectors/);
   });
 });

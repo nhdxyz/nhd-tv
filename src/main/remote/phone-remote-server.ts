@@ -421,7 +421,13 @@ export class PhoneRemoteServer {
 
       const now = Date.now();
       if (now - this.#lastPointerAt < MIN_POINTER_INTERVAL_MS) {
-        writeJson(response, 200, { ok: true, snapChanged: false, snapped: false, throttled: true });
+        writeJson(response, 200, {
+          ok: true,
+          snapChanged: false,
+          snapped: false,
+          textEntryAvailable: false,
+          throttled: true
+        });
         return;
       }
       this.#lastPointerAt = now;

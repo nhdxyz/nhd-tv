@@ -103,6 +103,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("event.isPrimary === false");
     expect(REMOTE_JS).toContain('queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true)');
     expect(REMOTE_JS).toContain('classList.toggle("has-snap", result.snapped === true)');
+    expect(REMOTE_JS).toContain('precisionTextEntryAvailable = result.textEntryAvailable === true');
+    expect(REMOTE_JS).toContain('phase === "tap" && precisionTextEntryAvailable');
+    expect(REMOTE_JS).toContain('searchQuery.focus({ preventScroll: true })');
+    expect(REMOTE_JS).toContain('result.throttled !== true');
     expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
     expect(REMOTE_JS).not.toContain("renderPointerPoint");
     expect(REMOTE_JS).not.toContain("event.clientX - rect.left");

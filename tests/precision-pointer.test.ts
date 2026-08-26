@@ -70,4 +70,20 @@ describe("precision pointer page boundary", () => {
     expect(script).not.toContain("ipcRenderer");
     expect(script).not.toContain("fetch(");
   });
+
+  it("admits only declared service search fields for phone text entry", () => {
+    const script = buildPrecisionPointerTargetScript(
+      0.5,
+      0.5,
+      "move",
+      ['input[data-uia="search-box-input"]']
+    );
+
+    expect(script).toContain("declaredTextEntrySelectors");
+    expect(script).toContain("search-box-input");
+    expect(script).toContain("textEntry: isDeclaredTextEntry(element)");
+    expect(script).toContain("['search', 'text'].includes(editable.type)");
+    expect(script).toContain("sensitiveBoundary(editable)");
+    expect(script).toContain("password|payment|checkout|billing");
+  });
 });

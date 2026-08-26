@@ -931,16 +931,18 @@ export class ServiceHost {
 
   async sendRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
     const view = this.#view;
+    const definition = this.#activeDefinition;
 
     if (
       view === null ||
+      definition === null ||
       view.webContents.isDestroyed() ||
       (input.phase !== "hide" && (
         this.#quitPromptVisible ||
         (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
       ))
     ) {
-      return { snapChanged: false, snapped: false };
+      return { snapChanged: false, snapped: false, textEntryAvailable: false };
     }
 
     try {
@@ -948,16 +950,18 @@ export class ServiceHost {
       const result = await dispatchPrecisionPointer(
         view.webContents,
         input,
-        this.#pointerSnapKey
+        this.#pointerSnapKey,
+        definition.remoteTextEntrySelectors
       );
       this.#pointerSnapKey = result.snapKey;
       return {
         snapChanged: result.snapChanged,
-        snapped: result.snapped
+        snapped: result.snapped,
+        textEntryAvailable: result.textEntryAvailable
       };
     } catch {
       this.#pointerSnapKey = null;
-      return { snapChanged: false, snapped: false };
+      return { snapChanged: false, snapped: false, textEntryAvailable: false };
     }
   }
 

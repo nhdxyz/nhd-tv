@@ -16,6 +16,7 @@ export interface ServiceDefinition {
     subtitleSelectors: readonly string[];
     titleSelectors: readonly string[];
   } | null;
+  remoteTextEntrySelectors: readonly string[];
   rootUrls: readonly string[];
   search: {
     baseUrl: string;
@@ -276,6 +277,14 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
     )
   ) {
     throw new Error(`Service playback rules are invalid: ${definition.id}`);
+  }
+
+  if (
+    definition.remoteTextEntrySelectors.some(
+      (selector) => selector.trim().length === 0 || selector.length > 200
+    )
+  ) {
+    throw new Error(`Service remote text-entry selectors are invalid: ${definition.id}`);
   }
 
   if (

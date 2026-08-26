@@ -60,6 +60,10 @@ describe("service registry", () => {
     expect(youtube?.allowedOrigins).toContain("https://accounts.youtube.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
     expect(youtube?.fullscreenOrigins).toEqual(["https://www.youtube.com"]);
+    expect(youtube?.remoteTextEntrySelectors).toEqual(["input#search"]);
+    expect(getServiceDefinition("netflix")?.remoteTextEntrySelectors).toEqual([
+      'input[data-uia="search-box-input"]'
+    ]);
   });
 
   it("surfaces Google sign-in recovery without exposing service URLs", () => {
@@ -85,6 +89,7 @@ describe("service registry", () => {
       fullscreenOrigins: [],
       kind: "custom",
       playback: null,
+      remoteTextEntrySelectors: [],
       search: null,
       startUrl: "https://watch.example.test/home"
     });

@@ -7,6 +7,7 @@ import type {
 interface PointerTarget {
   key: string | null;
   snapped: boolean;
+  textEntry: boolean;
   x: number;
   y: number;
 }
@@ -37,12 +38,14 @@ export function buildShellPrecisionScrollScript(scroll: number): string {
 export function buildPrecisionPointerTargetScript(
   x: number,
   y: number,
-  phase: RemotePointerInput["phase"] = "move"
+  phase: RemotePointerInput["phase"] = "move",
+  remoteTextEntrySelectors: readonly string[] = []
 ): string {
   return `(() => {
     const requestedX = Math.max(0, Math.min(1, ${JSON.stringify(x)})) * innerWidth;
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
     const phase = ${JSON.stringify(phase)};
+    const declaredTextEntrySelectors = ${JSON.stringify(remoteTextEntrySelectors)};
     const cursorId = 'nhd-tv-precision-cursor';
     const pointerState = globalThis.__nhdTvPrecisionPointer || {
       hideTimer: null,
@@ -126,7 +129,8 @@ export function buildPrecisionPointerTargetScript(
       'button',
       '[role="button"]',
       '[role="link"]',
-      '[tabindex]:not([tabindex="-1"])'
+      '[tabindex]:not([tabindex="-1"])',
+      ...declaredTextEntrySelectors
     ].join(',');
     const snapRadius = Math.max(52, Math.min(108, Math.min(innerWidth, innerHeight) * 0.1));
     const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
@@ -137,10 +141,7 @@ export function buildPrecisionPointerTargetScript(
       'ytd-compact-video-renderer',
       'yt-lockup-view-model'
     ].join(',');
-    const blocked = (element) => {
-      if (element.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]') !== null) {
-        return true;
-      }
+    const sensitiveBoundary = (element) => {
       const form = element.closest('form');
       if (form === null) return false;
       const boundary = [
@@ -151,6 +152,25 @@ export function buildPrecisionPointerTargetScript(
         form.className
       ].filter((value) => typeof value === 'string').join(' ');
       return /login|log-in|signin|sign-in|password|payment|checkout|billing/i.test(boundary);
+    };
+    const isDeclaredTextEntry = (element) => {
+      const editable = element.closest('input,textarea,[contenteditable="true"],[role="textbox"],[role="searchbox"]');
+      if (!(editable instanceof HTMLElement) || sensitiveBoundary(editable)) return false;
+      if (editable instanceof HTMLInputElement && !['search', 'text'].includes(editable.type)) return false;
+      return declaredTextEntrySelectors.some((selector) => {
+        try {
+          return editable.matches(selector);
+        } catch {
+          return false;
+        }
+      });
+    };
+    const blocked = (element) => {
+      if (sensitiveBoundary(element)) return true;
+      if (element.closest('input,textarea,select,[contenteditable="true"],[role="textbox"],[role="searchbox"]') !== null) {
+        return !isDeclaredTextEntry(element);
+      }
+      return false;
     };
     const isCandidate = (element) => {
       if (
@@ -247,6 +267,7 @@ export function buildPrecisionPointerTargetScript(
       return {
         key: null,
         snapped: false,
+        textEntry: false,
         x: Math.round(requestedX),
         y: Math.round(requestedY)
       };
@@ -273,6 +294,7 @@ export function buildPrecisionPointerTargetScript(
     return {
       key,
       snapped: true,
+      textEntry: isDeclaredTextEntry(element),
       x: Math.round(Math.max(rect.left + 1, Math.min(rect.right - 1, requestedX))),
       y: Math.round(Math.max(rect.top + 1, Math.min(rect.bottom - 1, requestedY)))
     };
@@ -313,6 +335,7 @@ function validTarget(value: unknown): value is PointerTarget {
   return (
     (typeof target.key === "string" || target.key === null) &&
     typeof target.snapped === "boolean" &&
+    typeof target.textEntry === "boolean" &&
     typeof target.x === "number" && Number.isFinite(target.x) &&
     target.x >= 0 && target.x <= 16_384 &&
     typeof target.y === "number" && Number.isFinite(target.y) &&
@@ -323,19 +346,25 @@ function validTarget(value: unknown): value is PointerTarget {
 export async function dispatchPrecisionPointer(
   webContents: WebContents,
   input: RemotePointerInput,
-  previousSnapKey: string | null
+  previousSnapKey: string | null,
+  remoteTextEntrySelectors: readonly string[] = []
 ): Promise<PrecisionPointerDispatch> {
   if (input.phase === "hide") {
     await webContents.executeJavaScript(buildPrecisionPointerHideScript(), true);
-    return { snapChanged: false, snapKey: null, snapped: false };
+    return { snapChanged: false, snapKey: null, snapped: false, textEntryAvailable: false };
   }
 
   const rawTarget = await webContents.executeJavaScript(
-    buildPrecisionPointerTargetScript(input.x, input.y, input.phase),
+    buildPrecisionPointerTargetScript(
+      input.x,
+      input.y,
+      input.phase,
+      remoteTextEntrySelectors
+    ),
     true
   ) as unknown;
   if (!validTarget(rawTarget)) {
-    return { snapChanged: false, snapKey: null, snapped: false };
+    return { snapChanged: false, snapKey: null, snapped: false, textEntryAvailable: false };
   }
 
   const target = rawTarget;
@@ -387,6 +416,7 @@ export async function dispatchPrecisionPointer(
   return {
     snapChanged: target.snapped && target.key !== previousSnapKey,
     snapKey: target.snapped ? target.key : null,
-    snapped: target.snapped
+    snapped: target.snapped,
+    textEntryAvailable: target.snapped && target.textEntry
   };
 }

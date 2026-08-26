@@ -543,7 +543,7 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
   }
 
   if (mainWindow === null || mainWindow.isDestroyed()) {
-    return { snapChanged: false, snapped: false };
+    return { snapChanged: false, snapped: false, textEntryAvailable: false };
   }
 
   try {
@@ -556,11 +556,12 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
     shellPointerSnapKey = result.snapKey;
     return {
       snapChanged: result.snapChanged,
-      snapped: result.snapped
+      snapped: result.snapped,
+      textEntryAvailable: result.textEntryAvailable
     };
   } catch {
     shellPointerSnapKey = null;
-    return { snapChanged: false, snapped: false };
+    return { snapChanged: false, snapped: false, textEntryAvailable: false };
   }
 }
 

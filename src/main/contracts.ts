@@ -54,6 +54,7 @@ export interface RemotePointerInput {
 export interface RemotePointerResult {
   snapChanged: boolean;
   snapped: boolean;
+  textEntryAvailable: boolean;
 }
 
 export type RemoteState = "awaiting-approval" | "inactive" | "pairing" | "ready";

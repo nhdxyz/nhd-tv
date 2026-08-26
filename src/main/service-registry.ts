@@ -15,6 +15,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Shaka Player DRM Demo",
     partition: "persist:service-shaka-demo",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://shaka-project.github.io/shaka-player-release/demo/"],
     search: null,
     spatialNavigation: "native",
@@ -46,6 +47,7 @@ const services: readonly ServiceDefinition[] = [
         "title"
       ]
     },
+    remoteTextEntrySelectors: ['input[data-uia="search-box-input"]'],
     rootUrls: ["https://www.netflix.com/browse"],
     search: {
       baseUrl: "https://www.netflix.com/search",
@@ -83,6 +85,7 @@ const services: readonly ServiceDefinition[] = [
         "title"
       ]
     },
+    remoteTextEntrySelectors: ["input#search"],
     rootUrls: ["https://www.youtube.com/"],
     search: {
       baseUrl: "https://www.youtube.com/results",
@@ -109,6 +112,7 @@ const services: readonly ServiceDefinition[] = [
         "title"
       ]
     },
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.disneyplus.com/home"],
     search: {
       baseUrl: "https://www.disneyplus.com/search",
@@ -129,6 +133,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Prime Video",
     partition: "persist:service-prime-video",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.primevideo.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -146,6 +151,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Hulu",
     partition: "persist:service-hulu",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.hulu.com/", "https://www.hulu.com/welcome"],
     search: null,
     spatialNavigation: "dom",
@@ -163,6 +169,7 @@ const services: readonly ServiceDefinition[] = [
     name: "HBO Max",
     partition: "persist:service-hbo-max",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://play.max.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -180,6 +187,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Peacock",
     partition: "persist:service-peacock",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.peacocktv.com/", "https://www.peacocktv.com/unavailable"],
     search: null,
     spatialNavigation: "dom",
@@ -197,6 +205,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Paramount+",
     partition: "persist:service-paramount-plus",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.paramountplus.com/", "https://www.paramountplus.com/intl/"],
     search: null,
     spatialNavigation: "dom",
@@ -214,6 +223,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Apple TV",
     partition: "persist:service-apple-tv",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://tv.apple.com/"],
     search: null,
     spatialNavigation: "dom",
@@ -231,6 +241,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Plex",
     partition: "persist:service-plex",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://app.plex.tv/desktop/"],
     search: null,
     spatialNavigation: "dom",
@@ -248,6 +259,7 @@ const services: readonly ServiceDefinition[] = [
     name: "Twitch",
     partition: "persist:service-twitch",
     playback: null,
+    remoteTextEntrySelectors: [],
     rootUrls: ["https://www.twitch.tv/"],
     search: null,
     spatialNavigation: "dom",
@@ -295,6 +307,7 @@ export function setCustomServiceManifests(
       name: manifest.name,
       partition: `persist:service-${manifest.id}`,
       playback: null,
+      remoteTextEntrySelectors: [],
       rootUrls: [manifest.startUrl],
       search: null,
       spatialNavigation: "dom",

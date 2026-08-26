@@ -65,8 +65,12 @@ describe("passive playback observer", () => {
   it("tracks the most recently activated visible tile without sending page data", () => {
     const script = buildPlaybackActivationTrackerScript();
 
+    expect(script).toContain('document.addEventListener("focusin"');
+    expect(script).toContain('document.addEventListener("pointerdown"');
     expect(script).toContain('document.addEventListener("click"');
     expect(script).toContain('document.addEventListener("keydown"');
+    expect(script).toContain('[class*="tracked-card"]');
+    expect(script).toContain('element.querySelectorAll("picture source")');
     expect(script).toContain("candidate.area >= 80 * 45");
     expect(script).not.toContain("ipcRenderer");
     expect(script).not.toContain("fetch(");

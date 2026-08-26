@@ -209,13 +209,14 @@ export function buildPlaybackActivationTrackerScript(): string {
       }
     };
 
-    const backgroundUrl = (element) => {
+    const backgroundUrls = (element) => {
       try {
         const value = getComputedStyle(element).backgroundImage;
-        const match = /url\\(["']?(.+?)["']?\\)/.exec(value);
-        return httpsUrl(match?.[1]);
+        return [...value.matchAll(/url\\(["']?(.+?)["']?\\)/g)]
+          .map((match) => httpsUrl(match[1]))
+          .filter((url) => url !== null);
       } catch {
-        return null;
+        return [];
       }
     };
 
@@ -233,19 +234,41 @@ export function buildPlaybackActivationTrackerScript(): string {
       image.getAttribute("srcset")
     );
 
+    const imageCandidates = (element) => {
+      const results = [];
+      const images = element instanceof HTMLImageElement
+        ? [element]
+        : [...element.querySelectorAll("img")];
+      for (const image of images) {
+        results.push({
+          area: visibleArea(image),
+          title: image.alt || null,
+          url: imageUrl(image)
+        });
+      }
+      for (const source of element.querySelectorAll("picture source")) {
+        const picture = source.closest("picture");
+        results.push({
+          area: picture === null ? 0 : visibleArea(picture),
+          title: null,
+          url: httpsUrl(source.getAttribute("srcset"))
+        });
+      }
+      return results;
+    };
+
     const candidateFrom = (start) => {
       let element = start;
-      for (let depth = 0; element instanceof Element && depth < 7; depth += 1) {
-        const candidates = [];
-        if (element instanceof HTMLImageElement) {
-          candidates.push({ area: visibleArea(element), url: imageUrl(element) });
+      for (let depth = 0; element instanceof Element && depth < 10; depth += 1) {
+        const candidates = imageCandidates(element);
+        for (const url of backgroundUrls(element)) {
+          candidates.push({ area: visibleArea(element), title: null, url });
         }
-        for (const image of element.querySelectorAll("img")) {
-          candidates.push({ area: visibleArea(image), url: imageUrl(image) });
-        }
-        candidates.push({ area: visibleArea(element), url: backgroundUrl(element) });
-        for (const child of element.querySelectorAll('[style*="background"], [class*="image"], [class*="artwork"], [class*="boxart"]')) {
-          candidates.push({ area: visibleArea(child), url: backgroundUrl(child) });
+        for (const child of element.querySelectorAll('[style*="background"], [class*="image"], [class*="artwork"], [class*="boxart"], [class*="tracked-card"], [class*="standard-card"], [class*="continue-watching-card"], [data-uia*="card"]')) {
+          candidates.push(...imageCandidates(child));
+          for (const url of backgroundUrls(child)) {
+            candidates.push({ area: visibleArea(child), title: null, url });
+          }
         }
 
         const best = candidates
@@ -255,7 +278,7 @@ export function buildPlaybackActivationTrackerScript(): string {
           const labelled = element.closest('[aria-label], [title]');
           const title = labelled?.getAttribute("aria-label") ||
             labelled?.getAttribute("title") ||
-            (element instanceof HTMLImageElement ? element.alt : "") ||
+            best.title ||
             null;
           return { artworkUrl: best.url, title };
         }
@@ -274,6 +297,8 @@ export function buildPlaybackActivationTrackerScript(): string {
       state.updatedAt = Date.now();
     };
 
+    document.addEventListener("focusin", (event) => remember(event.target), true);
+    document.addEventListener("pointerdown", (event) => remember(event.target), true);
     document.addEventListener("click", (event) => remember(event.target), true);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") remember(document.activeElement);

@@ -30,6 +30,9 @@ export interface HostStatus {
     serviceHtml: boolean;
     window: boolean;
   };
+  navigation: {
+    lastBlocked: NavigationDiagnostic | null;
+  };
   runtime: {
     chrome: string;
     electron: string;
@@ -39,6 +42,12 @@ export interface HostStatus {
     details: string;
     state: WidevineState;
   };
+}
+
+export interface NavigationDiagnostic {
+  kind: "navigation" | "popup" | "redirect";
+  origin: string;
+  serviceId: string;
 }
 
 export interface ProcessDiagnostics {

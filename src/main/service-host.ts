@@ -7,8 +7,10 @@ import {
 import {
   isAllowedServiceUrl,
   isExpectedAllowedNavigationAbort,
+  originForDiagnostics,
   type ServiceDefinition
 } from "./security/navigation-policy";
+import type { NavigationDiagnostic } from "./contracts";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 
@@ -40,6 +42,7 @@ export class ServiceHost {
   readonly #onStateChanged: ServiceStateListener;
   #activeDefinition: ServiceDefinition | null = null;
   #htmlFullscreen = false;
+  #lastBlockedNavigation: NavigationDiagnostic | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
 
@@ -66,8 +69,13 @@ export class ServiceHost {
     return this.#htmlFullscreen;
   }
 
+  get lastBlockedNavigation(): NavigationDiagnostic | null {
+    return this.#lastBlockedNavigation;
+  }
+
   async open(definition: ServiceDefinition): Promise<void> {
     this.close();
+    this.#lastBlockedNavigation = null;
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
 
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
@@ -86,7 +94,10 @@ export class ServiceHost {
     });
 
     view.setBackgroundColor("#05070d");
-    view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      this.#recordBlockedNavigation("popup", url, definition);
+      return { action: "deny" };
+    });
 
     // Temporary feasibility-spike escape path. Issue #4 replaces this with the
     // service-aware nested Back stack and root-level quit confirmation.
@@ -120,12 +131,14 @@ export class ServiceHost {
     view.webContents.on("will-navigate", (event, url) => {
       if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
         event.preventDefault();
+        this.#recordBlockedNavigation("navigation", url, definition);
       }
     });
 
     view.webContents.on("will-redirect", (event, url) => {
       if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
         event.preventDefault();
+        this.#recordBlockedNavigation("redirect", url, definition);
       }
     });
 
@@ -190,5 +203,18 @@ export class ServiceHost {
     const width = size[0] ?? 0;
     const height = size[1] ?? 0;
     this.#view.setBounds({ height, width, x: 0, y: 0 });
+  }
+
+  #recordBlockedNavigation(
+    kind: NavigationDiagnostic["kind"],
+    url: string,
+    definition: ServiceDefinition
+  ): void {
+    this.#lastBlockedNavigation = {
+      kind,
+      origin: originForDiagnostics(url),
+      serviceId: definition.id
+    };
+    this.#onStateChanged(this.activeServiceId);
   }
 }

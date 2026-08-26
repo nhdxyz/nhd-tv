@@ -23,6 +23,14 @@ export function normalizeOrigin(value: string): string | null {
   }
 }
 
+export function originForDiagnostics(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "invalid-url";
+  }
+}
+
 export function isAllowedServiceUrl(
   candidate: string,
   allowedOrigins: readonly string[]

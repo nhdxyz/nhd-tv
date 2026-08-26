@@ -83,6 +83,9 @@ function hostStatus(): HostStatus {
       serviceHtml: serviceHost?.isHtmlFullscreen ?? false,
       window: mainWindow?.isFullScreen() ?? false
     },
+    navigation: {
+      lastBlocked: serviceHost?.lastBlockedNavigation ?? null
+    },
     runtime: {
       chrome: process.versions.chrome ?? "unknown",
       electron: process.versions.electron ?? "unknown",

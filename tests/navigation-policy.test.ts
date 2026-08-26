@@ -3,7 +3,8 @@ import {
   assertValidServiceDefinition,
   isAllowedServiceUrl,
   isExpectedAllowedNavigationAbort,
-  normalizeOrigin
+  normalizeOrigin,
+  originForDiagnostics
 } from "../src/main/security/navigation-policy";
 
 describe("service navigation policy", () => {
@@ -19,6 +20,13 @@ describe("service navigation policy", () => {
     expect(isAllowedServiceUrl("https://example.com/watch/1", allowed)).toBe(true);
     expect(isAllowedServiceUrl("https://example.com.evil.test/watch/1", allowed)).toBe(false);
     expect(isAllowedServiceUrl("https://cdn.example.com/watch/1", allowed)).toBe(false);
+  });
+
+  it("reduces blocked URLs to privacy-safe origins for diagnostics", () => {
+    expect(originForDiagnostics("https://accounts.example.com/path?code=secret")).toBe(
+      "https://accounts.example.com"
+    );
+    expect(originForDiagnostics("not a url")).toBe("invalid-url");
   });
 
   it("accepts only expected aborts that continue on an allowed origin", () => {

@@ -37,11 +37,15 @@ function renderStatus(status: HostStatus): void {
   elements.serviceStatus.textContent = status.activeServiceId ?? "None";
   const serviceProcess = status.diagnostics.serviceRenderer;
   const gpuProcess = status.diagnostics.gpuProcess;
+  const lastBlocked = status.navigation.lastBlocked;
   elements.diagnosticsStatus.textContent = [
     `Acceleration ${status.diagnostics.hardwareAcceleration ?? "checking"}`,
     `Video decode ${status.diagnostics.videoDecode}`,
     `VPx ${status.diagnostics.vpxDecode}`,
     `Fullscreen window ${status.fullscreen.window} · service HTML ${status.fullscreen.serviceHtml}`,
+    lastBlocked === null
+      ? "No blocked service navigation"
+      : `Blocked ${lastBlocked.kind} for ${lastBlocked.serviceId}: ${lastBlocked.origin}`,
     serviceProcess === null
       ? "Service process inactive"
       : `Service ${serviceProcess.cpuPercent}% CPU · ${serviceProcess.memoryMegabytes} MB · sandbox ${serviceProcess.sandboxed ?? "unknown"}`,

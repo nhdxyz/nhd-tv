@@ -8,6 +8,7 @@ const services: readonly ServiceDefinition[] = [
   {
     allowedOrigins: ["https://shaka-project.github.io"],
     artworkHosts: [],
+    fullscreenOrigins: ["https://shaka-project.github.io"],
     id: "shaka-demo",
     kind: "test",
     mediaKeySystemOrigins: ["https://shaka-project.github.io"],
@@ -22,6 +23,7 @@ const services: readonly ServiceDefinition[] = [
   {
     allowedOrigins: ["https://www.netflix.com"],
     artworkHosts: ["nflximg.net", "nflxso.net"],
+    fullscreenOrigins: ["https://www.netflix.com"],
     id: "netflix",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.netflix.com"],
@@ -61,6 +63,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: ["i.ytimg.com"],
     authenticationNote:
       "Embedded Google sign-in is feasibility-only and may stall after passkey or OTP. Supported TV activation is under evaluation; signed-out playback remains available.",
+    fullscreenOrigins: ["https://www.youtube.com"],
     id: "youtube",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.youtube.com"],
@@ -91,6 +94,7 @@ const services: readonly ServiceDefinition[] = [
   {
     allowedOrigins: ["https://www.disneyplus.com"],
     artworkHosts: ["disney-plus.net"],
+    fullscreenOrigins: ["https://www.disneyplus.com"],
     id: "disney-plus",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.disneyplus.com"],
@@ -118,6 +122,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Regional redirects, sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "prime-video",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://www.primevideo.com"],
@@ -134,6 +139,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "hulu",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://www.hulu.com"],
@@ -150,6 +156,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "hbo-max",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://play.max.com"],
@@ -166,6 +173,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental US-only integration. Sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "peacock",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://www.peacocktv.com"],
@@ -182,6 +190,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Regional redirects, sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "paramount-plus",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://www.paramountplus.com"],
@@ -198,6 +207,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Apple Account sign-in, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "apple-tv",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://tv.apple.com"],
@@ -214,6 +224,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Account linking, playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "plex",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://app.plex.tv"],
@@ -230,6 +241,7 @@ const services: readonly ServiceDefinition[] = [
     artworkHosts: [],
     authenticationNote:
       "Experimental integration. Sign-in, live playback, and remote navigation still need qualification.",
+    fullscreenOrigins: [],
     id: "twitch",
     kind: "experimental",
     mediaKeySystemOrigins: ["https://www.twitch.tv"],
@@ -276,6 +288,7 @@ export function setCustomServiceManifests(
       allowedOrigins: [startUrl.origin],
       artworkHosts: [],
       authenticationNote: "Custom same-origin service. Playback observation and search are not enabled.",
+      fullscreenOrigins: [],
       id: manifest.id,
       kind: "custom",
       mediaKeySystemOrigins: [startUrl.origin],

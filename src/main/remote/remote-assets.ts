@@ -37,11 +37,11 @@ export const REMOTE_HTML = `<!doctype html>
             <button class="down" data-action="down" type="button" disabled aria-label="Down"><span>↓</span></button>
           </div>
 
-          <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Move freely, edge-scroll, and tap a highlighted item" hidden>
+          <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Move freely, drag at an edge to scroll, and tap a highlighted item" hidden>
             <span class="precision-guide precision-guide-x" aria-hidden="true"></span>
             <span class="precision-guide precision-guide-y" aria-hidden="true"></span>
             <span class="precision-dot" aria-hidden="true"></span>
-            <span class="precision-copy">Move freely<small>Edges scroll · Tap selects</small></span>
+            <span class="precision-copy">Move freely<small>Edge-drag scrolls · Tap selects</small></span>
             <span class="precision-status" aria-hidden="true"><i></i> Target locked</span>
           </div>
         </div>

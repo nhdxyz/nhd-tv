@@ -4,6 +4,7 @@ export interface ServiceDefinition {
   allowedOrigins: readonly string[];
   artworkHosts: readonly string[];
   authenticationNote?: string;
+  fullscreenOrigins: readonly string[];
   id: string;
   kind: ServiceKind;
   mediaKeySystemOrigins: readonly string[];
@@ -59,6 +60,22 @@ export function isAllowedServiceUrl(
   }
 
   return allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === candidateOrigin);
+}
+
+export function isAllowedServicePermission(
+  permission: string,
+  requestingUrl: string,
+  definition: Pick<ServiceDefinition, "fullscreenOrigins" | "mediaKeySystemOrigins">
+): boolean {
+  if (permission === "fullscreen") {
+    return isAllowedServiceUrl(requestingUrl, definition.fullscreenOrigins);
+  }
+
+  if (permission === "mediaKeySystem") {
+    return isAllowedServiceUrl(requestingUrl, definition.mediaKeySystemOrigins);
+  }
+
+  return false;
 }
 
 export function isAllowedArtworkUrl(
@@ -220,6 +237,16 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
     )
   ) {
     throw new Error(`Service media-key-system origins must be allowed HTTPS origins: ${definition.id}`);
+  }
+
+  if (
+    definition.fullscreenOrigins.some(
+      (origin) =>
+        normalizeOrigin(origin) !== origin ||
+        !definition.allowedOrigins.includes(origin)
+    )
+  ) {
+    throw new Error(`Service fullscreen origins must be allowed HTTPS origins: ${definition.id}`);
   }
 
   if (!isAllowedServiceUrl(definition.startUrl, definition.allowedOrigins)) {

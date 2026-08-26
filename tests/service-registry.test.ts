@@ -42,6 +42,7 @@ describe("service registry", () => {
     ]);
     expect(experimental.every((service) => service.playback === null)).toBe(true);
     expect(experimental.every((service) => service.search === null)).toBe(true);
+    expect(experimental.every((service) => service.fullscreenOrigins.length === 0)).toBe(true);
     expect(experimental.every((service) => service.authenticationNote?.includes("Experimental"))).toBe(true);
   });
 
@@ -58,6 +59,7 @@ describe("service registry", () => {
     expect(youtube?.allowedOrigins).toContain("https://accounts.google.com");
     expect(youtube?.allowedOrigins).toContain("https://accounts.youtube.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
+    expect(youtube?.fullscreenOrigins).toEqual(["https://www.youtube.com"]);
   });
 
   it("surfaces Google sign-in recovery without exposing service URLs", () => {
@@ -80,6 +82,7 @@ describe("service registry", () => {
     expect(custom).toMatchObject({
       allowedOrigins: ["https://watch.example.test"],
       artworkHosts: [],
+      fullscreenOrigins: [],
       kind: "custom",
       playback: null,
       search: null,

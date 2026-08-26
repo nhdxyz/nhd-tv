@@ -547,6 +547,7 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
   }
 
   try {
+    mainWindow.focus();
     const result = await dispatchPrecisionPointer(
       mainWindow.webContents,
       input,

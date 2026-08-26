@@ -59,6 +59,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Active-service contextual search routing
 - [x] Optional bounded precision-pad navigation with target snapping and edge scrolling (#25)
 - [x] Full-height phone layout with icon system controls and explicit precision-target feedback (#35)
+- [x] Directional edge-drag scrolling, tap stabilization, free TV cursor, and scoped YouTube fullscreen (#36)
 - [ ] Remembered-phone credentials and device management (#25)
 - [ ] Reconnection across app restarts and persistent device management
 - [x] Multiple phones within one app session

@@ -8,6 +8,7 @@ import {
   isAllowedServiceUrl,
   isAllowedArtworkUrl,
   isExpectedAllowedNavigationAbort,
+  isAllowedServicePermission,
   isServiceRootUrl,
   originForDiagnostics,
   sanitizePlaybackUrl,
@@ -397,13 +398,13 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
     return;
   }
 
+  serviceSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
+    isAllowedServicePermission(permission, requestingOrigin, definition)
+  );
+
   serviceSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     const requestingUrl = details.requestingUrl || webContents.getURL();
-    const allowMediaKeySystem =
-      permission === "mediaKeySystem" &&
-      isAllowedServiceUrl(requestingUrl, definition.mediaKeySystemOrigins);
-
-    callback(allowMediaKeySystem);
+    callback(isAllowedServicePermission(permission, requestingUrl, definition));
   });
 
   serviceSession.on("will-download", (event) => {
@@ -942,6 +943,7 @@ export class ServiceHost {
     }
 
     try {
+      this.#window.focus();
       const result = await dispatchPrecisionPointer(
         view.webContents,
         input,
@@ -1288,6 +1290,7 @@ export class ServiceHost {
       up: "Up"
     };
 
+    this.#window.focus();
     view.webContents.focus();
     this.#replayingInput = true;
 

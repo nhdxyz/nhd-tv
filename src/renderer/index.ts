@@ -379,6 +379,13 @@ function serviceTile(service: ServiceSummary): HTMLButtonElement {
   button.setAttribute("aria-label", `Open ${service.name}`);
   button.append(createServiceMark(service.id, service.name));
 
+  if (service.kind === "experimental") {
+    const readiness = document.createElement("span");
+    readiness.className = "service-readiness";
+    readiness.textContent = "Experimental";
+    button.append(readiness);
+  }
+
   const footer = document.createElement("span");
   footer.className = "service-tile-footer";
   const name = document.createElement("strong");
@@ -435,9 +442,13 @@ function storeCard(service: ServiceSummary): HTMLElement {
     ? "Favorite"
     : enabled
       ? "On Home"
+      : service.kind === "experimental"
+        ? "Experimental"
       : service.kind === "test"
         ? "Test tool"
-        : "Available";
+        : service.kind === "custom"
+          ? "Custom"
+          : "Available";
   top.append(status);
 
   const copy = document.createElement("span");
@@ -448,6 +459,8 @@ function storeCard(service: ServiceSummary): HTMLElement {
   detail.textContent = service.authenticationNote ?? (
     service.kind === "test"
       ? "Widevine host diagnostics and public test playback."
+      : service.kind === "experimental"
+        ? "Experimental integration; core behavior still needs qualification."
       : "Uses its own isolated local sign-in session."
   );
   copy.append(name, detail);

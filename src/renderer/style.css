@@ -789,6 +789,46 @@ h2 {
   background: radial-gradient(circle at 84% 20%, #059669, transparent 10rem), #071b15;
 }
 
+.service-tile[data-service-id="prime-video"],
+.catalog-card[data-service-id="prime-video"] {
+  background: radial-gradient(circle at 84% 16%, #00a8e1, transparent 10rem), #061722;
+}
+
+.service-tile[data-service-id="hulu"],
+.catalog-card[data-service-id="hulu"] {
+  background: radial-gradient(circle at 84% 18%, #1ce783, transparent 10rem), #071a12;
+}
+
+.service-tile[data-service-id="hbo-max"],
+.catalog-card[data-service-id="hbo-max"] {
+  background: radial-gradient(circle at 84% 18%, #7c3aed, transparent 10rem), #140b27;
+}
+
+.service-tile[data-service-id="peacock"],
+.catalog-card[data-service-id="peacock"] {
+  background: radial-gradient(circle at 84% 18%, #facc15, transparent 8rem), #141218;
+}
+
+.service-tile[data-service-id="paramount-plus"],
+.catalog-card[data-service-id="paramount-plus"] {
+  background: radial-gradient(circle at 84% 18%, #2563eb, transparent 10rem), #071631;
+}
+
+.service-tile[data-service-id="apple-tv"],
+.catalog-card[data-service-id="apple-tv"] {
+  background: radial-gradient(circle at 84% 18%, #64748b, transparent 10rem), #0d0f13;
+}
+
+.service-tile[data-service-id="plex"],
+.catalog-card[data-service-id="plex"] {
+  background: radial-gradient(circle at 84% 18%, #e5a00d, transparent 9rem), #17130a;
+}
+
+.service-tile[data-service-id="twitch"],
+.catalog-card[data-service-id="twitch"] {
+  background: radial-gradient(circle at 84% 18%, #9146ff, transparent 10rem), #160b28;
+}
+
 .service-logo {
   position: relative;
   z-index: 2;
@@ -814,6 +854,20 @@ h2 {
   color: #ff0033;
 }
 
+.service-logo[data-brand="hbo-max"],
+.service-logo[data-brand="apple-tv"],
+.service-logo[data-brand="paramount-plus"] {
+  color: #fff;
+}
+
+.service-logo[data-brand="plex"] {
+  color: #e5a00d;
+}
+
+.service-logo[data-brand="twitch"] {
+  color: #a970ff;
+}
+
 .service-wordmark {
   position: relative;
   z-index: 2;
@@ -829,6 +883,69 @@ h2 {
   font-family: "Trebuchet MS", ui-sans-serif, sans-serif;
   font-style: italic;
   letter-spacing: -0.09em;
+}
+
+.service-wordmark[data-brand="prime-video"] {
+  color: #eaf9ff;
+  font-weight: 750;
+  letter-spacing: -0.06em;
+}
+
+.service-wordmark[data-brand="hulu"] {
+  color: #1ce783;
+  font-size: clamp(1.7rem, 2.7vw, 2.5rem);
+  font-weight: 950;
+  letter-spacing: -0.075em;
+  text-transform: lowercase;
+}
+
+.service-wordmark[data-brand="peacock"] {
+  color: #fff;
+  font-size: clamp(1.5rem, 2.5vw, 2.3rem);
+  letter-spacing: -0.06em;
+  text-transform: lowercase;
+}
+
+.service-wordmark[data-brand="peacock"]::after {
+  width: 0.38rem;
+  height: 0.38rem;
+  margin-left: 0.32rem;
+  border-radius: 50%;
+  background: #facc15;
+  box-shadow: 0 -0.55rem #f97316, 0 0.55rem #a855f7;
+  content: "";
+}
+
+.service-tile > .service-logo,
+.service-tile > .service-wordmark,
+.service-tile > .service-monogram {
+  align-self: center;
+  margin: auto 0;
+}
+
+.service-tile > .service-logo {
+  width: clamp(4.2rem, 6vw, 6rem);
+  height: clamp(4.2rem, 6vw, 6rem);
+}
+
+.service-tile > .service-wordmark {
+  font-size: clamp(1.75rem, 2.8vw, 2.65rem);
+}
+
+.service-readiness {
+  position: absolute;
+  z-index: 2;
+  top: 0.85rem;
+  right: 0.85rem;
+  padding: 0.34rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  background: rgb(3 5 9 / 44%);
+  color: #dbeafe;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .service-monogram {
@@ -967,7 +1084,24 @@ h2 {
   gap: 1rem;
 }
 
+.catalog-card-top {
+  min-height: 5.8rem;
+  justify-content: center;
+}
+
+.catalog-card-top > .service-logo {
+  width: 4.2rem;
+  height: 4.2rem;
+}
+
+.catalog-card-top > .service-wordmark {
+  font-size: 2rem;
+}
+
 .catalog-status {
+  position: absolute;
+  top: 0;
+  right: 0;
   padding: 0.38rem 0.58rem;
   border: 1px solid rgb(255 255 255 / 15%);
   border-radius: 999px;

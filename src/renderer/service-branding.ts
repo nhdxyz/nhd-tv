@@ -1,4 +1,12 @@
-import { siNetflix, siYoutube } from "simple-icons";
+import {
+  siAppletv,
+  siHbomax,
+  siNetflix,
+  siParamountplus,
+  siPlex,
+  siTwitch,
+  siYoutube
+} from "simple-icons";
 
 interface BrandDefinition {
   path?: string;
@@ -7,14 +15,46 @@ interface BrandDefinition {
 }
 
 const brands: Readonly<Record<string, BrandDefinition>> = {
+  "apple-tv": {
+    path: siAppletv.path,
+    presentation: "icon",
+    value: "Apple TV"
+  },
   "disney-plus": {
     presentation: "wordmark",
     value: "Disney+"
+  },
+  "hbo-max": {
+    path: siHbomax.path,
+    presentation: "icon",
+    value: "HBO Max"
+  },
+  hulu: {
+    presentation: "wordmark",
+    value: "hulu"
   },
   netflix: {
     path: siNetflix.path,
     presentation: "icon",
     value: "Netflix"
+  },
+  "paramount-plus": {
+    path: siParamountplus.path,
+    presentation: "icon",
+    value: "Paramount+"
+  },
+  peacock: {
+    presentation: "wordmark",
+    value: "peacock"
+  },
+  plex: {
+    path: siPlex.path,
+    presentation: "icon",
+    value: "Plex"
+  },
+  "prime-video": {
+    presentation: "wordmark",
+    value: "prime video"
   },
   "shaka-demo": {
     presentation: "monogram",
@@ -24,6 +64,11 @@ const brands: Readonly<Record<string, BrandDefinition>> = {
     path: siYoutube.path,
     presentation: "icon",
     value: "YouTube"
+  },
+  twitch: {
+    path: siTwitch.path,
+    presentation: "icon",
+    value: "Twitch"
   }
 };
 

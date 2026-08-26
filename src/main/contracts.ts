@@ -54,7 +54,7 @@ export interface RemoteStatus {
   state: RemoteState;
 }
 
-export type ServiceKind = "commercial" | "custom" | "test";
+export type ServiceKind = "commercial" | "custom" | "experimental" | "test";
 
 export interface ServiceSummary {
   authenticationNote?: string;

@@ -14,7 +14,35 @@ describe("service registry", () => {
     expect(getServiceDefinition("netflix")?.name).toBe("Netflix");
     expect(getServiceDefinition("youtube")?.name).toBe("YouTube");
     expect(getServiceDefinition("disney-plus")?.name).toBe("Disney+");
+    expect(getServiceDefinition("prime-video")?.name).toBe("Prime Video");
+    expect(getServiceDefinition("hulu")?.name).toBe("Hulu");
+    expect(getServiceDefinition("hbo-max")?.name).toBe("HBO Max");
+    expect(getServiceDefinition("peacock")?.name).toBe("Peacock");
+    expect(getServiceDefinition("paramount-plus")?.name).toBe("Paramount+");
+    expect(getServiceDefinition("apple-tv")?.name).toBe("Apple TV");
+    expect(getServiceDefinition("plex")?.name).toBe("Plex");
+    expect(getServiceDefinition("twitch")?.name).toBe("Twitch");
     expect(getServiceDefinition("missing")).toBeNull();
+  });
+
+  it("keeps unqualified catalog additions experimental and capability-free", () => {
+    const experimental = getServiceDefinitions().filter(
+      (service) => service.kind === "experimental"
+    );
+
+    expect(experimental.map((service) => service.id)).toEqual([
+      "prime-video",
+      "hulu",
+      "hbo-max",
+      "peacock",
+      "paramount-plus",
+      "apple-tv",
+      "plex",
+      "twitch"
+    ]);
+    expect(experimental.every((service) => service.playback === null)).toBe(true);
+    expect(experimental.every((service) => service.search === null)).toBe(true);
+    expect(experimental.every((service) => service.authenticationNote?.includes("Experimental"))).toBe(true);
   });
 
   it("uses a unique persistent partition for every service", () => {

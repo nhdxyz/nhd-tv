@@ -112,6 +112,134 @@ const services: readonly ServiceDefinition[] = [
     },
     spatialNavigation: "dom",
     startUrl: "https://www.disneyplus.com/home"
+  },
+  {
+    allowedOrigins: ["https://www.primevideo.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Regional redirects, sign-in, playback, and remote navigation still need qualification.",
+    id: "prime-video",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://www.primevideo.com"],
+    name: "Prime Video",
+    partition: "persist:service-prime-video",
+    playback: null,
+    rootUrls: ["https://www.primevideo.com/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://www.primevideo.com/"
+  },
+  {
+    allowedOrigins: ["https://www.hulu.com", "https://auth.hulu.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Sign-in, playback, and remote navigation still need qualification.",
+    id: "hulu",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://www.hulu.com"],
+    name: "Hulu",
+    partition: "persist:service-hulu",
+    playback: null,
+    rootUrls: ["https://www.hulu.com/", "https://www.hulu.com/welcome"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://www.hulu.com/"
+  },
+  {
+    allowedOrigins: ["https://play.max.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Sign-in, playback, and remote navigation still need qualification.",
+    id: "hbo-max",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://play.max.com"],
+    name: "HBO Max",
+    partition: "persist:service-hbo-max",
+    playback: null,
+    rootUrls: ["https://play.max.com/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://play.max.com/"
+  },
+  {
+    allowedOrigins: ["https://www.peacocktv.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental US-only integration. Sign-in, playback, and remote navigation still need qualification.",
+    id: "peacock",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://www.peacocktv.com"],
+    name: "Peacock",
+    partition: "persist:service-peacock",
+    playback: null,
+    rootUrls: ["https://www.peacocktv.com/", "https://www.peacocktv.com/unavailable"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://www.peacocktv.com/"
+  },
+  {
+    allowedOrigins: ["https://www.paramountplus.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Regional redirects, sign-in, playback, and remote navigation still need qualification.",
+    id: "paramount-plus",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://www.paramountplus.com"],
+    name: "Paramount+",
+    partition: "persist:service-paramount-plus",
+    playback: null,
+    rootUrls: ["https://www.paramountplus.com/", "https://www.paramountplus.com/intl/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://www.paramountplus.com/"
+  },
+  {
+    allowedOrigins: ["https://tv.apple.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Apple Account sign-in, playback, and remote navigation still need qualification.",
+    id: "apple-tv",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://tv.apple.com"],
+    name: "Apple TV",
+    partition: "persist:service-apple-tv",
+    playback: null,
+    rootUrls: ["https://tv.apple.com/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://tv.apple.com/"
+  },
+  {
+    allowedOrigins: ["https://app.plex.tv"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Account linking, playback, and remote navigation still need qualification.",
+    id: "plex",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://app.plex.tv"],
+    name: "Plex",
+    partition: "persist:service-plex",
+    playback: null,
+    rootUrls: ["https://app.plex.tv/desktop/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://app.plex.tv/desktop/"
+  },
+  {
+    allowedOrigins: ["https://www.twitch.tv", "https://passport.twitch.tv"],
+    artworkHosts: [],
+    authenticationNote:
+      "Experimental integration. Sign-in, live playback, and remote navigation still need qualification.",
+    id: "twitch",
+    kind: "experimental",
+    mediaKeySystemOrigins: ["https://www.twitch.tv"],
+    name: "Twitch",
+    partition: "persist:service-twitch",
+    playback: null,
+    rootUrls: ["https://www.twitch.tv/"],
+    search: null,
+    spatialNavigation: "dom",
+    startUrl: "https://www.twitch.tv/"
   }
 ];
 

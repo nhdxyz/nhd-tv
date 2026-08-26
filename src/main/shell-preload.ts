@@ -16,6 +16,7 @@ import type {
 const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
+  clearServiceData: "nhd:service:data:clear",
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
@@ -46,6 +47,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.approveRemotePairing),
   cancelServiceQuit: (): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.cancelServiceQuit),
+  clearServiceData: (serviceId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.clearServiceData, serviceId),
   closeService: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.closeService),
   confirmServiceQuit: (): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.confirmServiceQuit),

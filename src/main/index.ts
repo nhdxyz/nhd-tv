@@ -521,6 +521,24 @@ function registerIpc(): void {
     await serviceHost?.closeWithCheckpoint();
   });
 
+  ipcMain.handle(IPC_CHANNELS.clearServiceData, async (event, serviceId: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (typeof serviceId !== "string") {
+      throw new TypeError("Service id must be a string.");
+    }
+
+    const definition = getServiceDefinition(serviceId);
+    if (definition === null) {
+      throw new Error(`Unknown service: ${serviceId}`);
+    }
+
+    if (serviceHost?.activeServiceId === serviceId) {
+      await serviceHost.closeWithCheckpoint();
+    }
+
+    await session.fromPartition(definition.partition, { cache: true }).clearStorageData();
+  });
+
   ipcMain.handle(IPC_CHANNELS.cancelServiceQuit, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     serviceHost?.cancelQuit();

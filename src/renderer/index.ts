@@ -28,6 +28,11 @@ function requireElement<T>(selector: string, name: string): T {
 }
 
 const elements = {
+  clearDataCancel: requireElement<HTMLButtonElement>("#clear-data-cancel", "clear-data-cancel"),
+  clearDataConfirm: requireElement<HTMLButtonElement>("#clear-data-confirm", "clear-data-confirm"),
+  clearDataCopy: requireElement<HTMLParagraphElement>("#clear-data-copy", "clear-data-copy"),
+  clearDataDialog: requireElement<HTMLDialogElement>("#clear-data-dialog", "clear-data-dialog"),
+  clearDataTitle: requireElement<HTMLHeadingElement>("#clear-data-title", "clear-data-title"),
   closeServiceButton: requireElement<HTMLButtonElement>("#close-service", "close-service"),
   continueActions: requireElement<HTMLDivElement>("#continue-actions", "continue-actions"),
   continueHint: requireElement<HTMLSpanElement>("#continue-hint", "continue-hint"),
@@ -96,6 +101,7 @@ let feedbackTimer: number | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
 let localAppState: LocalAppState | null = null;
+let pendingClearService: ServiceSummary | null = null;
 let remoteFocusedElement: HTMLElement | null = null;
 let serviceOrder: string[] = [];
 let services: readonly ServiceSummary[] = [];
@@ -347,8 +353,33 @@ function serviceTile(service: ServiceSummary): HTMLButtonElement {
   return button;
 }
 
-function storeCard(service: ServiceSummary): HTMLButtonElement {
+function moveService(serviceId: string, offset: -1 | 1): void {
+  const enabledOrder = serviceOrder.filter((id) => enabledServiceIds.has(id));
+  const currentIndex = enabledOrder.indexOf(serviceId);
+  const targetIndex = currentIndex + offset;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= enabledOrder.length) {
+    return;
+  }
+
+  const targetId = enabledOrder[targetIndex];
+  if (targetId === undefined) {
+    return;
+  }
+
+  const currentOrderIndex = serviceOrder.indexOf(serviceId);
+  const targetOrderIndex = serviceOrder.indexOf(targetId);
+  [serviceOrder[currentOrderIndex], serviceOrder[targetOrderIndex]] = [
+    serviceOrder[targetOrderIndex]!,
+    serviceOrder[currentOrderIndex]!
+  ];
+}
+
+function storeCard(service: ServiceSummary): HTMLElement {
   const enabled = enabledServiceIds.has(service.id);
+  const favorite = favoriteServiceIds.has(service.id);
+  const shell = document.createElement("article");
+  shell.className = "catalog-card-shell";
+  shell.dataset.serviceId = service.id;
   const button = document.createElement("button");
   button.className = "catalog-card";
   button.dataset.enabled = String(enabled);
@@ -361,7 +392,13 @@ function storeCard(service: ServiceSummary): HTMLButtonElement {
   top.append(createServiceMark(service.id, service.name));
   const status = document.createElement("span");
   status.className = "catalog-status";
-  status.textContent = enabled ? "On Home" : service.kind === "test" ? "Test tool" : "Available";
+  status.textContent = favorite
+    ? "Favorite"
+    : enabled
+      ? "On Home"
+      : service.kind === "test"
+        ? "Test tool"
+        : "Available";
   top.append(status);
 
   const copy = document.createElement("span");
@@ -407,7 +444,86 @@ function storeCard(service: ServiceSummary): HTMLButtonElement {
       renderServiceViews();
     }
   });
-  return button;
+
+  const controls = document.createElement("div");
+  controls.className = "catalog-card-controls";
+  controls.dataset.navGroup = `store-controls-${service.id}`;
+
+  const favoriteButton = document.createElement("button");
+  favoriteButton.type = "button";
+  favoriteButton.disabled = !enabled;
+  favoriteButton.textContent = favorite ? "Unfavorite" : "Favorite";
+  favoriteButton.setAttribute("aria-pressed", String(favorite));
+  favoriteButton.addEventListener("click", async () => {
+    const previousState = localAppState;
+    if (favoriteServiceIds.has(service.id)) {
+      favoriteServiceIds.delete(service.id);
+    } else {
+      favoriteServiceIds.add(service.id);
+    }
+    try {
+      await saveProfilePreferences();
+      renderServiceViews();
+      showFeedback(`${service.name} ${favorite ? "removed from favorites" : "moved to favorites"}.`);
+    } catch (error) {
+      if (previousState !== null) {
+        applyLocalAppState(previousState);
+      }
+      renderServiceViews();
+      showFeedback(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const earlierButton = document.createElement("button");
+  earlierButton.type = "button";
+  earlierButton.disabled = !enabled || serviceOrder.filter((id) => enabledServiceIds.has(id))[0] === service.id;
+  earlierButton.textContent = "Earlier";
+  earlierButton.addEventListener("click", async () => {
+    const previousState = localAppState;
+    moveService(service.id, -1);
+    try {
+      await saveProfilePreferences();
+      renderServiceViews();
+      showFeedback(`${service.name} moved earlier.`);
+    } catch (error) {
+      if (previousState !== null) {
+        applyLocalAppState(previousState);
+      }
+      renderServiceViews();
+      showFeedback(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const laterButton = document.createElement("button");
+  laterButton.type = "button";
+  const enabledOrder = serviceOrder.filter((id) => enabledServiceIds.has(id));
+  laterButton.disabled = !enabled || enabledOrder.at(-1) === service.id;
+  laterButton.textContent = "Later";
+  laterButton.addEventListener("click", async () => {
+    const previousState = localAppState;
+    moveService(service.id, 1);
+    try {
+      await saveProfilePreferences();
+      renderServiceViews();
+      showFeedback(`${service.name} moved later.`);
+    } catch (error) {
+      if (previousState !== null) {
+        applyLocalAppState(previousState);
+      }
+      renderServiceViews();
+      showFeedback(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.className = "catalog-clear-data";
+  clearButton.textContent = "Clear data";
+  clearButton.addEventListener("click", () => openClearDataDialog(service));
+
+  controls.append(favoriteButton, earlierButton, laterButton, clearButton);
+  shell.append(button, controls);
+  return shell;
 }
 
 function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
@@ -684,6 +800,45 @@ elements.profileCreateForm.addEventListener("submit", async (event) => {
   }
 });
 
+function openClearDataDialog(service: ServiceSummary): void {
+  pendingClearService = service;
+  elements.clearDataTitle.textContent = `Sign out of ${service.name}?`;
+  elements.clearDataCopy.textContent = `This removes ${service.name}'s local cookies, storage, and cache from this computer. Your NHD-TV lineup and Continue Watching history are kept.`;
+  elements.clearDataDialog.showModal();
+  elements.clearDataCancel.focus();
+}
+
+function cancelClearData(): void {
+  pendingClearService = null;
+  if (elements.clearDataDialog.open) {
+    elements.clearDataDialog.close();
+  }
+}
+
+elements.clearDataCancel.addEventListener("click", cancelClearData);
+elements.clearDataDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  cancelClearData();
+});
+elements.clearDataConfirm.addEventListener("click", async () => {
+  const service = pendingClearService;
+  if (service === null) {
+    cancelClearData();
+    return;
+  }
+
+  elements.clearDataConfirm.disabled = true;
+  try {
+    await window.nhd.clearServiceData(service.id);
+    cancelClearData();
+    showFeedback(`${service.name} local sign-in data was cleared.`);
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  } finally {
+    elements.clearDataConfirm.disabled = false;
+  }
+});
+
 function remoteExpiryCopy(expiresAt: number | null): string {
   if (expiresAt === null) {
     return "";
@@ -806,6 +961,10 @@ function setRemoteFocusedElement(element: HTMLElement | null): void {
 }
 
 function activeNavigationScope(): ParentNode {
+  if (elements.clearDataDialog.open) {
+    return elements.clearDataDialog;
+  }
+
   if (elements.quitDialog.open) {
     return elements.quitDialog;
   }
@@ -874,6 +1033,10 @@ function moveSpatialFocus(direction: SpatialDirection, remote = false): boolean 
 }
 
 function returnHome(remote = false): void {
+  if (elements.clearDataDialog.open) {
+    cancelClearData();
+  }
+
   if (elements.remoteDialog.open) {
     elements.remoteDialog.close();
   }
@@ -922,6 +1085,9 @@ document.addEventListener("keydown", (event) => {
   } else if (elements.profileDialog.open) {
     elements.profileDialog.close();
     event.preventDefault();
+  } else if (elements.clearDataDialog.open) {
+    cancelClearData();
+    event.preventDefault();
   } else if (elements.quitDialog.open) {
     elements.quitCancel.click();
     event.preventDefault();
@@ -962,6 +1128,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
   }
 
   if (action === "back") {
+    if (elements.clearDataDialog.open) {
+      cancelClearData();
+      return;
+    }
+
     if (elements.remoteDialog.open) {
       elements.remoteDialog.close();
       return;

@@ -47,6 +47,8 @@ Continue Watching qualifies recognized, visible long-form playback from actual p
 
 An Xbox-style controller uses the D-pad or left stick for navigation, A for Select, B for Back, and Guide for Home. If a browser does not expose Guide, pressing View and Menu together provides the Home fallback. Directional holds have a bounded repeat delay and use the same host action router as the phone remote.
 
+Store choices belong to the active local profile. Services can be favorited and reordered for Home. Removing a service from Home keeps its login; **Clear data** is a separate confirmed action that clears only that service's isolated local session.
+
 ### Production Widevine signing
 
 The ECS download is VMP-signed for development. Public Widevine test content works with that signature, but commercial production license services require a production signature. Castlabs provides free production signing through its EVS service; signup requires a user-controlled email verification and password. The current macOS development runtime has been EVS-signed and passes both Castlabs' production VMP endpoint and Netflix Test Patterns playback.

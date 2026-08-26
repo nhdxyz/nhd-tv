@@ -28,9 +28,10 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Local profile creation, switching, lineup preferences, and per-profile viewing history foundation (#22)
 - [x] Curated service catalog foundation
 - [x] Add and remove services without clearing sessions
-- [ ] Reorder and favorite services
-- Declarative custom services
-- Session clearing and privacy controls
+- [x] Reorder and favorite services (#26)
+- [ ] Declarative custom services (#26)
+- [x] Confirmed per-service session clearing foundation (#3, #26)
+- [ ] Broader service-data and privacy controls (#26)
 
 ## Milestone 3: Continue Watching
 

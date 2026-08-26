@@ -1,6 +1,7 @@
 export const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
+  clearServiceData: "nhd:service:data:clear",
   closeService: "nhd:service:close",
   continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",

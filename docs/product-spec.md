@@ -56,7 +56,7 @@ The Store is a catalog of available service integrations, not a payment or binar
 
 Executable third-party plugins and remotely downloaded adapter code are excluded from the first version.
 
-The current Store foundation saves the enabled Home lineup locally. Removing an item from Home never clears its isolated service partition.
+The current Store foundation saves the enabled, ordered, and favorited Home lineup per local profile. Removing an item from Home never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
 
 ## Profiles and sessions
 

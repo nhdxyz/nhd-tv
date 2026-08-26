@@ -324,6 +324,18 @@
       </div>
     </dialog>
 
+    <dialog class="quit-dialog" id="clear-data-dialog" aria-labelledby="clear-data-title">
+      <div class="quit-dialog-shell">
+        <p class="eyebrow">Clear service data?</p>
+        <h2 id="clear-data-title">Sign out of this service?</h2>
+        <p id="clear-data-copy">This removes the service's local cookies, storage, and cache from this computer.</p>
+        <div class="quit-actions" data-nav-group="clear-data-actions">
+          <button class="secondary-action" id="clear-data-cancel" type="button">Cancel</button>
+          <button class="danger-action" id="clear-data-confirm" type="button">Clear data</button>
+        </div>
+      </div>
+    </dialog>
+
     <script type="module" src="/index.ts"></script>
   </body>
 </html>

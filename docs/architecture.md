@@ -68,6 +68,8 @@ The first Continue Watching slice uses a versioned, owner-readable JSON document
 
 SQLite remains the target once profiles, ordering, migrations, manual removal, and larger libraries justify it. Browser cookies and other service session state remain in the runtime's session storage rather than being copied into application tables.
 
+Lineup removal and service-data clearing are deliberately separate. The first changes only active-profile preferences. The second requires host-owned confirmation, closes that service if active, and calls Electron session storage clearing only for the selected registered partition.
+
 Application-owned secrets must use operating-system-backed encryption where available. Linux must expose degraded-security states rather than silently treating weak storage as secure.
 
 ## Search boundary

@@ -14,6 +14,7 @@ declare global {
     nhd: {
       approveRemotePairing: () => Promise<RemoteStatus>;
       cancelServiceQuit: () => Promise<void>;
+      clearServiceData: (serviceId: string) => Promise<void>;
       closeService: () => Promise<void>;
       confirmServiceQuit: () => Promise<void>;
       createProfile: (name: string) => Promise<LocalAppState>;

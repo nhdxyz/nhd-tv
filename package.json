@@ -10,6 +10,7 @@
   },
   "scripts": {
     "clean": "node scripts/clean.mjs",
+    "runtime:install": "install-electron --no",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "build": "pnpm clean && pnpm build:main && pnpm build:renderer && pnpm verify:build",

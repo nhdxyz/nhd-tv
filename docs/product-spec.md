@@ -35,17 +35,17 @@ The current controller foundation maps a standard Gamepad API layout: D-pad or l
 The first home experience contains:
 
 - Continue Watching
-- Search across enabled service integrations
+- Result-first local search with app-owned catalog actions
 - Enabled services
 - Profile access
-- Store access
-- Settings
+- App Library access
+- Settings utility access
 
-The first search slice is a privacy-scoped launcher: NHD-TV accepts a title, person, genre, or topic and lets the user choose an enabled service. While typing, it also matches renderer-safe metadata from the active profile's local Continue Watching history. From Home, integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination and its adapter opens the supported search route directly. Search routing never types into arbitrary focused fields. Aggregated cross-service metadata results, algorithmic recommendations, direct microphone capture, and cloud synchronization are later capabilities.
+The first search slice is a privacy-scoped discovery surface. Before typing, it presents the active profile's recent Continue Watching items. While typing, it immediately filters renderer-safe local titles, subtitles, and service names. App-owned catalog searches appear as smaller secondary actions, and the UI explicitly distinguishes them from local results. Integrations with a declared query URL receive the text only after they are selected; integrations without one open their own search screen. From the phone remote while a searchable service is open, that service is the default destination. Search routing never types into arbitrary focused fields. Licensed provider-neutral metadata, algorithmic recommendations, direct microphone capture, and cloud synchronization remain later capabilities.
 
 ## Store
 
-The Store is a catalog of available service integrations, not a payment or binary-download marketplace.
+The App Library is a catalog of available service integrations, not a payment or binary-download marketplace. Core, experimental, custom, and diagnostic integrations are visually separated so a new provider is never mistaken for a qualified one.
 
 - Adding a service enables its home tile.
 - Removing a service hides it but preserves its login and local history.
@@ -57,6 +57,8 @@ The Store is a catalog of available service integrations, not a payment or binar
 Executable third-party plugins and remotely downloaded adapter code are excluded from the first version. The current custom-service foundation accepts a name and HTTPS start page, allows only that exact origin, and creates a dedicated isolated session. Removing a custom integration also clears its partition and removes it from all profiles.
 
 The current Store foundation saves the enabled, ordered, and favorited Home lineup per local profile. Removing an item from Home never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
+
+The current experimental catalog includes Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch. These use official HTTPS entry points, exact-origin navigation boundaries, and separate persistent partitions. They remain disabled by default and do not advertise search, playback observation, or compatibility until per-platform qualification is complete.
 
 ## Profiles and sessions
 
@@ -101,3 +103,7 @@ Voice search initially uses the phone keyboard's native dictation button. Direct
 - Avoid preventing system sleep unless active playback requires it.
 
 The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, and reduced motion. Audio output, startup-at-login, pointer inactivity, sleep/wake recovery, and updater behavior still require platform-specific qualification.
+
+## Future multiview
+
+Multiview is a planned, gated capability rather than an extension of the current one-active-service model. A spike must first prove two-up and four-up layouts, one active audio source, deterministic focus and Back behavior, independent service isolation, and acceptable decoder, GPU, memory, and bandwidth use on the Windows target. Simultaneous DRM sessions and provider restrictions must be tested before any production control is exposed.

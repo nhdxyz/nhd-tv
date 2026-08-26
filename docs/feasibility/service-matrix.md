@@ -33,6 +33,10 @@ Verified 2026-08-25 on Apple silicon (`darwin arm64`). These results exercise th
 | YouTube | Pass | Previously observed; current smoke inconclusive | Pass | Retest pending | Google sign-in opens in a controlled, sandboxed NHD-TV window using YouTube's isolated session. The unsigned macOS passkey prompt remains unavailable, but Google's password fallback previously completed and an earlier smoke check observed YouTube's saved account control without reading account details. Two 2026-08-26 reruns showed neither a visible account nor Sign in control before timeout, so durable authentication needs a manual unlocked-window retest. A public 10:35 video rendered and advanced in the embedded view. |
 | Disney+ | Pass | Pass | Pending user login | Pending | The isolated service reached the MyDisney login page without a renderer error. |
 
+## Experimental App Library entries
+
+Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch are present in the App Library but are not compatibility claims. They are disabled on Home by default, use separate persistent partitions and exact official HTTPS origin boundaries, and expose no search or Continue Watching adapter yet. Each requires its own login, playback, DRM, fullscreen, Back/root, spatial-navigation, and resource qualification before its status can advance.
+
 The initial YouTube load uncovered an expected same-origin redirect reported by Chromium as `ERR_ABORTED (-3)`. The host now tolerates that code only when the replacement URL remains on the service's exact allowlist; other load failures still close the service and surface an error.
 
 ## Windows 11 acceptance run

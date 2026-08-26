@@ -2,7 +2,9 @@
 
 ## Current implementation
 
-NHD-TV provides a TV-scale overlay that takes a bounded query and shows the enabled services able to handle it. Netflix and YouTube adapters declare allowlisted query URLs. Disney+ opens its own search page because the current adapter does not declare a query parameter. The user chooses the destination before any query leaves NHD-TV, and the query is not stored or logged.
+NHD-TV provides a TV-scale, result-first overlay. With an empty query it shows recent Continue Watching items. As the user types a bounded query, it filters the active profile's renderer-safe title, subtitle, and provider metadata immediately. App-owned catalog destinations are compact secondary actions rather than the main result model. Netflix and YouTube adapters declare allowlisted query URLs; Disney+ opens its own search page because its current adapter does not declare a query parameter. A query leaves NHD-TV only after the user chooses one of those app actions, and it is not stored or logged.
+
+When no local item matches, the overlay explains that NHD-TV can currently search only its local viewing history and offers the enabled apps below. This is an intentional metadata-unavailable state, not a claim that the title is absent from a provider.
 
 The paired phone exposes the same bounded `type="search"` field with a 120-character limit, but defaults to the current viewing context:
 

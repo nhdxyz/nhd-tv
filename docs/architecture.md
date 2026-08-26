@@ -20,6 +20,8 @@ The desktop host owns one fullscreen window on the chosen display.
 - Each service uses an explicit persistent session partition.
 - Leaving a service may suspend it briefly for fast return, then destroy its renderer while preserving session data.
 
+The one-active-service rule remains a stability boundary. Future multiview work (#28) must use separately isolated service views, one explicit audio-focus owner, bounded two-up/four-up layouts, and platform resource qualification. It must not reuse one service partition or renderer across tiles, and it cannot ship until simultaneous DRM/player behavior is proven.
+
 Service pages never receive direct access to the application database, filesystem, remote server, or another service's session.
 
 ## Input routing
@@ -62,6 +64,8 @@ A versioned adapter contract will separate common hosting from service-specific 
 
 The custom-service MVP uses declarative manifests containing a local ID, name, and HTTPS start page. The host derives one exact allowed origin, a dedicated persistent partition, and a root URL. Playback observation, artwork capture, search routes, extra origins, and executable code are disabled. Arbitrary plugin execution requires a future permissions and signing model.
 
+The App Library distinguishes core integrations from experimental catalog entries. Experimental entries may declare only their official start page, exact navigation origins, isolated partition, and DOM navigation mode. Search, playback observation, artwork capture, and compatibility stay disabled until each capability is individually qualified. This keeps catalog visibility separate from claims that a provider works.
+
 Service popup policy never creates an unrestricted child window. A popup URL on the adapter's exact origin allowlist may open as a sandboxed, app-owned modal using the service's isolated session, preserving authentication opener/close semantics without weakening the navigation boundary. Its redirects are checked against the same allowlist. Every other popup is denied and only its origin is retained for diagnostics.
 
 ## Local data
@@ -82,7 +86,7 @@ Device preferences share the versioned local-state document but are not profile-
 
 Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.
 
-The shell can match the normalized query against renderer-safe title, subtitle, and service fields already present in the active profile's Continue Watching view. These local results update while typing and resume through item-ID IPC; they do not expose stored watch URLs.
+The shell presents recent Continue Watching items before typing, then matches the normalized query against renderer-safe title, subtitle, and service fields already present in the active profile's Continue Watching view. These local results update while typing and resume through item-ID IPC; they do not expose stored watch URLs. Provider destinations are secondary actions, not synthetic result cards.
 
 Provider search remains federated launching, not a metadata index: NHD-TV does not scrape provider catalogs or claim that a result is available in a subscription. A later metadata provider must have explicit attribution, regional availability semantics, caching limits, and commercial-use terms before its results appear in the shell.
 

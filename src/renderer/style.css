@@ -351,6 +351,38 @@ summary:focus-visible {
     linear-gradient(105deg, #060b0a 0%, #0b1e18 52%, #0b3427 100%);
 }
 
+.featured[data-service-id="prime-video"] {
+  background: radial-gradient(circle at 82% 38%, rgb(0 168 225 / 32%), transparent 29rem), linear-gradient(105deg, #05090d 0%, #071b27 52%, #07364d 100%);
+}
+
+.featured[data-service-id="hulu"] {
+  background: radial-gradient(circle at 82% 38%, rgb(28 231 131 / 28%), transparent 29rem), linear-gradient(105deg, #050a07 0%, #081b12 52%, #0b3a23 100%);
+}
+
+.featured[data-service-id="hbo-max"] {
+  background: radial-gradient(circle at 82% 38%, rgb(124 58 237 / 34%), transparent 29rem), linear-gradient(105deg, #08060d 0%, #160d2a 52%, #30135e 100%);
+}
+
+.featured[data-service-id="peacock"] {
+  background: radial-gradient(circle at 82% 38%, rgb(250 204 21 / 25%), transparent 27rem), linear-gradient(105deg, #08080a 0%, #17131a 52%, #372d0a 100%);
+}
+
+.featured[data-service-id="paramount-plus"] {
+  background: radial-gradient(circle at 82% 38%, rgb(37 99 235 / 36%), transparent 29rem), linear-gradient(105deg, #050810 0%, #07172f 52%, #0b3274 100%);
+}
+
+.featured[data-service-id="apple-tv"] {
+  background: radial-gradient(circle at 82% 38%, rgb(148 163 184 / 24%), transparent 29rem), linear-gradient(105deg, #060708 0%, #101216 52%, #222730 100%);
+}
+
+.featured[data-service-id="plex"] {
+  background: radial-gradient(circle at 82% 38%, rgb(229 160 13 / 29%), transparent 28rem), linear-gradient(105deg, #080805 0%, #1b1609 52%, #443305 100%);
+}
+
+.featured[data-service-id="twitch"] {
+  background: radial-gradient(circle at 82% 38%, rgb(145 70 255 / 35%), transparent 29rem), linear-gradient(105deg, #08060d 0%, #170d2b 52%, #35126b 100%);
+}
+
 .featured::after {
   position: absolute;
   inset: 0;
@@ -1044,6 +1076,10 @@ h2 {
 
 .catalog-view .rail {
   margin-top: 3.5rem;
+}
+
+.catalog-view .catalog-tier {
+  margin-top: 2.5rem;
 }
 
 .catalog-card {

@@ -17,6 +17,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 - [x] Fullscreen display selection and persistence foundation (#27)
 - [x] Controller-first home navigation foundation
+- [x] Geometrically centered Home/Apps navigation with Settings moved to utilities (#29; multi-resolution visual qualification remains)
 - [x] Keyboard and mouse support
 - [x] Shared input-action router
 - [x] Xbox-style Gamepad API adapter foundation (#20; physical Windows validation remains)
@@ -28,6 +29,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 - [x] Local profile creation, switching, lineup preferences, and per-profile viewing history foundation (#22)
 - [x] Curated service catalog foundation
+- [x] Experimental catalog and branded-card expansion (#30; provider qualification remains)
 - [x] Add and remove services without clearing sessions
 - [x] Reorder and favorite services (#26)
 - [x] Same-origin declarative custom-service foundation (#26)
@@ -62,7 +64,8 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 5: Search and discovery
 
-- [x] TV search overlay and enabled-service launcher
+- [x] Result-first TV search overlay with secondary provider actions (#31)
+- [x] Recent Continue Watching discovery before typing
 - [x] Dynamic active-profile Continue Watching matches
 - [x] Declarative Netflix and YouTube query routes
 - [x] Disney+ browse-search fallback
@@ -71,6 +74,13 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [ ] Licensed cross-service metadata and regional availability (#19)
 - [ ] Trusted local HTTPS and opt-in direct microphone capture (#21)
 - [ ] Watchlist, favorites, and recommendation controls
+
+## Milestone 5.5: Multiview feasibility
+
+- [ ] Define two-up and four-up interaction and layout models (#28)
+- [ ] Prove single-audio focus and independent per-tile service isolation
+- [ ] Qualify simultaneous DRM sessions, hardware decoders, GPU, memory, and bandwidth on Windows
+- [ ] Define Back, Home, fullscreen, failure, sleep/wake, and remote behavior before adding production UI
 
 ## Milestone 6: Packaging and platform expansion
 

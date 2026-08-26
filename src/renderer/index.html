@@ -116,16 +116,32 @@
 
         <section class="rail" aria-labelledby="catalog-title">
           <div class="section-heading">
-            <h2 id="catalog-title">Available services</h2>
+            <h2 id="catalog-title">Core apps</h2>
             <span class="section-hint" id="lineup-count">Loading catalog…</span>
           </div>
           <div class="catalog-row horizontal-row" id="store-actions" data-nav-group="store-services"></div>
         </section>
 
+        <section class="rail catalog-tier" aria-labelledby="experimental-catalog-title">
+          <div class="section-heading">
+            <h2 id="experimental-catalog-title">More apps to try</h2>
+            <span class="section-hint">Experimental · login and playback testing remains</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="experimental-store-actions" data-nav-group="experimental-store-services"></div>
+        </section>
+
+        <section class="rail catalog-tier" aria-labelledby="utility-catalog-title">
+          <div class="section-heading">
+            <h2 id="utility-catalog-title">Custom & diagnostics</h2>
+            <span class="section-hint">Advanced tools</span>
+          </div>
+          <div class="catalog-row horizontal-row" id="utility-store-actions" data-nav-group="utility-store-services"></div>
+        </section>
+
         <section class="store-note" aria-label="Custom services">
           <div class="store-note-icon" aria-hidden="true">＋</div>
           <div>
-            <p class="eyebrow">Custom service</p>
+            <p class="eyebrow">Custom app</p>
             <h2>Add a trusted web service</h2>
             <p>NHD-TV will allow only the HTTPS origin you enter. Custom services cannot run plugin code or observe playback.</p>
             <form class="custom-service-form" id="custom-service-form">

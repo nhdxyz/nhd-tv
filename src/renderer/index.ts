@@ -43,6 +43,7 @@ const elements = {
   diagnosticsStatus: requireElement<HTMLParagraphElement>("#diagnostics-status", "diagnostics-status"),
   displayCard: requireElement<HTMLButtonElement>("#display-card", "display-card"),
   displayCopy: requireElement<HTMLElement>("#display-copy", "display-copy"),
+  experimentalStoreActions: requireElement<HTMLDivElement>("#experimental-store-actions", "experimental-store-actions"),
   featuredBrand: requireElement<HTMLDivElement>("#featured-brand", "featured-brand"),
   featuredCopy: requireElement<HTMLParagraphElement>("#featured-copy", "featured-copy"),
   featuredIcon: requireElement<HTMLDivElement>("#featured-icon", "featured-icon"),
@@ -109,6 +110,7 @@ const elements = {
   topRemoteButton: requireElement<HTMLButtonElement>("#top-remote-button", "top-remote-button"),
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
   topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
+  utilityStoreActions: requireElement<HTMLDivElement>("#utility-store-actions", "utility-store-actions"),
   widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status")
 };
 
@@ -628,7 +630,17 @@ function renderServiceViews(): void {
           (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
     });
   elements.serviceActions.replaceChildren(...enabledServices.map(serviceTile));
-  elements.storeActions.replaceChildren(...services.map(storeCard));
+  elements.storeActions.replaceChildren(
+    ...services.filter((service) => service.kind === "commercial").map(storeCard)
+  );
+  elements.experimentalStoreActions.replaceChildren(
+    ...services.filter((service) => service.kind === "experimental").map(storeCard)
+  );
+  elements.utilityStoreActions.replaceChildren(
+    ...services
+      .filter((service) => service.kind === "custom" || service.kind === "test")
+      .map(storeCard)
+  );
   elements.lineupCount.textContent = `${enabledServices.length} of ${services.length} on Home`;
 
   if (enabledServices.length === 0) {
@@ -641,7 +653,7 @@ function renderServiceViews(): void {
   renderFeatured(enabledServices);
   renderContinueWatching();
 
-  if (elements.searchDialog.open && elements.searchInput.value.trim().length > 0) {
+  if (elements.searchDialog.open) {
     renderSearchResults(elements.searchInput.value);
   }
 }

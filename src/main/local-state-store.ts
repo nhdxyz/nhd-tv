@@ -64,6 +64,7 @@ function devicePreferences(value: unknown): DevicePreferences {
     ? value as Partial<DevicePreferences>
     : {};
   return {
+    autoApproveFirstRemote: candidate.autoApproveFirstRemote !== false,
     fullscreen: candidate.fullscreen !== false,
     reducedMotion: candidate.reducedMotion === true,
     safeArea: candidate.safeArea === "compact" || candidate.safeArea === "wide"

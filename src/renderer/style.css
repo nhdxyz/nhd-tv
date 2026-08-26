@@ -207,6 +207,52 @@ summary:focus-visible {
   gap: 0.65rem;
 }
 
+.remote-invite {
+  position: fixed;
+  z-index: 46;
+  top: 5.65rem;
+  right: var(--safe-x);
+  display: flex;
+  width: min(21rem, calc(100vw - var(--safe-x) * 2));
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem;
+  border: 1px solid rgb(125 211 252 / 30%);
+  border-radius: 1.15rem;
+  background: linear-gradient(145deg, rgb(15 31 58 / 96%), rgb(8 11 18 / 96%));
+  box-shadow: 0 1.2rem 3.2rem rgb(0 0 0 / 48%), inset 0 1px rgb(255 255 255 / 8%);
+  backdrop-filter: blur(22px);
+  pointer-events: none;
+}
+
+.remote-invite[hidden] {
+  display: none;
+}
+
+.remote-invite img {
+  width: 7.5rem;
+  height: 7.5rem;
+  flex: 0 0 auto;
+  border: 0.35rem solid #fff;
+  border-radius: 0.8rem;
+  background: #fff;
+}
+
+.remote-invite > span {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.remote-invite strong {
+  font-size: 1.05rem;
+}
+
+.remote-invite small {
+  color: #bfdbfe;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .search-chip,
 .remote-chip,
 .settings-chip,

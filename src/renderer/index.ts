@@ -90,6 +90,8 @@ const elements = {
   quitDialog: requireElement<HTMLDialogElement>("#quit-dialog", "quit-dialog"),
   quitServicePreview: requireElement<HTMLImageElement>("#quit-service-preview", "quit-service-preview"),
   remoteApproval: requireElement<HTMLDivElement>("#remote-approval", "remote-approval"),
+  remoteAutoConnectCopy: requireElement<HTMLElement>("#remote-auto-connect-copy", "remote-auto-connect-copy"),
+  remoteAutoConnectToggle: requireElement<HTMLButtonElement>("#remote-auto-connect-toggle", "remote-auto-connect-toggle"),
   remoteApprove: requireElement<HTMLButtonElement>("#remote-approve", "remote-approve"),
   remoteClose: requireElement<HTMLButtonElement>("#remote-close", "remote-close"),
   remoteDeny: requireElement<HTMLButtonElement>("#remote-deny", "remote-deny"),
@@ -98,6 +100,8 @@ const elements = {
   remoteExpiry: requireElement<HTMLParagraphElement>("#remote-expiry", "remote-expiry"),
   remotePairingView: requireElement<HTMLDivElement>("#remote-pairing-view", "remote-pairing-view"),
   remoteQr: requireElement<HTMLImageElement>("#remote-qr", "remote-qr"),
+  remoteInvite: requireElement<HTMLElement>("#remote-invite", "remote-invite"),
+  remoteInviteQr: requireElement<HTMLImageElement>("#remote-invite-qr", "remote-invite-qr"),
   remoteReady: requireElement<HTMLDivElement>("#remote-ready", "remote-ready"),
   remoteReadyCopy: requireElement<HTMLSpanElement>("#remote-ready-copy", "remote-ready-copy"),
   remoteStart: requireElement<HTMLButtonElement>("#remote-start", "remote-start"),
@@ -237,6 +241,13 @@ function applyLocalAppState(state: LocalAppState): void {
   elements.motionToggle.setAttribute("aria-pressed", String(state.devicePreferences.reducedMotion));
   elements.motionCopy.textContent = state.devicePreferences.reducedMotion ? "On" : "Off";
   elements.safeAreaCopy.textContent = `${state.devicePreferences.safeArea[0]?.toUpperCase() ?? "S"}${state.devicePreferences.safeArea.slice(1)}`;
+  elements.remoteAutoConnectToggle.setAttribute(
+    "aria-pressed",
+    String(state.devicePreferences.autoApproveFirstRemote)
+  );
+  elements.remoteAutoConnectCopy.textContent = state.devicePreferences.autoApproveFirstRemote
+    ? "On · first scan connects when no remote is active"
+    : "Off · approve every new phone on the TV";
 }
 
 async function saveProfilePreferences(): Promise<void> {
@@ -1417,10 +1428,17 @@ function renderRemoteStatus(status: RemoteStatus): void {
         ? "Pairing code is ready to scan"
         : "Pair on your trusted local network";
 
+  const showInvite = status.connectedControllers === 0 &&
+    status.state === "pairing" &&
+    status.qrDataUrl !== null;
+  elements.remoteInvite.hidden = !showInvite;
+
   if (status.qrDataUrl !== null) {
     elements.remoteQr.src = status.qrDataUrl;
+    elements.remoteInviteQr.src = status.qrDataUrl;
   } else {
     elements.remoteQr.removeAttribute("src");
+    elements.remoteInviteQr.removeAttribute("src");
   }
 }
 
@@ -1481,6 +1499,13 @@ elements.soundToggle.addEventListener("click", () => {
 });
 
 renderSoundPreference();
+
+elements.remoteAutoConnectToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.autoApproveFirstRemote ?? true);
+  void saveDevicePreferences({ autoApproveFirstRemote: enabled })
+    .then(() => showFeedback(`First remote auto-connect ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
 
 elements.fullscreenToggle.addEventListener("click", () => {
   const enabled = !(localAppState?.devicePreferences.fullscreen ?? true);
@@ -1862,3 +1887,4 @@ window.setInterval(() => {
     void refreshRemoteStatus().catch(showRemoteError);
   }
 }, 1_000);
+window.setInterval(() => void refreshRemoteStatus().catch(() => undefined), 15_000);

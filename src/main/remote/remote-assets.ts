@@ -610,6 +610,22 @@ export const REMOTE_JS = `(() => {
     }
   }
 
+  function disconnectRemote() {
+    if (!controllerToken) return;
+    const token = controllerToken;
+    controllerToken = null;
+    sessionStorage.removeItem("nhd-controller-token");
+    void fetch("/api/disconnect", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: "{}",
+      keepalive: true
+    });
+  }
+
   async function sendAction(action, button) {
     if (!controllerToken) return;
 
@@ -840,5 +856,6 @@ export const REMOTE_JS = `(() => {
 
   setEnabled(false);
   usePrecisionMode(false);
+  window.addEventListener("pagehide", disconnectRemote);
   beginPairing();
 })();`;

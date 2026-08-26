@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { remotePostHeadersAreAllowed } from "../src/main/remote/phone-remote-server";
+import {
+  remotePostHeadersAreAllowed,
+  shouldAutoApprovePairing
+} from "../src/main/remote/phone-remote-server";
 import {
   movePrecisionPoint,
   precisionEdgeScroll,
@@ -31,6 +34,13 @@ describe("phone remote boundary", () => {
     }, null)).toBe(false);
   });
 
+  it("auto-approves only the first remote when the device preference allows it", () => {
+    expect(shouldAutoApprovePairing(0, true)).toBe(true);
+    expect(shouldAutoApprovePairing(0, false)).toBe(false);
+    expect(shouldAutoApprovePairing(1, true)).toBe(false);
+    expect(shouldAutoApprovePairing(2, true)).toBe(false);
+  });
+
   it("exposes only the bounded search text field and no credential controls", () => {
     expect(REMOTE_HTML.match(/<input\b/g)).toHaveLength(1);
     expect(REMOTE_HTML).toContain('type="search"');
@@ -40,6 +50,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).not.toContain("innerHTML");
     expect(REMOTE_JS).not.toMatch(/https?:\/\//);
     expect(REMOTE_JS).toContain('await jsonRequest("/api/search"');
+    expect(REMOTE_JS).toContain('fetch("/api/disconnect"');
+    expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
   });
 
   it("uses the compact arrow layout without decorative system glyphs or room copy", () => {

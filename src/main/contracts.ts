@@ -114,6 +114,7 @@ export interface ProfilePreferences {
 }
 
 export interface DevicePreferences {
+  autoApproveFirstRemote: boolean;
   fullscreen: boolean;
   reducedMotion: boolean;
   safeArea: "compact" | "standard" | "wide";

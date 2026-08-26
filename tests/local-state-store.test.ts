@@ -32,6 +32,7 @@ describe("local profile state", () => {
       activeProfileId: "default",
       customServices: [],
       devicePreferences: {
+        autoApproveFirstRemote: true,
         fullscreen: true,
         reducedMotion: false,
         safeArea: "standard",
@@ -80,6 +81,7 @@ describe("local profile state", () => {
     const { filePath, store } = await testStore();
     await store.createProfile("Guest");
     await store.updateDevicePreferences({
+      autoApproveFirstRemote: false,
       fullscreen: false,
       reducedMotion: true,
       safeArea: "compact",
@@ -90,6 +92,7 @@ describe("local profile state", () => {
     const restored = new LocalStateStore(filePath, ["youtube"], ["youtube"]);
     await restored.initialize();
     expect(restored.snapshot().devicePreferences).toEqual({
+      autoApproveFirstRemote: false,
       fullscreen: false,
       reducedMotion: true,
       safeArea: "compact",
@@ -128,6 +131,7 @@ describe("local profile state", () => {
     await restored.initialize();
     expect(restored.snapshot()).toMatchObject({
       activeProfileId: "valid",
+      devicePreferences: { autoApproveFirstRemote: true },
       profiles: [{ id: "valid", name: "Guest" }]
     });
     await expect(restored.selectProfile("missing")).rejects.toThrow("does not exist");

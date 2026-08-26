@@ -731,9 +731,11 @@ function registerIpc(): void {
     return hostStatus();
   });
 
-  ipcMain.handle(IPC_CHANNELS.getRemoteStatus, (event) => {
+  ipcMain.handle(IPC_CHANNELS.getRemoteStatus, async (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    return phoneRemote?.status ?? inactiveRemoteStatus();
+    return phoneRemote === null
+      ? inactiveRemoteStatus()
+      : phoneRemote.ensurePairing();
   });
 
   ipcMain.handle(IPC_CHANNELS.inputAction, (event, action: unknown) => {
@@ -959,7 +961,9 @@ async function createMainWindow(): Promise<void> {
     onAction: handleRemoteAction,
     onPointer: handleRemotePointer,
     onSearch: handleRemoteSearch,
-    onStatusChanged: publishRemoteStatus
+    onStatusChanged: publishRemoteStatus,
+    shouldAutoApproveFirstRemote: () =>
+      localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
   });
 
   mainWindow.on("close", (event) => {

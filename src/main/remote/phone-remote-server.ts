@@ -38,6 +38,14 @@ export interface PhoneRemoteServerOptions {
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
+  shouldAutoApproveFirstRemote: () => boolean;
+}
+
+export function shouldAutoApprovePairing(
+  connectedControllers: number,
+  autoApproveFirstRemote: boolean
+): boolean {
+  return connectedControllers === 0 && autoApproveFirstRemote;
 }
 
 function lanIpv4Address(): string | null {
@@ -133,6 +141,7 @@ export class PhoneRemoteServer {
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
+  readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
   #lastPointerAt = 0;
   #networkAddress: string | null = null;
@@ -145,6 +154,7 @@ export class PhoneRemoteServer {
     this.#onPointer = options.onPointer;
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
+    this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
 
   get status(): RemoteStatus {
@@ -221,6 +231,19 @@ export class PhoneRemoteServer {
     });
     this.#publishStatus();
     return this.status;
+  }
+
+  async ensurePairing(): Promise<RemoteStatus> {
+    const status = this.status;
+    if (
+      status.connectedControllers > 0 ||
+      status.state === "awaiting-approval" ||
+      status.state === "pairing"
+    ) {
+      return status;
+    }
+
+    return this.startPairing();
   }
 
   approvePending(): RemoteStatus {
@@ -313,6 +336,10 @@ export class PhoneRemoteServer {
       }
 
       const body = await readJsonBody(request);
+      const shouldAutoApprove = shouldAutoApprovePairing(
+        this.#manager.connectedControllers,
+        this.#shouldAutoApproveFirstRemote()
+      );
       const pairing = this.#manager.requestPairing(body?.token);
 
       if (pairing === null) {
@@ -322,6 +349,10 @@ export class PhoneRemoteServer {
 
       this.#expiresAt = pairing.expiresAt;
       this.#qrDataUrl = null;
+      if (shouldAutoApprove) {
+        this.#manager.approvePending();
+        this.#expiresAt = null;
+      }
       this.#publishStatus();
       writeJson(response, 202, { requestId: pairing.requestId });
       return;
@@ -455,6 +486,7 @@ export class PhoneRemoteServer {
 
       this.#publishStatus();
       writeJson(response, 200, { ok: true });
+      void this.ensurePairing().catch(() => undefined);
       return;
     }
 

@@ -53,6 +53,14 @@
       </div>
     </header>
 
+    <aside class="remote-invite" id="remote-invite" aria-live="polite" hidden>
+      <img id="remote-invite-qr" alt="Pair an NHD-TV phone remote" />
+      <span>
+        <strong>Use your phone</strong>
+        <small>Scan to connect a remote</small>
+      </span>
+    </aside>
+
     <main class="tv-shell">
       <section class="app-view home-view" id="home-view" data-view="home">
         <section class="featured" aria-labelledby="featured-title">
@@ -192,6 +200,13 @@
             <span>
               <strong>Phone remote</strong>
               <small id="settings-remote-copy">Pair on your trusted local network</small>
+            </span>
+          </button>
+          <button class="settings-card" id="remote-auto-connect-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">AUTO</span>
+            <span>
+              <strong>Auto-connect first remote</strong>
+              <small id="remote-auto-connect-copy">On · first scan connects when no remote is active</small>
             </span>
           </button>
           <button class="settings-card" id="sound-toggle" type="button" aria-pressed="true">

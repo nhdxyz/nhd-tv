@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   getServiceDefinition,
   getServiceDefinitions,
-  getServiceSummaries
+  getServiceSummaries,
+  setCustomServiceManifests
 } from "../src/main/service-registry";
+
+afterEach(() => setCustomServiceManifests([]));
 
 describe("service registry", () => {
   it("returns configured services by stable id", () => {
@@ -36,5 +39,24 @@ describe("service registry", () => {
     expect(youtube?.authenticationNote).toContain("Enter your password");
     expect(youtube).not.toHaveProperty("startUrl");
     expect(youtube).not.toHaveProperty("allowedOrigins");
+  });
+
+  it("builds custom services with an exact same-origin boundary", () => {
+    setCustomServiceManifests([{
+      id: "custom-11111111-1111-4111-8111-111111111111",
+      name: "Example TV",
+      startUrl: "https://watch.example.test/home"
+    }]);
+
+    const custom = getServiceDefinition("custom-11111111-1111-4111-8111-111111111111");
+    expect(custom).toMatchObject({
+      allowedOrigins: ["https://watch.example.test"],
+      artworkHosts: [],
+      kind: "custom",
+      playback: null,
+      search: null,
+      startUrl: "https://watch.example.test/home"
+    });
+    expect(custom?.partition).toBe("persist:service-custom-11111111-1111-4111-8111-111111111111");
   });
 });

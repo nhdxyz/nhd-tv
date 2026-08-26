@@ -58,7 +58,7 @@ A versioned adapter contract will separate common hosting from service-specific 
 - Optional spatial-navigation enhancement
 - Platform support declarations
 
-The custom-service MVP uses declarative manifests. Arbitrary plugin execution requires a future permissions and signing model.
+The custom-service MVP uses declarative manifests containing a local ID, name, and HTTPS start page. The host derives one exact allowed origin, a dedicated persistent partition, and a root URL. Playback observation, artwork capture, search routes, extra origins, and executable code are disabled. Arbitrary plugin execution requires a future permissions and signing model.
 
 Service popup policy never creates an unrestricted child window. A popup URL on the adapter's exact origin allowlist may open as a sandboxed, app-owned modal using the service's isolated session, preserving authentication opener/close semantics without weakening the navigation boundary. Its redirects are checked against the same allowlist. Every other popup is denied and only its origin is retained for diagnostics.
 

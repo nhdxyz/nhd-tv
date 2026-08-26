@@ -29,9 +29,9 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Curated service catalog foundation
 - [x] Add and remove services without clearing sessions
 - [x] Reorder and favorite services (#26)
-- [ ] Declarative custom services (#26)
+- [x] Same-origin declarative custom-service foundation (#26)
 - [x] Confirmed per-service session clearing foundation (#3, #26)
-- [ ] Broader service-data and privacy controls (#26)
+- [ ] Custom icons, edit flow, multi-origin permission review, and broader privacy controls (#26)
 
 ## Milestone 3: Continue Watching
 

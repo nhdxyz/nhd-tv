@@ -36,6 +36,9 @@ const elements = {
   closeServiceButton: requireElement<HTMLButtonElement>("#close-service", "close-service"),
   continueActions: requireElement<HTMLDivElement>("#continue-actions", "continue-actions"),
   continueHint: requireElement<HTMLSpanElement>("#continue-hint", "continue-hint"),
+  customServiceForm: requireElement<HTMLFormElement>("#custom-service-form", "custom-service-form"),
+  customServiceName: requireElement<HTMLInputElement>("#custom-service-name", "custom-service-name"),
+  customServiceUrl: requireElement<HTMLInputElement>("#custom-service-url", "custom-service-url"),
   diagnosticsStatus: requireElement<HTMLParagraphElement>("#diagnostics-status", "diagnostics-status"),
   displayCard: requireElement<HTMLButtonElement>("#display-card", "display-card"),
   displayCopy: requireElement<HTMLElement>("#display-copy", "display-copy"),
@@ -110,6 +113,7 @@ let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
 let localAppState: LocalAppState | null = null;
 let pendingClearService: ServiceSummary | null = null;
+let pendingServiceAction: "clear" | "remove-custom" = "clear";
 let remoteFocusedElement: HTMLElement | null = null;
 let serviceOrder: string[] = [];
 let services: readonly ServiceSummary[] = [];
@@ -553,6 +557,14 @@ function storeCard(service: ServiceSummary): HTMLElement {
   clearButton.addEventListener("click", () => openClearDataDialog(service));
 
   controls.append(favoriteButton, earlierButton, laterButton, clearButton);
+  if (service.kind === "custom") {
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "catalog-remove-service";
+    removeButton.textContent = "Remove app";
+    removeButton.addEventListener("click", () => openRemoveCustomDialog(service));
+    controls.append(removeButton);
+  }
   shell.append(button, controls);
   return shell;
 }
@@ -701,6 +713,32 @@ async function initializeServices(): Promise<void> {
   renderServiceViews();
 }
 
+elements.customServiceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = elements.customServiceForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit !== null) {
+    submit.disabled = true;
+  }
+
+  try {
+    applyLocalAppState(await window.nhd.addCustomService(
+      elements.customServiceName.value,
+      elements.customServiceUrl.value
+    ));
+    services = await window.nhd.getServices();
+    elements.customServiceName.value = "";
+    elements.customServiceUrl.value = "";
+    renderServiceViews();
+    showFeedback("Custom service added to this profile's Home.");
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (submit !== null) {
+      submit.disabled = false;
+    }
+  }
+});
+
 function showView(view: AppView): void {
   currentView = view;
   document.body.dataset.view = view;
@@ -833,8 +871,20 @@ elements.profileCreateForm.addEventListener("submit", async (event) => {
 
 function openClearDataDialog(service: ServiceSummary): void {
   pendingClearService = service;
+  pendingServiceAction = "clear";
   elements.clearDataTitle.textContent = `Sign out of ${service.name}?`;
   elements.clearDataCopy.textContent = `This removes ${service.name}'s local cookies, storage, and cache from this computer. Your NHD-TV lineup and Continue Watching history are kept.`;
+  elements.clearDataConfirm.textContent = "Clear data";
+  elements.clearDataDialog.showModal();
+  elements.clearDataCancel.focus();
+}
+
+function openRemoveCustomDialog(service: ServiceSummary): void {
+  pendingClearService = service;
+  pendingServiceAction = "remove-custom";
+  elements.clearDataTitle.textContent = `Remove ${service.name}?`;
+  elements.clearDataCopy.textContent = "This removes the custom integration from every local profile and clears its isolated local cookies, storage, and cache.";
+  elements.clearDataConfirm.textContent = "Remove service";
   elements.clearDataDialog.showModal();
   elements.clearDataCancel.focus();
 }
@@ -860,9 +910,17 @@ elements.clearDataConfirm.addEventListener("click", async () => {
 
   elements.clearDataConfirm.disabled = true;
   try {
-    await window.nhd.clearServiceData(service.id);
+    if (pendingServiceAction === "remove-custom") {
+      applyLocalAppState(await window.nhd.removeCustomService(service.id));
+      services = await window.nhd.getServices();
+      renderServiceViews();
+    } else {
+      await window.nhd.clearServiceData(service.id);
+    }
     cancelClearData();
-    showFeedback(`${service.name} local sign-in data was cleared.`);
+    showFeedback(pendingServiceAction === "remove-custom"
+      ? `${service.name} was removed and its local data was cleared.`
+      : `${service.name} local sign-in data was cleared.`);
   } catch (error) {
     showFeedback(error instanceof Error ? error.message : String(error));
   } finally {

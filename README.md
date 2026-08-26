@@ -49,6 +49,8 @@ An Xbox-style controller uses the D-pad or left stick for navigation, A for Sele
 
 Store choices belong to the active local profile. Services can be favorited and reordered for Home. Removing a service from Home keeps its login; **Clear data** is a separate confirmed action that clears only that service's isolated local session.
 
+The Store also accepts declarative custom services with a name and HTTPS start page. NHD-TV derives an exact same-origin navigation boundary and a dedicated local session; custom entries cannot execute plugin code, observe playback, or inject search behavior. Removing a custom integration clears its partition and removes it from all local profiles.
+
 Device-wide television settings persist the selected display, launch-fullscreen behavior, safe-area margin, and reduced-motion preference. The display card cycles NHD-TV across connected screens; audio routing and startup-at-login remain platform milestones.
 
 ### Production Widevine signing

@@ -1,9 +1,11 @@
+import type { ServiceKind } from "../contracts";
+
 export interface ServiceDefinition {
   allowedOrigins: readonly string[];
   artworkHosts: readonly string[];
   authenticationNote?: string;
   id: string;
-  kind: "commercial" | "test";
+  kind: ServiceKind;
   mediaKeySystemOrigins: readonly string[];
   name: string;
   partition: string;

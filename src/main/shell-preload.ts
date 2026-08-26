@@ -15,6 +15,7 @@ import type {
 // load local CommonJS modules at runtime. Keep channel names self-contained here;
 // the HostStatus import is type-only and is erased by TypeScript.
 const IPC_CHANNELS = {
+  addCustomService: "nhd:custom-service:add",
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
@@ -36,6 +37,7 @@ const IPC_CHANNELS = {
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
+  removeCustomService: "nhd:custom-service:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
@@ -46,6 +48,8 @@ const IPC_CHANNELS = {
 } as const;
 
 contextBridge.exposeInMainWorld("nhd", {
+  addCustomService: (name: string, startUrl: string): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.addCustomService, name, startUrl),
   approveRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.approveRemotePairing),
   cancelServiceQuit: (): Promise<void> =>
@@ -109,6 +113,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.openService, serviceId),
   removeContinueWatching: (itemId: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.removeContinueWatching, itemId),
+  removeCustomService: (serviceId: string): Promise<LocalAppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.removeCustomService, serviceId),
   resumeContinueWatching: (itemId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.resumeContinueWatching, itemId),
   searchService: (serviceId: string, query: string): Promise<void> =>

@@ -54,7 +54,7 @@ The Store is a catalog of available service integrations, not a payment or binar
 - Services display platform support and integration status.
 - A custom-service flow accepts declarative configuration such as name, icon, URL, allowed origins, and root-page rules.
 
-Executable third-party plugins and remotely downloaded adapter code are excluded from the first version.
+Executable third-party plugins and remotely downloaded adapter code are excluded from the first version. The current custom-service foundation accepts a name and HTTPS start page, allows only that exact origin, and creates a dedicated isolated session. Removing a custom integration also clears its partition and removes it from all profiles.
 
 The current Store foundation saves the enabled, ordered, and favorited Home lineup per local profile. Removing an item from Home never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
 

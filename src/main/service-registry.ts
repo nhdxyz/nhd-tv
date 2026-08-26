@@ -2,7 +2,7 @@ import {
   assertValidServiceDefinition,
   type ServiceDefinition
 } from "./security/navigation-policy";
-import type { ServiceSummary } from "./contracts";
+import type { CustomServiceManifest, ServiceSummary } from "./contracts";
 
 const services: readonly ServiceDefinition[] = [
   {
@@ -115,24 +115,51 @@ const services: readonly ServiceDefinition[] = [
   }
 ];
 
+let customServices: readonly ServiceDefinition[] = [];
+
 for (const service of services) {
   assertValidServiceDefinition(service);
 }
 
 export function getServiceDefinition(serviceId: string): ServiceDefinition | null {
-  return services.find((service) => service.id === serviceId) ?? null;
+  return [...services, ...customServices].find((service) => service.id === serviceId) ?? null;
 }
 
 export function getServiceDefinitions(): readonly ServiceDefinition[] {
-  return services;
+  return [...services, ...customServices];
 }
 
 export function getServiceSummaries(): readonly ServiceSummary[] {
-  return services.map(({ authenticationNote, id, kind, name, search }) => ({
+  return [...services, ...customServices].map(({ authenticationNote, id, kind, name, search }) => ({
     authenticationNote,
     id,
     kind,
     name,
     searchMode: search === null ? "none" : search.queryParameter === null ? "browse" : "query"
   }));
+}
+
+export function setCustomServiceManifests(
+  manifests: readonly CustomServiceManifest[]
+): void {
+  customServices = manifests.map((manifest) => {
+    const startUrl = new URL(manifest.startUrl);
+    const definition: ServiceDefinition = {
+      allowedOrigins: [startUrl.origin],
+      artworkHosts: [],
+      authenticationNote: "Custom same-origin service. Playback observation and search are not enabled.",
+      id: manifest.id,
+      kind: "custom",
+      mediaKeySystemOrigins: [startUrl.origin],
+      name: manifest.name,
+      partition: `persist:service-${manifest.id}`,
+      playback: null,
+      rootUrls: [manifest.startUrl],
+      search: null,
+      spatialNavigation: "dom",
+      startUrl: manifest.startUrl
+    };
+    assertValidServiceDefinition(definition);
+    return definition;
+  });
 }

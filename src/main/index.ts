@@ -31,7 +31,8 @@ import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import {
   getServiceDefinition,
   getServiceDefinitions,
-  getServiceSummaries
+  getServiceSummaries,
+  setCustomServiceManifests
 } from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
@@ -372,6 +373,39 @@ function registerIpc(): void {
       throw new Error("Local profile state is not ready.");
     }
     return localStateStore.snapshot();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.addCustomService,
+    async (event, name: unknown, startUrl: unknown) => {
+      validateShellSender(event.senderFrame?.url ?? "");
+      if (localStateStore === null) {
+        throw new Error("Local service state is not ready.");
+      }
+      const state = await localStateStore.addCustomService(name, startUrl);
+      setCustomServiceManifests(state.customServices);
+      return state;
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.removeCustomService, async (event, serviceId: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (localStateStore === null || typeof serviceId !== "string") {
+      throw new Error("That custom service does not exist.");
+    }
+
+    const definition = getServiceDefinition(serviceId);
+    if (definition === null || definition.kind !== "custom") {
+      throw new Error("That custom service does not exist.");
+    }
+
+    if (serviceHost?.activeServiceId === serviceId) {
+      await serviceHost.closeWithCheckpoint();
+    }
+    await session.fromPartition(definition.partition, { cache: true }).clearStorageData();
+    const state = await localStateStore.removeCustomService(serviceId);
+    setCustomServiceManifests(state.customServices);
+    return state;
   });
 
   ipcMain.handle(IPC_CHANNELS.createProfile, async (event, name: unknown) => {
@@ -731,6 +765,7 @@ app.whenReady().then(async () => {
       .map((service) => service.id)
   );
   await localStateStore.initialize();
+  setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(
     localStateStore.snapshot().activeProfileId,
     true

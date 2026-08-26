@@ -13,6 +13,7 @@ import type {
 declare global {
   interface Window {
     nhd: {
+      addCustomService: (name: string, startUrl: string) => Promise<LocalAppState>;
       approveRemotePairing: () => Promise<RemoteStatus>;
       cancelServiceQuit: () => Promise<void>;
       clearServiceData: (serviceId: string) => Promise<void>;
@@ -37,6 +38,7 @@ declare global {
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;
       openService: (serviceId: string) => Promise<void>;
       removeContinueWatching: (itemId: string) => Promise<boolean>;
+      removeCustomService: (serviceId: string) => Promise<LocalAppState>;
       resumeContinueWatching: (itemId: string) => Promise<void>;
       searchService: (serviceId: string, query: string) => Promise<void>;
       selectProfile: (profileId: string) => Promise<LocalAppState>;

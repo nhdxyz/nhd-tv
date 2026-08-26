@@ -121,9 +121,14 @@
         <section class="store-note" aria-label="Custom services">
           <div class="store-note-icon" aria-hidden="true">＋</div>
           <div>
-            <p class="eyebrow">Coming next</p>
-            <h2>Custom service manifests</h2>
-            <p>Add a name, local icon, HTTPS start page, and narrow navigation allowlist—without downloading executable plugins.</p>
+            <p class="eyebrow">Custom service</p>
+            <h2>Add a trusted web service</h2>
+            <p>NHD-TV will allow only the HTTPS origin you enter. Custom services cannot run plugin code or observe playback.</p>
+            <form class="custom-service-form" id="custom-service-form">
+              <input id="custom-service-name" maxlength="32" autocomplete="off" placeholder="Service name" required />
+              <input id="custom-service-url" type="url" inputmode="url" autocomplete="url" placeholder="https://watch.example.com" required />
+              <button class="primary-action" type="submit">Add service</button>
+            </form>
           </div>
         </section>
       </section>

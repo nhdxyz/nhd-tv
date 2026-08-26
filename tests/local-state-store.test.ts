@@ -30,6 +30,7 @@ describe("local profile state", () => {
     const { store } = await testStore();
     expect(store.snapshot()).toEqual({
       activeProfileId: "default",
+      customServices: [],
       devicePreferences: {
         fullscreen: true,
         reducedMotion: false,
@@ -72,7 +73,7 @@ describe("local profile state", () => {
       },
       profiles: expect.arrayContaining([{ id: childId, name: "Kids Room" }])
     });
-    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(2);
+    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(3);
   });
 
   it("persists device-wide television preferences across profiles", async () => {
@@ -94,6 +95,22 @@ describe("local profile state", () => {
       safeArea: "compact",
       selectedDisplayId: "42"
     });
+  });
+
+  it("adds and removes same-origin HTTPS custom service manifests", async () => {
+    const { store } = await testStore();
+    const added = await store.addCustomService("  Film Room ", "https://watch.example.test/home#section");
+    const service = added.customServices[0];
+    expect(service).toMatchObject({
+      name: "Film Room",
+      startUrl: "https://watch.example.test/home"
+    });
+    expect(added.preferences.enabledServiceIds).toContain(service?.id);
+    await expect(store.addCustomService("Bad", "http://example.test")).rejects.toThrow("HTTPS");
+
+    const removed = await store.removeCustomService(service?.id);
+    expect(removed.customServices).toEqual([]);
+    expect(removed.preferences.enabledServiceIds).not.toContain(service?.id);
   });
 
   it("sanitizes malformed disk state and rejects unknown profiles", async () => {

@@ -3,12 +3,13 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   DevicePreferences,
+  CustomServiceManifest,
   LocalAppState,
   LocalProfile,
   ProfilePreferences
 } from "./contracts";
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const DEFAULT_PROFILE_ID = "default";
 const MAX_PROFILES = 8;
 const MAX_PROFILE_NAME_LENGTH = 32;
@@ -19,10 +20,43 @@ interface StoredProfile extends LocalProfile {
 
 interface StoredLocalState {
   activeProfileId: string;
+  customServices: CustomServiceManifest[];
   devicePreferences: DevicePreferences;
   preferences: Record<string, ProfilePreferences>;
   profiles: StoredProfile[];
   version: number;
+}
+
+function customServiceManifest(value: unknown): CustomServiceManifest | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const candidate = value as Partial<CustomServiceManifest>;
+  const name = normalizedProfileName(candidate.name);
+  if (
+    typeof candidate.id !== "string" ||
+    !/^custom-[a-f0-9-]{36}$/.test(candidate.id) ||
+    name === null ||
+    typeof candidate.startUrl !== "string"
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(candidate.startUrl);
+    if (
+      url.protocol !== "https:" ||
+      url.username.length > 0 ||
+      url.password.length > 0
+    ) {
+      return null;
+    }
+    url.hash = "";
+    return { id: candidate.id, name, startUrl: url.toString() };
+  } catch {
+    return null;
+  }
 }
 
 function devicePreferences(value: unknown): DevicePreferences {
@@ -94,7 +128,7 @@ function publicProfile(profile: StoredProfile): LocalProfile {
 export class LocalStateStore {
   readonly #defaultEnabledServiceIds: readonly string[];
   readonly #filePath: string;
-  readonly #knownServiceIds: ReadonlySet<string>;
+  readonly #knownServiceIds: Set<string>;
   #state: StoredLocalState;
   #writeSequence: Promise<void> = Promise.resolve();
 
@@ -120,7 +154,7 @@ export class LocalStateStore {
 
       const document = parsed as Partial<StoredLocalState>;
       if (
-        (document.version !== 1 && document.version !== STORE_VERSION) ||
+        (document.version !== 1 && document.version !== 2 && document.version !== STORE_VERSION) ||
         !Array.isArray(document.profiles)
       ) {
         return;
@@ -155,6 +189,15 @@ export class LocalStateStore {
         return;
       }
 
+      const customServices = Array.isArray(document.customServices)
+        ? document.customServices
+          .map(customServiceManifest)
+          .filter((service): service is CustomServiceManifest => service !== null)
+        : [];
+      for (const service of customServices) {
+        this.#knownServiceIds.add(service.id);
+      }
+
       const storedPreferences = typeof document.preferences === "object" &&
         document.preferences !== null
         ? document.preferences
@@ -174,6 +217,7 @@ export class LocalStateStore {
 
       this.#state = {
         activeProfileId,
+        customServices,
         devicePreferences: devicePreferences(document.devicePreferences),
         preferences,
         profiles,
@@ -190,6 +234,7 @@ export class LocalStateStore {
 
     return {
       activeProfileId: this.#state.activeProfileId,
+      customServices: this.#state.customServices.map((service) => ({ ...service })),
       devicePreferences: { ...this.#state.devicePreferences },
       preferences: {
         enabledServiceIds: [...preferences.enabledServiceIds],
@@ -252,6 +297,52 @@ export class LocalStateStore {
     return this.snapshot();
   }
 
+  async addCustomService(nameValue: unknown, startUrlValue: unknown): Promise<LocalAppState> {
+    const manifest = customServiceManifest({
+      id: `custom-${randomUUID()}`,
+      name: nameValue,
+      startUrl: startUrlValue
+    });
+    if (manifest === null) {
+      throw new TypeError("Custom services require a name and an HTTPS start URL without credentials.");
+    }
+
+    if (this.#state.customServices.some((service) => service.startUrl === manifest.startUrl)) {
+      throw new Error("That custom service URL is already in the Store.");
+    }
+
+    this.#state.customServices.push(manifest);
+    this.#knownServiceIds.add(manifest.id);
+    const preferences = this.#state.preferences[this.#state.activeProfileId];
+    if (preferences !== undefined) {
+      preferences.enabledServiceIds.push(manifest.id);
+      preferences.serviceOrder.push(manifest.id);
+    }
+    await this.#persist();
+    return this.snapshot();
+  }
+
+  async removeCustomService(serviceId: unknown): Promise<LocalAppState> {
+    if (
+      typeof serviceId !== "string" ||
+      !this.#state.customServices.some((service) => service.id === serviceId)
+    ) {
+      throw new Error("That custom service does not exist.");
+    }
+
+    this.#state.customServices = this.#state.customServices.filter(
+      (service) => service.id !== serviceId
+    );
+    this.#knownServiceIds.delete(serviceId);
+    for (const preferences of Object.values(this.#state.preferences)) {
+      preferences.enabledServiceIds = preferences.enabledServiceIds.filter((id) => id !== serviceId);
+      preferences.favoriteServiceIds = preferences.favoriteServiceIds.filter((id) => id !== serviceId);
+      preferences.serviceOrder = preferences.serviceOrder.filter((id) => id !== serviceId);
+    }
+    await this.#persist();
+    return this.snapshot();
+  }
+
   #defaultState(): StoredLocalState {
     const profile: StoredProfile = {
       createdAt: Date.now(),
@@ -261,6 +352,7 @@ export class LocalStateStore {
 
     return {
       activeProfileId: profile.id,
+      customServices: [],
       devicePreferences: devicePreferences(null),
       preferences: {
         [profile.id]: profilePreferences(

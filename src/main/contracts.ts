@@ -1,4 +1,5 @@
 export const IPC_CHANNELS = {
+  addCustomService: "nhd:custom-service:add",
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
@@ -20,6 +21,7 @@ export const IPC_CHANNELS = {
   remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
+  removeCustomService: "nhd:custom-service:remove",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
@@ -52,7 +54,7 @@ export interface RemoteStatus {
   state: RemoteState;
 }
 
-export type ServiceKind = "commercial" | "test";
+export type ServiceKind = "commercial" | "custom" | "test";
 
 export interface ServiceSummary {
   authenticationNote?: string;
@@ -94,9 +96,16 @@ export interface DevicePreferences {
 
 export interface LocalAppState {
   activeProfileId: string;
+  customServices: CustomServiceManifest[];
   devicePreferences: DevicePreferences;
   preferences: ProfilePreferences;
   profiles: LocalProfile[];
+}
+
+export interface CustomServiceManifest {
+  id: string;
+  name: string;
+  startUrl: string;
 }
 
 export interface ServiceQuitRequest {

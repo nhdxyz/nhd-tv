@@ -5,6 +5,18 @@ export interface SpatialCandidateDescriptor {
   tagName: string;
 }
 
+export const NETFLIX_SPATIAL_TARGET_SELECTORS = [
+  '[data-uia="play-button"]',
+  '[data-uia="add-to-my-list"]',
+  '[data-uia*="thumbs-up"]',
+  '[data-uia*="thumbs-down"]',
+  '[data-uia*="episode-item"]',
+  '[data-uia*="season-selector"]',
+  '.episodeSelector .episode',
+  '[class*="episodeSelector"] [class*="episode"]',
+  '[class*="episode-item"]'
+] as const;
+
 export function spatialCandidatePriority(candidate: SpatialCandidateDescriptor): number {
   const tagName = candidate.tagName.toUpperCase();
   if (["BUTTON", "INPUT", "SELECT", "SUMMARY", "TEXTAREA"].includes(tagName)) return 4;

@@ -28,6 +28,8 @@ describe("service spatial navigation", () => {
     expect(script).toContain("primaryModalTargets.includes(current)");
     expect(script).toContain("play|resume|watch now|continue watching");
     expect(script).toContain("location.hostname === 'www.netflix.com'");
+    expect(script).toContain("episode-item");
+    expect(script).toContain("add-to-my-list");
     expect(script).toContain("element.contains(descendant)");
     expect(script).toContain("descendantPriority > priority");
     expect(script).toContain("modalArea * 0.55");

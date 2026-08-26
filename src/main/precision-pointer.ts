@@ -3,7 +3,10 @@ import type {
   RemotePointerInput,
   RemotePointerResult
 } from "./contracts";
-import { spatialCandidatePriority } from "./spatial-focus";
+import {
+  NETFLIX_SPATIAL_TARGET_SELECTORS,
+  spatialCandidatePriority
+} from "./spatial-focus";
 
 interface PointerTarget {
   key: string | null;
@@ -67,6 +70,7 @@ export function buildPrecisionPointerTargetScript(
     const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
     const phase = ${JSON.stringify(phase)};
     const candidatePriority = (${spatialCandidatePriority.toString()});
+    const netflixTargetSelectors = ${JSON.stringify(NETFLIX_SPATIAL_TARGET_SELECTORS)};
     const declaredTextEntrySelectors = ${JSON.stringify(remoteTextEntrySelectors)};
     const declaredTextEntryTriggerSelectors = ${JSON.stringify(remoteTextEntryTriggerSelectors)};
     const cursorId = 'nhd-tv-precision-cursor';
@@ -152,24 +156,25 @@ export function buildPrecisionPointerTargetScript(
         'important'
       );
     };
+    const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
+    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     const selectors = [
       'a[href]',
       'button',
       '[role="button"]',
       '[role="link"]',
       '[tabindex]:not([tabindex="-1"])',
+      ...(netflix ? netflixTargetSelectors : []),
       ...declaredTextEntrySelectors,
       ...declaredTextEntryTriggerSelectors
     ].join(',');
     const snapRadius = Math.max(52, Math.min(108, Math.min(innerWidth, innerHeight) * 0.1));
-    const youtube = location.hostname === 'www.youtube.com' || location.hostname.endsWith('.youtube.com');
-    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     const priorityFor = (element) => candidatePriority({
       hasHref: element instanceof HTMLAnchorElement && element.hasAttribute('href'),
       role: element.getAttribute('role'),
       tabIndex: element.tabIndex,
       tagName: element.tagName
-    });
+    }) + (netflix && netflixTargetSelectors.some((selector) => element.matches(selector)) ? 5 : 0);
     const cardSelector = [
       'ytd-rich-item-renderer',
       'ytd-video-renderer',
@@ -231,9 +236,17 @@ export function buildPrecisionPointerTargetScript(
         Number(style.opacity) > 0.05 && rect.width >= 40 && rect.height >= 40 &&
         rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
     });
-    const modalRoot = visibleModalRoots
-      .filter((candidate) => !visibleModalRoots.some((other) => other !== candidate && other.contains(candidate)))
-      .at(-1) || null;
+    const pointElements = document.elementsFromPoint(requestedX, requestedY);
+    const pointModalRoots = visibleModalRoots.filter((root) =>
+      pointElements.some((element) => root === element || root.contains(element))
+    );
+    const modalArea = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width * rect.height;
+    };
+    const modalRoot = (pointModalRoots.length > 0 ? pointModalRoots : visibleModalRoots)
+      .sort((left, right) => modalArea(right) - modalArea(left))
+      [0] || null;
     const isCandidate = (element) => {
       if (
         !(element instanceof HTMLElement) ||
@@ -260,7 +273,10 @@ export function buildPrecisionPointerTargetScript(
     for (const [offsetX, offsetY] of samplePoints) {
       const sampleX = Math.max(0, Math.min(innerWidth - 1, requestedX + offsetX));
       const sampleY = Math.max(0, Math.min(innerHeight - 1, requestedY + offsetY));
-      for (const element of document.elementsFromPoint(sampleX, sampleY)) {
+      const elements = offsetX === 0 && offsetY === 0
+        ? pointElements
+        : document.elementsFromPoint(sampleX, sampleY);
+      for (const element of elements) {
         const card = youtube ? element.closest(cardSelector) : null;
         const cardTarget = card === null
           ? null

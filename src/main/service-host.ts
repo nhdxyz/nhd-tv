@@ -51,7 +51,10 @@ import {
   type ServiceBackState
 } from "./service-navigation";
 import { scoreSpatialCandidate } from "./spatial-navigation";
-import { spatialCandidatePriority } from "./spatial-focus";
+import {
+  NETFLIX_SPATIAL_TARGET_SELECTORS,
+  spatialCandidatePriority
+} from "./spatial-focus";
 import {
   isSystemVolumeAction,
   type SystemVolumeAction
@@ -178,6 +181,7 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
     const action = ${JSON.stringify(action)};
     const scoreCandidate = (${scoreSpatialCandidate.toString()});
     const candidatePriority = (${spatialCandidatePriority.toString()});
+    const netflixTargetSelectors = ${JSON.stringify(NETFLIX_SPATIAL_TARGET_SELECTORS)};
     const clearFocus = () => {
       document.querySelectorAll('[data-nhd-tv-focus="true"]').forEach((element) => {
         element.removeAttribute('data-nhd-tv-focus');
@@ -198,20 +202,21 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       return false;
     }
 
+    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     const selectors = [
       'a[href]',
       'button',
       '[role="button"]',
       '[role="link"]',
-      '[tabindex]:not([tabindex="-1"])'
+      '[tabindex]:not([tabindex="-1"])',
+      ...(netflix ? netflixTargetSelectors : [])
     ].join(',');
-    const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
     const priorityFor = (element) => candidatePriority({
       hasHref: element instanceof HTMLAnchorElement && element.hasAttribute('href'),
       role: element.getAttribute('role'),
       tabIndex: element.tabIndex,
       tagName: element.tagName
-    });
+    }) + (netflix && netflixTargetSelectors.some((selector) => element.matches(selector)) ? 5 : 0);
     let candidates = [...document.querySelectorAll(selectors)].filter((element) => {
       if (
         !(element instanceof HTMLElement) ||

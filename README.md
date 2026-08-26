@@ -20,7 +20,7 @@ NHD-TV is a controller-friendly desktop TV environment for Windows, macOS, and L
 
 ## Current host spike
 
-The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its TV-first home includes a hero, Continue Watching foundation, service rail, planned Store/Profile/Remote affordances, spatial arrow-key focus, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, privacy-safe compatibility diagnostics, and automated security-policy tests.
+The first spike uses Castlabs Electron for Content Security (ECS) to run a trusted local shell beside an isolated streaming-service view. Its TV-first home includes a hero, Continue Watching foundation, service rail, planned Store/Profile affordances, spatial arrow-key focus, configurable navigation sounds, secure QR phone pairing, and a collapsed engineering panel. The host includes a Shaka Player Widevine test service, narrow IPC, strict navigation rules, privacy-safe compatibility diagnostics, and automated security-policy tests.
 
 ## Development setup
 
@@ -40,6 +40,8 @@ pnpm start
 ```
 
 In the feasibility shell, select a service from the matrix and press Escape to return to NHD-TV. The Shaka entry is the public Widevine test; commercial-service credentials must be entered directly into their isolated service pages. Escape is a temporary spike behavior; the nested Back and quit flow is tracked separately.
+
+To use a phone as a session-only remote, choose **Pair a phone**, scan the short-lived QR code from a phone on the same trusted network, and approve the request on the TV. The local controller sends only directional, Select, Back, and Home actions; it cannot send credentials or arbitrary text. Restarting NHD-TV revokes all paired phones.
 
 ## Project documents
 

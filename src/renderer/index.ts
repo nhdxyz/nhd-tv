@@ -1,5 +1,6 @@
 import "./style.css";
-import type { HostStatus } from "../main/contracts";
+import type { HostStatus, RemoteAction, RemoteStatus } from "../main/contracts";
+import { NavigationSounds } from "./navigation-sounds";
 import {
   findDirectionalTarget,
   type SpatialDirection
@@ -14,6 +15,19 @@ const feedback = document.querySelector<HTMLParagraphElement>("#feedback");
 const closeServiceButton = document.querySelector<HTMLButtonElement>("#close-service");
 const serviceActions = document.querySelector<HTMLDivElement>("#service-actions");
 const heroOpenButton = document.querySelector<HTMLButtonElement>("#hero-open");
+const remoteDialog = document.querySelector<HTMLDialogElement>("#remote-dialog");
+const remoteDetail = document.querySelector<HTMLParagraphElement>("#remote-detail");
+const remotePairingView = document.querySelector<HTMLDivElement>("#remote-pairing-view");
+const remoteQr = document.querySelector<HTMLImageElement>("#remote-qr");
+const remoteExpiry = document.querySelector<HTMLParagraphElement>("#remote-expiry");
+const remoteApproval = document.querySelector<HTMLDivElement>("#remote-approval");
+const remoteReady = document.querySelector<HTMLDivElement>("#remote-ready");
+const remoteReadyCopy = document.querySelector<HTMLSpanElement>("#remote-ready-copy");
+const remoteStart = document.querySelector<HTMLButtonElement>("#remote-start");
+const remoteApprove = document.querySelector<HTMLButtonElement>("#remote-approve");
+const remoteDeny = document.querySelector<HTMLButtonElement>("#remote-deny");
+const remoteClose = document.querySelector<HTMLButtonElement>("#remote-close");
+const soundToggle = document.querySelector<HTMLButtonElement>("#sound-toggle");
 
 function requireElement<T>(element: T | null, name: string): T {
   if (element === null) {
@@ -29,11 +43,27 @@ const elements = {
   feedback: requireElement(feedback, "feedback"),
   healthPill: requireElement(healthPill, "health-pill"),
   heroOpenButton: requireElement(heroOpenButton, "hero-open"),
+  remoteApproval: requireElement(remoteApproval, "remote-approval"),
+  remoteApprove: requireElement(remoteApprove, "remote-approve"),
+  remoteClose: requireElement(remoteClose, "remote-close"),
+  remoteDeny: requireElement(remoteDeny, "remote-deny"),
+  remoteDetail: requireElement(remoteDetail, "remote-detail"),
+  remoteDialog: requireElement(remoteDialog, "remote-dialog"),
+  remoteExpiry: requireElement(remoteExpiry, "remote-expiry"),
+  remotePairingView: requireElement(remotePairingView, "remote-pairing-view"),
+  remoteQr: requireElement(remoteQr, "remote-qr"),
+  remoteReady: requireElement(remoteReady, "remote-ready"),
+  remoteReadyCopy: requireElement(remoteReadyCopy, "remote-ready-copy"),
+  remoteStart: requireElement(remoteStart, "remote-start"),
   runtimeStatus: requireElement(runtimeStatus, "runtime-status"),
   serviceActions: requireElement(serviceActions, "service-actions"),
   serviceStatus: requireElement(serviceStatus, "service-status"),
+  soundToggle: requireElement(soundToggle, "sound-toggle"),
   widevineStatus: requireElement(widevineStatus, "widevine-status")
 };
+
+const navigationSounds = new NavigationSounds();
+let currentRemoteStatus: RemoteStatus | null = null;
 
 function renderStatus(status: HostStatus): void {
   elements.runtimeStatus.textContent = [
@@ -156,9 +186,94 @@ document.querySelector<HTMLButtonElement>("#settings-nav")?.addEventListener("cl
   showPlannedFeature("Display, input, and privacy settings arrive with the TV shell milestone.");
 });
 
+function remoteExpiryCopy(expiresAt: number | null): string {
+  if (expiresAt === null) {
+    return "";
+  }
+
+  const seconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1_000));
+  return seconds === 0 ? "Pairing code expired." : `Code expires in ${seconds} seconds.`;
+}
+
+function renderRemoteStatus(status: RemoteStatus): void {
+  currentRemoteStatus = status;
+  elements.remoteDetail.textContent = status.detail;
+  elements.remotePairingView.hidden = status.state !== "pairing" || status.qrDataUrl === null;
+  elements.remoteApproval.hidden = status.state !== "awaiting-approval";
+  elements.remoteReady.hidden = status.state !== "ready";
+  elements.remoteStart.hidden = status.state === "awaiting-approval";
+  elements.remoteStart.textContent = status.state === "ready"
+    ? "Pair another phone"
+    : status.state === "pairing"
+      ? "Refresh pairing code"
+      : "Create pairing code";
+  elements.remoteReadyCopy.textContent = status.connectedControllers === 1
+    ? "1 phone remote connected for this session."
+    : `${status.connectedControllers} phone remotes connected for this session.`;
+  elements.remoteExpiry.textContent = remoteExpiryCopy(status.expiresAt);
+
+  if (status.qrDataUrl !== null) {
+    elements.remoteQr.src = status.qrDataUrl;
+  } else {
+    elements.remoteQr.removeAttribute("src");
+  }
+}
+
+function showRemoteError(error: unknown): void {
+  elements.remoteDetail.textContent = error instanceof Error ? error.message : String(error);
+  elements.remoteStart.disabled = false;
+}
+
+async function refreshRemoteStatus(): Promise<void> {
+  renderRemoteStatus(await window.nhd.getRemoteStatus());
+}
+
+async function startRemotePairing(): Promise<void> {
+  elements.remoteStart.disabled = true;
+  elements.remoteDetail.textContent = "Creating a private, short-lived pairing code…";
+
+  try {
+    renderRemoteStatus(await window.nhd.startRemotePairing());
+  } catch (error) {
+    showRemoteError(error);
+  } finally {
+    elements.remoteStart.disabled = false;
+  }
+}
+
 document.querySelector<HTMLButtonElement>("#remote-card")?.addEventListener("click", () => {
-  showPlannedFeature("QR phone pairing is planned for Milestone 4.");
+  elements.remoteDialog.showModal();
+  void refreshRemoteStatus()
+    .then(() => {
+      if (currentRemoteStatus?.state === "inactive") {
+        return startRemotePairing();
+      }
+
+      elements.remoteStart.focus();
+    })
+    .catch(showRemoteError);
 });
+
+elements.remoteStart.addEventListener("click", () => void startRemotePairing());
+elements.remoteClose.addEventListener("click", () => elements.remoteDialog.close());
+elements.remoteApprove.addEventListener("click", () => {
+  void window.nhd.approveRemotePairing().then(renderRemoteStatus).catch(showRemoteError);
+});
+elements.remoteDeny.addEventListener("click", () => {
+  void window.nhd.denyRemotePairing().then(renderRemoteStatus).catch(showRemoteError);
+});
+
+function renderSoundPreference(): void {
+  elements.soundToggle.setAttribute("aria-pressed", String(navigationSounds.enabled));
+  elements.soundToggle.textContent = navigationSounds.enabled ? "Sound on" : "Sound off";
+}
+
+elements.soundToggle.addEventListener("click", () => {
+  navigationSounds.setEnabled(!navigationSounds.enabled);
+  renderSoundPreference();
+});
+
+renderSoundPreference();
 
 const arrowDirections: Readonly<Record<string, SpatialDirection>> = {
   ArrowDown: "down",
@@ -167,21 +282,26 @@ const arrowDirections: Readonly<Record<string, SpatialDirection>> = {
   ArrowUp: "up"
 };
 
-document.addEventListener("keydown", (event) => {
-  const direction = arrowDirections[event.key];
-  const current = event.target;
+function visibleNavigationCandidates(): HTMLElement[] {
+  const scope: ParentNode = elements.remoteDialog.open ? elements.remoteDialog : document;
+  return Array.from(
+    scope.querySelectorAll<HTMLElement>("button:not(:disabled), summary")
+  ).filter((candidate) => candidate.getClientRects().length > 0);
+}
 
-  if (direction === undefined || !(current instanceof HTMLElement)) {
-    return;
+function moveSpatialFocus(direction: SpatialDirection): boolean {
+  const candidates = visibleNavigationCandidates();
+  const current = document.activeElement;
+  const currentIndex = current instanceof HTMLElement ? candidates.indexOf(current) : -1;
+
+  if (candidates.length === 0) {
+    return false;
   }
 
-  const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>("button:not(:disabled), summary")
-  ).filter((candidate) => candidate.getClientRects().length > 0);
-  const currentIndex = candidates.indexOf(current);
-
   if (currentIndex === -1) {
-    return;
+    candidates[0]?.focus({ preventScroll: true });
+    navigationSounds.playMove();
+    return true;
   }
 
   const nextIndex = findDirectionalTarget(
@@ -191,13 +311,57 @@ document.addEventListener("keydown", (event) => {
   );
 
   if (nextIndex === null) {
+    return false;
+  }
+
+  candidates[nextIndex]?.focus({ preventScroll: true });
+  candidates[nextIndex]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  navigationSounds.playMove();
+  return true;
+}
+
+document.addEventListener("keydown", (event) => {
+  const direction = arrowDirections[event.key];
+
+  if (direction === undefined) {
     return;
   }
 
-  event.preventDefault();
-  candidates[nextIndex]?.focus({ preventScroll: true });
-  candidates[nextIndex]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  if (moveSpatialFocus(direction)) {
+    event.preventDefault();
+  }
 });
+
+document.addEventListener("click", (event) => {
+  if (event.target instanceof Element && event.target.closest("button, summary") !== null) {
+    navigationSounds.playSelect();
+  }
+}, { capture: true });
+
+function handleShellRemoteAction(action: RemoteAction): void {
+  if (action === "up" || action === "down" || action === "left" || action === "right") {
+    moveSpatialFocus(action);
+    return;
+  }
+
+  if (action === "select") {
+    const focused = document.activeElement;
+
+    if (focused instanceof HTMLElement && visibleNavigationCandidates().includes(focused)) {
+      focused.click();
+    } else {
+      visibleNavigationCandidates()[0]?.focus();
+    }
+    return;
+  }
+
+  if (elements.remoteDialog.open) {
+    elements.remoteDialog.close();
+  }
+
+  window.scrollTo({ behavior: "smooth", top: 0 });
+  elements.heroOpenButton.focus({ preventScroll: true });
+}
 
 elements.closeServiceButton.addEventListener("click", async () => {
   await window.nhd.closeService();
@@ -205,6 +369,19 @@ elements.closeServiceButton.addEventListener("click", async () => {
 });
 
 window.nhd.onHostStatusChanged(renderStatus);
+window.nhd.onRemoteAction(handleShellRemoteAction);
+window.nhd.onRemoteStatusChanged(renderRemoteStatus);
 void refreshStatus();
 void renderServices();
 window.setInterval(() => void refreshStatus().catch(() => undefined), 5_000);
+window.setInterval(() => {
+  if (!elements.remoteDialog.open || currentRemoteStatus === null) {
+    return;
+  }
+
+  elements.remoteExpiry.textContent = remoteExpiryCopy(currentRemoteStatus.expiresAt);
+
+  if (currentRemoteStatus.expiresAt !== null && currentRemoteStatus.expiresAt <= Date.now()) {
+    void refreshRemoteStatus().catch(showRemoteError);
+  }
+}, 1_000);

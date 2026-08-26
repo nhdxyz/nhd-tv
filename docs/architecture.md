@@ -31,6 +31,10 @@ The host decides whether an action belongs to the shell, the service, or an NHD-
 3. At an adapter-defined root state, display the host-owned quit confirmation.
 4. Provide a hold-to-force-return escape path.
 
+The current phone-remote slice starts an HTTP server on a random port only when pairing is requested. Its QR secret is 256-bit random data held in memory and expires quickly. Scanning creates a pending request; the TV must approve it before the server returns a separate session-only controller token. Pairing and controller tokens are stored as hashes in the host, never logged, and revoked at app shutdown. The local page has a restrictive Content Security Policy and accepts only a fixed action vocabulary. It intentionally has no text-entry channel.
+
+The first implementation uses small authenticated HTTP requests for commands rather than a persistent WebSocket. This keeps the exposed local surface narrow while retaining adequate D-pad latency; the normalized action layer allows the transport to change later without changing shell or service routing.
+
 ## Service adapters
 
 A versioned adapter contract will separate common hosting from service-specific behavior. Expected capabilities include:
@@ -59,4 +63,3 @@ Application-owned secrets must use operating-system-backed encryption where avai
 - Virtualize large home rows.
 - Keep high-frequency playback observation outside shell render state.
 - Measure cold startup, time to interactive, navigation latency, memory, dropped frames, hardware video decode, and recovery after sleep.
-

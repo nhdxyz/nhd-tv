@@ -10,7 +10,7 @@ import {
   originForDiagnostics,
   type ServiceDefinition
 } from "./security/navigation-policy";
-import type { NavigationDiagnostic } from "./contracts";
+import type { NavigationDiagnostic, RemoteAction } from "./contracts";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 
@@ -192,6 +192,28 @@ export class ServiceHost {
     }
 
     this.#onStateChanged(null);
+  }
+
+  sendRemoteAction(action: Exclude<RemoteAction, "home">): boolean {
+    const view = this.#view;
+
+    if (view === null || view.webContents.isDestroyed()) {
+      return false;
+    }
+
+    const keyCode: Record<Exclude<RemoteAction, "home">, string> = {
+      back: "Escape",
+      down: "Down",
+      left: "Left",
+      right: "Right",
+      select: "Enter",
+      up: "Up"
+    };
+
+    view.webContents.focus();
+    view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyDown" });
+    view.webContents.sendInputEvent({ keyCode: keyCode[action], type: "keyUp" });
+    return true;
   }
 
   #resize(): void {

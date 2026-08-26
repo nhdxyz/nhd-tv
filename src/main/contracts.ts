@@ -1,10 +1,39 @@
 export const IPC_CHANNELS = {
+  approveRemotePairing: "nhd:remote:pairing:approve",
   closeService: "nhd:service:close",
+  denyRemotePairing: "nhd:remote:pairing:deny",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
+  getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
-  openService: "nhd:service:open"
+  openService: "nhd:service:open",
+  remoteAction: "nhd:remote:action",
+  remoteStatusChanged: "nhd:remote:status:changed",
+  startRemotePairing: "nhd:remote:pairing:start"
 } as const;
+
+export const REMOTE_ACTIONS = [
+  "back",
+  "down",
+  "home",
+  "left",
+  "right",
+  "select",
+  "up"
+] as const;
+
+export type RemoteAction = (typeof REMOTE_ACTIONS)[number];
+
+export type RemoteState = "awaiting-approval" | "inactive" | "pairing" | "ready";
+
+export interface RemoteStatus {
+  connectedControllers: number;
+  detail: string;
+  expiresAt: number | null;
+  networkAddress: string | null;
+  qrDataUrl: string | null;
+  state: RemoteState;
+}
 
 export type ServiceKind = "commercial" | "test";
 

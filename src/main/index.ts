@@ -13,8 +13,11 @@ import {
   IPC_CHANNELS,
   type HostStatus,
   type ProcessDiagnostics,
+  type RemoteAction,
+  type RemoteStatus,
   type WidevineState
 } from "./contracts";
+import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { getServiceDefinition, getServiceSummaries } from "./service-registry";
 import { ServiceHost } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
@@ -37,6 +40,7 @@ protocol.registerSchemesAsPrivileged([
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
+let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
@@ -104,6 +108,39 @@ function publishHostStatus(): void {
   }
 }
 
+function inactiveRemoteStatus(): RemoteStatus {
+  return {
+    connectedControllers: 0,
+    detail: "Start pairing to create a short-lived local QR code.",
+    expiresAt: null,
+    networkAddress: null,
+    qrDataUrl: null,
+    state: "inactive"
+  };
+}
+
+function publishRemoteStatus(status: RemoteStatus): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.remoteStatusChanged, status);
+  }
+}
+
+function handleRemoteAction(action: RemoteAction): void {
+  if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
+    if (action === "home") {
+      serviceHost.close();
+      return;
+    }
+
+    serviceHost.sendRemoteAction(action);
+    return;
+  }
+
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
+  }
+}
+
 function registerShellProtocol(): void {
   const rendererRoot = path.resolve(__dirname, "../renderer");
 
@@ -148,6 +185,41 @@ function registerIpc(): void {
   ipcMain.handle(IPC_CHANNELS.getHostStatus, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return hostStatus();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.getRemoteStatus, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return phoneRemote?.status ?? inactiveRemoteStatus();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.startRemotePairing, async (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+
+    if (phoneRemote === null) {
+      throw new Error("The phone remote is not ready yet.");
+    }
+
+    return phoneRemote.startPairing();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.approveRemotePairing, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+
+    if (phoneRemote === null) {
+      throw new Error("The phone remote is not ready yet.");
+    }
+
+    return phoneRemote.approvePending();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.denyRemotePairing, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+
+    if (phoneRemote === null) {
+      throw new Error("The phone remote is not ready yet.");
+    }
+
+    return phoneRemote.denyPending();
   });
 
   ipcMain.handle(IPC_CHANNELS.openService, async (event, serviceId: unknown) => {
@@ -225,10 +297,18 @@ async function createMainWindow(): Promise<void> {
   });
 
   serviceHost = new ServiceHost(mainWindow, publishHostStatus);
+  phoneRemote = new PhoneRemoteServer({
+    onAction: handleRemoteAction,
+    onStatusChanged: publishRemoteStatus
+  });
 
   mainWindow.on("closed", () => {
+    const remoteToStop = phoneRemote;
+
+    phoneRemote = null;
     serviceHost = null;
     mainWindow = null;
+    void remoteToStop?.stop();
   });
 
   await mainWindow.loadURL("app://shell/index.html");

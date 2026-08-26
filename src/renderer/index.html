@@ -23,6 +23,9 @@
         <span class="nav-current" aria-current="page">Home</span>
         <button class="nav-button" id="store-nav" type="button">Store</button>
         <button class="nav-button" id="settings-nav" type="button">Settings</button>
+        <button class="nav-button sound-toggle" id="sound-toggle" type="button" aria-pressed="true">
+          Sound on
+        </button>
       </nav>
 
       <button class="profile-chip" id="profile-button" type="button">
@@ -104,7 +107,7 @@
         </button>
         <button class="quick-card" id="remote-card" type="button">
           <span class="quick-icon" aria-hidden="true">⌁</span>
-          <span><strong>Pair a phone</strong><small>Remote control is coming later</small></span>
+          <span><strong>Pair a phone</strong><small>Scan securely on your local network</small></span>
         </button>
         <button class="quick-card" id="profile-card" type="button">
           <span class="quick-icon" aria-hidden="true">◎</span>
@@ -147,6 +150,51 @@
         </button>
       </details>
     </main>
+
+    <dialog class="remote-dialog" id="remote-dialog" aria-labelledby="remote-title">
+      <div class="remote-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="section-kicker">Phone remote</p>
+            <h2 id="remote-title">Pair this television</h2>
+          </div>
+          <button class="dialog-close" id="remote-close" type="button" aria-label="Close phone pairing">
+            ×
+          </button>
+        </header>
+
+        <p class="remote-detail" id="remote-detail" role="status" aria-live="polite">
+          Start pairing to create a short-lived local QR code.
+        </p>
+        <p class="remote-safety">
+          Use a trusted home network. The remote intentionally cannot send passwords,
+          payment details, or arbitrary text.
+        </p>
+
+        <div class="remote-pairing-view" id="remote-pairing-view" hidden>
+          <img class="remote-qr" id="remote-qr" alt="QR code for the NHD-TV phone remote" />
+          <p class="remote-expiry" id="remote-expiry"></p>
+        </div>
+
+        <div class="remote-approval" id="remote-approval" hidden>
+          <strong>Allow this phone?</strong>
+          <p>A phone scanned the current code. Confirm here before it can send commands.</p>
+          <div class="remote-dialog-actions">
+            <button class="primary-action" id="remote-approve" type="button">Allow phone</button>
+            <button class="glass-action" id="remote-deny" type="button">Deny</button>
+          </div>
+        </div>
+
+        <div class="remote-ready" id="remote-ready" hidden>
+          <span class="remote-ready-dot" aria-hidden="true"></span>
+          <span id="remote-ready-copy">Phone remote connected.</span>
+        </div>
+
+        <button class="primary-action remote-start" id="remote-start" type="button">
+          Create pairing code
+        </button>
+      </div>
+    </dialog>
 
     <script type="module" src="/index.ts"></script>
   </body>

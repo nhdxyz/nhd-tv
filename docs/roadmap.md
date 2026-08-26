@@ -40,11 +40,13 @@ The milestone passes only when results and limitations are documented. Unsupport
 
 ## Milestone 4: Phone remote
 
-- Local controller server
-- QR pairing and television approval
-- Revocable device tokens
-- Navigation and trackpad controls
-- Reconnection and multiple-device behavior
+- [x] Session-only local controller server
+- [x] Short-lived QR pairing and television approval
+- [x] Revocable in-memory device tokens
+- [x] Directional, Select, Back, and Home controls
+- [ ] Trackpad controls
+- [ ] Reconnection across app restarts and persistent device management
+- [x] Multiple phones within one app session
 
 ## Milestone 5: Packaging and platform expansion
 
@@ -52,4 +54,3 @@ The milestone passes only when results and limitations are documented. Unsupport
 - macOS packaging, signing, and platform validation
 - Linux packaging and documented DRM limitations
 - Startup behavior, audio output, sleep/wake, and accessibility hardening
-

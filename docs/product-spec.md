@@ -80,7 +80,7 @@ The listener checkpoints active playback periodically and immediately on pause, 
 
 The desktop app exposes a local controller page and displays a QR code containing a short-lived pairing credential. The television requires confirmation before issuing a revocable device token.
 
-The remote provides navigation, Select, Back, a trackpad, and non-sensitive text entry. Password entry over the remote is excluded until the channel has an appropriate encryption design.
+The first remote slice provides directional navigation, Select, Back, and Home. It is session-only, requires television approval, and deliberately excludes all text entry so a phone cannot forward passwords or payment details. Trackpad and carefully scoped non-sensitive text entry remain later capabilities; password entry is excluded until the channel has an appropriate encryption design.
 
 ## Desktop behavior
 
@@ -90,4 +90,3 @@ The remote provides navigation, Select, Back, a trackpad, and non-sensitive text
 - Restore focus predictably when returning home.
 - Handle sleep, wake, offline state, service crashes, and application updates.
 - Avoid preventing system sleep unless active playback requires it.
-

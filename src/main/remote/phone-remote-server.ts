@@ -11,6 +11,7 @@ import type {
   RemoteAction,
   RemotePointerInput,
   RemotePointerResult,
+  RemoteServiceShortcut,
   RemoteStatus,
   RemoteTextInput
 } from "../contracts";
@@ -41,6 +42,10 @@ export interface PhoneRemoteServerOptions {
     { detail?: string; handled: boolean } |
     Promise<{ detail?: string; handled: boolean }>;
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
+  onGetRecentServices: () =>
+    readonly RemoteServiceShortcut[] |
+    Promise<readonly RemoteServiceShortcut[]>;
+  onLaunchService: (serviceId: string) => boolean | Promise<boolean>;
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
   onText: (input: RemoteTextInput) => boolean | Promise<boolean>;
@@ -145,6 +150,8 @@ export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
+  readonly #onGetRecentServices: PhoneRemoteServerOptions["onGetRecentServices"];
+  readonly #onLaunchService: PhoneRemoteServerOptions["onLaunchService"];
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   readonly #onText: PhoneRemoteServerOptions["onText"];
@@ -159,6 +166,8 @@ export class PhoneRemoteServer {
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
+    this.#onGetRecentServices = options.onGetRecentServices;
+    this.#onLaunchService = options.onLaunchService;
     this.#onPointer = options.onPointer;
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
@@ -379,6 +388,22 @@ export class PhoneRemoteServer {
       return;
     }
 
+    if (method === "GET" && url.pathname === "/api/apps") {
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const services = [...await this.#onGetRecentServices()].slice(0, 3);
+      writeJson(response, 200, { services });
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/api/command") {
       if (!isSameOriginPost(request, this.#remoteOrigin)) {
         writeJson(response, 403, { error: "Command origin rejected" });
@@ -395,12 +420,10 @@ export class PhoneRemoteServer {
         return;
       }
 
-      const now = Date.now();
-      if (now - this.#lastCommandAt < MIN_COMMAND_INTERVAL_MS) {
+      if (!this.#acceptCommand()) {
         writeJson(response, 429, { error: "Commands are arriving too quickly" });
         return;
       }
-      this.#lastCommandAt = now;
 
       const body = await readJsonBody(request);
       const action = parseRemoteAction(body?.action);
@@ -412,6 +435,44 @@ export class PhoneRemoteServer {
 
       const result = await this.#onAction(action);
       writeJson(response, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/launch") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "App launch origin rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      if (!this.#acceptCommand()) {
+        writeJson(response, 429, { error: "Commands are arriving too quickly" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      if (
+        body === null ||
+        Object.keys(body).some((key) => key !== "serviceId") ||
+        typeof body.serviceId !== "string"
+      ) {
+        writeJson(response, 400, { error: "A recent app id is required" });
+        return;
+      }
+
+      if (!await this.#onLaunchService(body.serviceId)) {
+        writeJson(response, 409, { error: "That app is no longer in Recent Apps" });
+        return;
+      }
+
+      writeJson(response, 200, { handled: true, ok: true });
       return;
     }
 
@@ -572,6 +633,15 @@ export class PhoneRemoteServer {
 
   #publishStatus(): void {
     this.#onStatusChanged(this.status);
+  }
+
+  #acceptCommand(): boolean {
+    const now = Date.now();
+    if (now - this.#lastCommandAt < MIN_COMMAND_INTERVAL_MS) {
+      return false;
+    }
+    this.#lastCommandAt = now;
+    return true;
   }
 
   #authorize(token: unknown): boolean {

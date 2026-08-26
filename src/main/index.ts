@@ -26,6 +26,7 @@ import {
   type RemoteAction,
   type RemotePointerInput,
   type RemotePointerResult,
+  type RemoteServiceShortcut,
   type RemoteStatus,
   type RemoteTextInput,
   type ServiceRecoveryMode,
@@ -63,7 +64,8 @@ import { resolveRemoteSearchDestination } from "./search-routing";
 import {
   buildServiceSearchUrl,
   isAllowedArtworkUrl,
-  sanitizePlaybackUrl
+  sanitizePlaybackUrl,
+  type ServiceDefinition
 } from "./security/navigation-policy";
 
 const SHELL_HOST = "shell";
@@ -510,6 +512,42 @@ async function handlePlaybackObservation(observation: PlaybackObservation): Prom
   }
 }
 
+async function openTrackedService(
+  definition: ServiceDefinition,
+  initialUrl = definition.startUrl
+): Promise<void> {
+  if (serviceHost === null) {
+    throw new Error("The service host is not ready.");
+  }
+
+  await serviceHost.open(definition, initialUrl);
+  await localStateStore?.recordServiceLaunch(definition.id).catch(() => undefined);
+}
+
+function recentRemoteServices(): RemoteServiceShortcut[] {
+  const state = localStateStore?.snapshot();
+  if (state === undefined) return [];
+
+  const enabled = new Set(state.preferences.enabledServiceIds);
+  return state.recentServiceIds
+    .filter((serviceId) => enabled.has(serviceId))
+    .map((serviceId) => getServiceDefinition(serviceId))
+    .filter((definition): definition is ServiceDefinition => definition !== null)
+    .slice(0, 3)
+    .map(({ id, name }) => ({ id, name }));
+}
+
+async function handleRemoteServiceLaunch(serviceId: string): Promise<boolean> {
+  if (!recentRemoteServices().some((service) => service.id === serviceId)) {
+    return false;
+  }
+
+  const definition = getServiceDefinition(serviceId);
+  if (definition === null) return false;
+  await openTrackedService(definition);
+  return true;
+}
+
 async function handleRemoteSearch(query: string): Promise<void> {
   const destination = resolveRemoteSearchDestination(
     serviceHost?.activeServiceId ?? null,
@@ -882,7 +920,7 @@ function registerIpc(): void {
       throw new Error(`Unknown service: ${serviceId}`);
     }
 
-    await serviceHost.open(definition);
+    await openTrackedService(definition);
   });
 
   ipcMain.handle(IPC_CHANNELS.recoverService, async (event, mode: unknown) => {
@@ -915,7 +953,7 @@ function registerIpc(): void {
         throw new Error(`${definition.name} does not support this search.`);
       }
 
-      await serviceHost.open(definition, searchUrl);
+      await openTrackedService(definition, searchUrl);
     }
   );
 
@@ -932,7 +970,7 @@ function registerIpc(): void {
       throw new Error("That Continue Watching item is no longer available.");
     }
 
-    await serviceHost.open(definition, watchUrl);
+    await openTrackedService(definition, watchUrl);
   });
 
   ipcMain.handle(IPC_CHANNELS.removeContinueWatching, async (event, itemId: unknown) => {
@@ -1059,6 +1097,8 @@ async function createMainWindow(): Promise<void> {
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
+    onGetRecentServices: recentRemoteServices,
+    onLaunchService: handleRemoteServiceLaunch,
     onPointer: handleRemotePointer,
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus,

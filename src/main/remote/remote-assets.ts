@@ -129,8 +129,21 @@ export const REMOTE_HTML = `<!doctype html>
 
         <div class="remote-utilities">
           <button class="control-mode" id="control-mode" type="button" disabled>Pointer</button>
+          <button class="quick-launch-toggle" id="quick-launch-toggle" type="button" disabled>Apps</button>
           <button class="search-toggle" id="search-toggle" type="button" disabled>Search</button>
         </div>
+
+        <section class="quick-launch-panel" id="quick-launch-panel" aria-labelledby="quick-launch-title" hidden>
+          <div class="quick-launch-heading">
+            <div>
+              <small>Quick launch</small>
+              <strong id="quick-launch-title">Recent apps</strong>
+            </div>
+            <button id="quick-launch-close" type="button" aria-label="Close recent apps">×</button>
+          </div>
+          <div class="quick-launch-list" id="quick-launch-list"></div>
+          <p id="quick-launch-empty">Open an app on NHD-TV and it will appear here.</p>
+        </section>
 
         <div class="volume-controls" aria-label="Volume controls">
           <button data-action="volume-down" data-feedback="Volume sent · TV support varies" type="button" disabled aria-label="Volume down"><span aria-hidden="true">−</span></button>
@@ -494,10 +507,11 @@ input {
 .remote-utilities {
   display: grid;
   margin-bottom: 0.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.42rem;
 }
 .control-mode,
+.quick-launch-toggle,
 .search-toggle {
   width: 100%;
   min-height: 2.65rem;
@@ -509,6 +523,77 @@ input {
   font-size: 0.7rem;
   font-weight: 850;
 }
+.quick-launch-toggle {
+  border-color: rgb(167 139 250 / 24%);
+  background: linear-gradient(145deg, #292544, #19182a);
+  color: #ede9fe;
+}
+
+.quick-launch-panel {
+  min-height: 0;
+  padding: 0.8rem;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  border: 1px solid rgb(167 139 250 / 24%);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgb(31 26 52 / 94%), rgb(13 15 24 / 94%));
+}
+.quick-launch-panel[hidden] { display: none; }
+.quick-launch-heading {
+  display: flex;
+  margin-bottom: 0.7rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.quick-launch-heading div { display: grid; gap: 0.08rem; }
+.quick-launch-heading small {
+  color: #a78bfa;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.quick-launch-heading strong { font-size: 0.88rem; }
+.quick-launch-heading button {
+  width: 2.35rem;
+  height: 2.35rem;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 6%);
+  color: #d8d5e5;
+  font: inherit;
+  font-size: 1.15rem;
+}
+.quick-launch-list { display: grid; gap: 0.5rem; }
+.quick-app {
+  display: grid;
+  min-height: 3.45rem;
+  padding: 0.55rem 0.7rem;
+  grid-template-columns: 2.25rem 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, #262b3b, #171b26);
+  color: #f8fafc;
+  font: inherit;
+  text-align: left;
+}
+.quick-app > span {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: linear-gradient(145deg, #2563eb, #7c3aed);
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+.quick-app strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-app small { color: #9aa8bb; font-size: 0.6rem; font-weight: 850; }
+.quick-app:active { transform: scale(0.98); filter: brightness(1.2); }
+#quick-launch-empty { margin: 1.1rem 0; color: #8e9bad; font-size: 0.7rem; line-height: 1.45; text-align: center; }
 
 button:disabled { opacity: 0.3; }
 
@@ -556,10 +641,17 @@ button:disabled { opacity: 0.3; }
 
 body.is-typing .control-surface,
 body.is-typing .control-mode,
+body.is-typing .quick-launch-toggle,
 body.is-typing .playback-controls,
 body.is-typing .volume-controls { display: none; }
 body.is-typing .remote-card { justify-content: flex-start; }
 body.is-typing .remote-utilities { display: block; margin-top: auto; }
+body.is-launching .control-surface,
+body.is-launching .playback-controls,
+body.is-launching .control-mode,
+body.is-launching .search-toggle,
+body.is-launching .volume-controls { display: none; }
+body.is-launching .remote-utilities { display: none; }
 
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
@@ -574,6 +666,7 @@ body.is-typing .remote-utilities { display: block; margin-top: auto; }
   .dpad,
   .precision-pad { width: min(78vw, 31dvh, 15rem); }
   .control-mode,
+  .quick-launch-toggle,
   .search-toggle { min-height: 2.4rem; }
   .playback-controls button { min-height: 2.65rem; }
   .volume-controls button { min-height: 2.35rem; }
@@ -595,6 +688,11 @@ export const REMOTE_JS = `(() => {
   const dpad = document.querySelector(".dpad");
   const precisionPad = document.querySelector("#precision-pad");
   const controlMode = document.querySelector("#control-mode");
+  const quickLaunchToggle = document.querySelector("#quick-launch-toggle");
+  const quickLaunchPanel = document.querySelector("#quick-launch-panel");
+  const quickLaunchClose = document.querySelector("#quick-launch-close");
+  const quickLaunchList = document.querySelector("#quick-launch-list");
+  const quickLaunchEmpty = document.querySelector("#quick-launch-empty");
   const searchLabel = document.querySelector("#search-label");
   const remoteModeLabel = document.querySelector("#remote-mode-label");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
@@ -644,7 +742,11 @@ export const REMOTE_JS = `(() => {
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
     controlMode.disabled = !enabled;
-    if (!enabled) resetTextEntry();
+    quickLaunchToggle.disabled = !enabled;
+    if (!enabled) {
+      resetTextEntry();
+      closeQuickLaunch();
+    }
   }
 
   function confirmCommand(button) {
@@ -751,8 +853,95 @@ export const REMOTE_JS = `(() => {
     remoteModeLabel.textContent = "Navigate";
   }
 
+  function closeQuickLaunch() {
+    quickLaunchPanel.hidden = true;
+    document.body.classList.remove("is-launching");
+    remoteModeLabel.textContent = "Navigate";
+  }
+
+  function renderRecentApps(services) {
+    quickLaunchList.replaceChildren();
+    const safeServices = Array.isArray(services)
+      ? services.filter((service) =>
+        service && typeof service.id === "string" && typeof service.name === "string"
+      ).slice(0, 3)
+      : [];
+    quickLaunchEmpty.hidden = safeServices.length > 0;
+
+    for (const service of safeServices) {
+      const button = document.createElement("button");
+      const mark = document.createElement("span");
+      const name = document.createElement("strong");
+      const action = document.createElement("small");
+      button.type = "button";
+      button.className = "quick-app";
+      button.setAttribute("aria-label", "Open " + service.name);
+      mark.setAttribute("aria-hidden", "true");
+      mark.textContent = service.name.slice(0, 1).toUpperCase();
+      name.textContent = service.name;
+      action.textContent = "Open";
+      button.append(mark, name, action);
+      button.addEventListener("click", () => void launchRecentApp(service, button));
+      quickLaunchList.append(button);
+    }
+  }
+
+  async function openQuickLaunch() {
+    if (!controllerToken) return;
+    resetTextEntry();
+    quickLaunchPanel.hidden = false;
+    quickLaunchEmpty.hidden = false;
+    quickLaunchEmpty.textContent = "Loading recent apps…";
+    document.body.classList.add("is-launching");
+    remoteModeLabel.textContent = "Recent apps";
+
+    try {
+      const result = await jsonRequest("/api/apps", {
+        headers: { "Authorization": "Bearer " + controllerToken }
+      });
+      quickLaunchEmpty.textContent = "Open an app on NHD-TV and it will appear here.";
+      renderRecentApps(result.services);
+    } catch (error) {
+      if (error && error.status === 401) {
+        controllerToken = null;
+        sessionStorage.removeItem("nhd-controller-token");
+        setEnabled(false);
+      }
+      quickLaunchEmpty.textContent = error instanceof Error ? error.message : "Recent apps unavailable";
+      setState(quickLaunchEmpty.textContent, "error");
+    }
+  }
+
+  async function launchRecentApp(service, button) {
+    if (!controllerToken) return;
+    button.disabled = true;
+    try {
+      await jsonRequest("/api/launch", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ serviceId: service.id })
+      });
+      confirmCommand(button);
+      closeQuickLaunch();
+      setState(service.name + " opened", "connected");
+    } catch (error) {
+      button.disabled = false;
+      setState(error instanceof Error ? error.message : "App launch failed", "error");
+    }
+  }
+
   async function sendAction(action, button) {
     if (document.body.classList.contains("is-typing")) resetTextEntry();
+    if (document.body.classList.contains("is-launching")) {
+      closeQuickLaunch();
+      if (action === "back") {
+        confirmCommand(button);
+        return;
+      }
+    }
     if (!controllerToken) return;
 
     try {
@@ -1076,6 +1265,7 @@ export const REMOTE_JS = `(() => {
       resetTextEntry();
       return;
     }
+    closeQuickLaunch();
     resetTextEntry();
     searchLabel.textContent = "Search your services";
     searchQuery.placeholder = "Title, person, or topic";
@@ -1085,6 +1275,16 @@ export const REMOTE_JS = `(() => {
     searchQuery.focus();
     searchPanel.scrollIntoView({ block: "nearest" });
   });
+
+  quickLaunchToggle.addEventListener("click", () => {
+    if (quickLaunchToggle.disabled) return;
+    if (!quickLaunchPanel.hidden) {
+      closeQuickLaunch();
+      return;
+    }
+    void openQuickLaunch();
+  });
+  quickLaunchClose.addEventListener("click", closeQuickLaunch);
 
   searchPanel.addEventListener("submit", (event) => {
     event.preventDefault();

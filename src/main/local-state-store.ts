@@ -9,10 +9,11 @@ import type {
   ProfilePreferences
 } from "./contracts";
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 const DEFAULT_PROFILE_ID = "default";
 const MAX_PROFILES = 8;
 const MAX_PROFILE_NAME_LENGTH = 32;
+const MAX_RECENT_SERVICES = 12;
 
 interface StoredProfile extends LocalProfile {
   createdAt: number;
@@ -24,6 +25,7 @@ interface StoredLocalState {
   devicePreferences: DevicePreferences;
   preferences: Record<string, ProfilePreferences>;
   profiles: StoredProfile[];
+  recentServiceIds: Record<string, string[]>;
   version: number;
 }
 
@@ -155,7 +157,7 @@ export class LocalStateStore {
 
       const document = parsed as Partial<StoredLocalState>;
       if (
-        (document.version !== 1 && document.version !== 2 && document.version !== STORE_VERSION) ||
+        ![1, 2, 3, STORE_VERSION].includes(document.version ?? -1) ||
         !Array.isArray(document.profiles)
       ) {
         return;
@@ -215,6 +217,15 @@ export class LocalStateStore {
         ids.has(document.activeProfileId)
         ? document.activeProfileId
         : profiles[0]?.id ?? DEFAULT_PROFILE_ID;
+      const storedRecentServiceIds = typeof document.recentServiceIds === "object" &&
+        document.recentServiceIds !== null
+        ? document.recentServiceIds
+        : {};
+      const recentServiceIds = Object.fromEntries(profiles.map((profile) => [
+        profile.id,
+        uniqueKnownIds(storedRecentServiceIds[profile.id], this.#knownServiceIds)
+          .slice(0, MAX_RECENT_SERVICES)
+      ]));
 
       this.#state = {
         activeProfileId,
@@ -222,6 +233,7 @@ export class LocalStateStore {
         devicePreferences: devicePreferences(document.devicePreferences),
         preferences,
         profiles,
+        recentServiceIds,
         version: STORE_VERSION
       };
     } catch {
@@ -242,7 +254,10 @@ export class LocalStateStore {
         favoriteServiceIds: [...preferences.favoriteServiceIds],
         serviceOrder: [...preferences.serviceOrder]
       },
-      profiles: this.#state.profiles.map(publicProfile)
+      profiles: this.#state.profiles.map(publicProfile),
+      recentServiceIds: [
+        ...(this.#state.recentServiceIds[this.#state.activeProfileId] ?? [])
+      ]
     };
   }
 
@@ -263,6 +278,7 @@ export class LocalStateStore {
       this.#knownServiceIds,
       this.#defaultEnabledServiceIds
     );
+    this.#state.recentServiceIds[profile.id] = [];
     this.#state.activeProfileId = profile.id;
     await this.#persist();
     return this.snapshot();
@@ -294,6 +310,21 @@ export class LocalStateStore {
 
   async updateDevicePreferences(value: unknown): Promise<LocalAppState> {
     this.#state.devicePreferences = devicePreferences(value);
+    await this.#persist();
+    return this.snapshot();
+  }
+
+  async recordServiceLaunch(serviceId: unknown): Promise<LocalAppState> {
+    if (typeof serviceId !== "string" || !this.#knownServiceIds.has(serviceId)) {
+      throw new Error("That service cannot be added to recent apps.");
+    }
+
+    const profileId = this.#state.activeProfileId;
+    const recent = this.#state.recentServiceIds[profileId] ?? [];
+    this.#state.recentServiceIds[profileId] = [
+      serviceId,
+      ...recent.filter((id) => id !== serviceId)
+    ].slice(0, MAX_RECENT_SERVICES);
     await this.#persist();
     return this.snapshot();
   }
@@ -340,6 +371,9 @@ export class LocalStateStore {
       preferences.favoriteServiceIds = preferences.favoriteServiceIds.filter((id) => id !== serviceId);
       preferences.serviceOrder = preferences.serviceOrder.filter((id) => id !== serviceId);
     }
+    for (const [profileId, recent] of Object.entries(this.#state.recentServiceIds)) {
+      this.#state.recentServiceIds[profileId] = recent.filter((id) => id !== serviceId);
+    }
     await this.#persist();
     return this.snapshot();
   }
@@ -363,6 +397,7 @@ export class LocalStateStore {
         )
       },
       profiles: [profile],
+      recentServiceIds: { [profile.id]: [] },
       version: STORE_VERSION
     };
   }

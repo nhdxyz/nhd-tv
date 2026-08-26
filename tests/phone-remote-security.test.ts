@@ -148,6 +148,21 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('event.target.closest("input") === null');
   });
 
+  it("offers an authenticated three-app quick launcher without exposing service URLs", () => {
+    expect(REMOTE_HTML).toContain('id="quick-launch-toggle"');
+    expect(REMOTE_HTML).toContain('id="quick-launch-panel"');
+    expect(REMOTE_HTML).toContain('id="quick-launch-list"');
+    expect(REMOTE_JS).toContain('jsonRequest("/api/apps"');
+    expect(REMOTE_JS).toContain('jsonRequest("/api/launch"');
+    expect(REMOTE_JS).toContain("body: JSON.stringify({ serviceId: service.id })");
+    expect(REMOTE_JS).toContain("document.createElement(\"button\")");
+    expect(REMOTE_JS).toContain(".slice(0, 3)");
+    expect(serverSource).toContain('url.pathname === "/api/apps"');
+    expect(serverSource).toContain('url.pathname === "/api/launch"');
+    expect(serverSource).toContain("Object.keys(body).some((key) => key !== \"serviceId\")");
+    expect(REMOTE_JS).not.toContain("startUrl");
+  });
+
   it("keeps arrows as the default and offers a bounded relative precision pad", () => {
     expect(REMOTE_HTML).toContain('class="dpad"');
     expect(REMOTE_HTML).toContain('id="precision-pad"');

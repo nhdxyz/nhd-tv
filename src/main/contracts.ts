@@ -121,6 +121,11 @@ export interface ServiceSummary {
   searchMode: "browse" | "none" | "query";
 }
 
+export interface RemoteServiceShortcut {
+  id: string;
+  name: string;
+}
+
 export interface ContinueWatchingItem {
   artworkDataUrl: string | null;
   durationSeconds: number;
@@ -169,6 +174,7 @@ export interface LocalAppState {
   devicePreferences: DevicePreferences;
   preferences: ProfilePreferences;
   profiles: LocalProfile[];
+  recentServiceIds: string[];
 }
 
 export interface CustomServiceManifest {

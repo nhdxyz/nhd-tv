@@ -43,7 +43,8 @@ describe("local profile state", () => {
         favoriteServiceIds: [],
         serviceOrder: ["netflix", "youtube", "disney-plus"]
       },
-      profiles: [{ id: "default", name: "Local profile" }]
+      profiles: [{ id: "default", name: "Local profile" }],
+      recentServiceIds: []
     });
   });
 
@@ -74,7 +75,29 @@ describe("local profile state", () => {
       },
       profiles: expect.arrayContaining([{ id: childId, name: "Kids Room" }])
     });
-    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(3);
+    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(4);
+  });
+
+  it("persists a profile-scoped recent-app list independently of viewing history", async () => {
+    const { filePath, store } = await testStore();
+    await store.recordServiceLaunch("netflix");
+    await store.recordServiceLaunch("youtube");
+    await store.recordServiceLaunch("netflix");
+    expect(store.snapshot().recentServiceIds).toEqual(["netflix", "youtube"]);
+
+    const guest = await store.createProfile("Guest");
+    expect(guest.recentServiceIds).toEqual([]);
+    await store.recordServiceLaunch("disney-plus");
+    await store.selectProfile("default");
+    expect(store.snapshot().recentServiceIds).toEqual(["netflix", "youtube"]);
+
+    const restored = new LocalStateStore(
+      filePath,
+      ["netflix", "youtube", "disney-plus", "shaka-demo"],
+      ["netflix", "youtube", "disney-plus"]
+    );
+    await restored.initialize();
+    expect(restored.snapshot().recentServiceIds).toEqual(["netflix", "youtube"]);
   });
 
   it("persists device-wide television preferences across profiles", async () => {

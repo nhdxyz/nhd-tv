@@ -1,5 +1,6 @@
 import {
   BrowserWindow,
+  net,
   session,
   type Session,
   WebContentsView
@@ -25,8 +26,15 @@ import type {
   RemotePointerInput,
   RemotePointerResult,
   RemoteTextInput,
+  ServiceFailureKind,
+  ServiceRecoveryMode,
+  ServiceRecoveryRequest,
   ServiceQuitRequest
 } from "./contracts";
+import {
+  classifyServiceFailure,
+  serviceRecoveryRequest
+} from "./service-recovery";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import {
   buildRemoteTextEntryAvailabilityScript,
@@ -40,6 +48,7 @@ import { scoreSpatialCandidate } from "./spatial-navigation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
+export type ServiceRecoveryListener = (request: ServiceRecoveryRequest) => void;
 export interface PlaybackObservation {
   artworkUrl: string | null;
   durationSeconds: number;
@@ -53,7 +62,12 @@ export interface PlaybackObservation {
 }
 export type PlaybackListener = (observation: PlaybackObservation) => void | Promise<void>;
 
-type ServiceSpatialAction = Exclude<RemoteAction, "back" | "home">;
+type ServiceSpatialAction = Exclude<RemoteAction, "back" | "force-home" | "home">;
+
+interface ServiceRecoveryTarget {
+  definition: ServiceDefinition;
+  url: string;
+}
 
 export interface NetflixSmokeResult {
   detail: string;
@@ -419,12 +433,14 @@ export class ServiceHost {
   readonly #window: BrowserWindow;
   readonly #onStateChanged: ServiceStateListener;
   readonly #onQuitRequested: ServiceQuitListener;
+  readonly #onRecoveryRequested: ServiceRecoveryListener;
   readonly #onPlayback: PlaybackListener;
   #activeDefinition: ServiceDefinition | null = null;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
   #popupWindow: BrowserWindow | null = null;
   #quitPromptVisible = false;
+  #recoveryTarget: ServiceRecoveryTarget | null = null;
   #replayingInput = false;
   #playbackCheckpoint: Promise<void> | null = null;
   #playbackQualificationTimer: NodeJS.Timeout | null = null;
@@ -437,11 +453,13 @@ export class ServiceHost {
     window: BrowserWindow,
     onStateChanged: ServiceStateListener,
     onQuitRequested: ServiceQuitListener,
+    onRecoveryRequested: ServiceRecoveryListener,
     onPlayback: PlaybackListener = () => undefined
   ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
     this.#onQuitRequested = onQuitRequested;
+    this.#onRecoveryRequested = onRecoveryRequested;
     this.#onPlayback = onPlayback;
     this.#window.on("resize", () => this.#resize());
   }
@@ -467,6 +485,10 @@ export class ServiceHost {
     return this.#quitPromptVisible;
   }
 
+  get hasRecoveryTarget(): boolean {
+    return this.#recoveryTarget !== null;
+  }
+
   get lastBlockedNavigation(): NavigationDiagnostic | null {
     return this.#lastBlockedNavigation;
   }
@@ -477,6 +499,7 @@ export class ServiceHost {
     }
 
     await this.closeWithCheckpoint();
+    this.#recoveryTarget = null;
     this.#lastBlockedNavigation = null;
     this.#pointerSnapKey = null;
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
@@ -559,9 +582,22 @@ export class ServiceHost {
     });
 
     view.webContents.on("before-input-event", (event, input) => {
-      if (input.type !== "keyDown" || this.#replayingInput) {
+      if (this.#replayingInput) {
         return;
       }
+
+      if (
+        input.type === "keyDown" &&
+        input.control &&
+        input.shift &&
+        input.key.toLocaleLowerCase() === "h"
+      ) {
+        event.preventDefault();
+        void this.forceReturnHome();
+        return;
+      }
+
+      if (input.type !== "keyDown") return;
 
       if (input.key === "Escape") {
         if (this.#htmlFullscreen) {
@@ -683,9 +719,25 @@ export class ServiceHost {
       }
     });
 
+    view.webContents.on(
+      "did-fail-load",
+      (_event, errorCode, _errorDescription, _validatedUrl, isMainFrame) => {
+        if (this.#view !== view || !isMainFrame || errorCode === -3) return;
+        this.#failActiveService(
+          classifyServiceFailure("load-failed", net.isOnline(), errorCode)
+        );
+      }
+    );
+
     view.webContents.on("render-process-gone", () => {
       if (this.#view === view) {
-        this.close();
+        this.#failActiveService("crashed");
+      }
+    });
+
+    view.webContents.on("unresponsive", () => {
+      if (this.#view === view) {
+        this.#failActiveService("unresponsive");
       }
     });
 
@@ -705,10 +757,13 @@ export class ServiceHost {
         view.webContents.focus();
       }
     } catch (error) {
+      const currentUrl = view.webContents.isDestroyed()
+        ? initialUrl
+        : view.webContents.getURL();
       if (
         isExpectedAllowedNavigationAbort(
           error,
-          view.webContents.getURL(),
+          currentUrl,
           definition.allowedOrigins
         )
       ) {
@@ -768,6 +823,53 @@ export class ServiceHost {
   async closeWithCheckpoint(): Promise<void> {
     await this.#checkpointPlayback();
     this.close();
+  }
+
+  async forceReturnHome(): Promise<void> {
+    this.#recoveryTarget = null;
+    await Promise.race([
+      this.#checkpointPlayback(),
+      delay(350)
+    ]).catch(() => undefined);
+    this.close();
+  }
+
+  async prepareForSuspend(): Promise<void> {
+    await Promise.race([
+      this.#checkpointPlayback(),
+      delay(750)
+    ]).catch(() => undefined);
+  }
+
+  async recover(mode: ServiceRecoveryMode): Promise<boolean> {
+    const target = this.#recoveryTarget;
+    if (mode === "home") {
+      this.#recoveryTarget = null;
+      this.close();
+      return true;
+    }
+    if (target === null) return false;
+
+    this.#recoveryTarget = null;
+    await this.open(
+      target.definition,
+      mode === "retry" ? target.url : target.definition.startUrl
+    );
+    return true;
+  }
+
+  async resumeAfterSuspend(): Promise<void> {
+    const view = this.#view;
+    if (view === null || view.webContents.isDestroyed()) return;
+
+    try {
+      await Promise.race([
+        view.webContents.executeJavaScript("document.readyState", true),
+        delay(2_000).then(() => Promise.reject(new Error("resume probe timed out")))
+      ]);
+    } catch {
+      if (this.#view === view) this.#failActiveService("resume-failed");
+    }
   }
 
   async navigate(url: string): Promise<void> {
@@ -916,6 +1018,11 @@ export class ServiceHost {
 
     if (action === "back") {
       return this.requestBack();
+    }
+
+    if (action === "force-home") {
+      await this.forceReturnHome();
+      return true;
     }
 
     if (
@@ -1366,14 +1473,32 @@ export class ServiceHost {
     return this.#playbackCheckpoint;
   }
 
-  #sendKey(action: Exclude<RemoteAction, "home">): void {
+  #failActiveService(kind: ServiceFailureKind): void {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (view === null || definition === null) return;
+
+    const currentUrl = view.webContents.isDestroyed()
+      ? definition.startUrl
+      : view.webContents.getURL();
+    this.#recoveryTarget = {
+      definition,
+      url: isAllowedServiceUrl(currentUrl, definition.allowedOrigins)
+        ? currentUrl
+        : definition.startUrl
+    };
+    this.close();
+    this.#onRecoveryRequested(serviceRecoveryRequest(kind, definition.id, definition.name));
+  }
+
+  #sendKey(action: Exclude<RemoteAction, "force-home" | "home">): void {
     const view = this.#view;
 
     if (view === null || view.webContents.isDestroyed()) {
       return;
     }
 
-    const keyCode: Record<Exclude<RemoteAction, "home">, string> = {
+    const keyCode: Record<Exclude<RemoteAction, "force-home" | "home">, string> = {
       back: "Escape",
       down: "Down",
       left: "Left",

@@ -6,6 +6,8 @@ import type {
   LocalAppState,
   RemoteAction,
   RemoteStatus,
+  ServiceRecoveryMode,
+  ServiceRecoveryRequest,
   ServiceSummary
 } from "../main/contracts";
 import { GamepadInput, type GamepadLike } from "./gamepad-input";
@@ -77,6 +79,7 @@ const elements = {
   lineupCount: requireElement<HTMLSpanElement>("#lineup-count", "lineup-count"),
   motionCopy: requireElement<HTMLElement>("#motion-copy", "motion-copy"),
   motionToggle: requireElement<HTMLButtonElement>("#motion-toggle", "motion-toggle"),
+  networkBanner: requireElement<HTMLElement>("#network-banner", "network-banner"),
   profileAvatar: requireElement<HTMLSpanElement>("#profile-avatar", "profile-avatar"),
   profileCardCopy: requireElement<HTMLElement>("#profile-card-copy", "profile-card-copy"),
   profileClose: requireElement<HTMLButtonElement>("#profile-close", "profile-close"),
@@ -90,6 +93,12 @@ const elements = {
   quitCopy: requireElement<HTMLParagraphElement>("#quit-copy", "quit-copy"),
   quitDialog: requireElement<HTMLDialogElement>("#quit-dialog", "quit-dialog"),
   quitServicePreview: requireElement<HTMLImageElement>("#quit-service-preview", "quit-service-preview"),
+  recoveryCopy: requireElement<HTMLParagraphElement>("#recovery-copy", "recovery-copy"),
+  recoveryDialog: requireElement<HTMLDialogElement>("#recovery-dialog", "recovery-dialog"),
+  recoveryHome: requireElement<HTMLButtonElement>("#recovery-home", "recovery-home"),
+  recoveryReload: requireElement<HTMLButtonElement>("#recovery-reload", "recovery-reload"),
+  recoveryRetry: requireElement<HTMLButtonElement>("#recovery-retry", "recovery-retry"),
+  recoveryTitle: requireElement<HTMLHeadingElement>("#recovery-title", "recovery-title"),
   remoteApproval: requireElement<HTMLDivElement>("#remote-approval", "remote-approval"),
   remoteAutoConnectCopy: requireElement<HTMLElement>("#remote-auto-connect-copy", "remote-auto-connect-copy"),
   remoteAutoConnectToggle: requireElement<HTMLButtonElement>("#remote-auto-connect-toggle", "remote-auto-connect-toggle"),
@@ -144,6 +153,7 @@ const elements = {
 
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
+let currentServiceRecovery: ServiceRecoveryRequest | null = null;
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let catalogSearchTimer: number | null = null;
 let catalogSearchVersion = 0;
@@ -172,6 +182,59 @@ function showFeedback(message: string): void {
     elements.feedback.textContent = "";
     feedbackTimer = null;
   }, 4_000);
+}
+
+function renderNetworkState(): void {
+  elements.networkBanner.hidden = navigator.onLine;
+  if (
+    navigator.onLine &&
+    currentServiceRecovery?.kind === "offline" &&
+    elements.recoveryDialog.open
+  ) {
+    elements.recoveryCopy.textContent =
+      `This computer is online again. Try ${currentServiceRecovery.serviceName} now.`;
+  }
+}
+
+function showServiceRecovery(request: ServiceRecoveryRequest): void {
+  currentServiceRecovery = request;
+  elements.recoveryTitle.textContent = `${request.serviceName} needs attention`;
+  elements.recoveryCopy.textContent = request.detail;
+  if (!elements.recoveryDialog.open) elements.recoveryDialog.showModal();
+  elements.recoveryRetry.focus();
+}
+
+function setRecoveryActionsDisabled(disabled: boolean): void {
+  elements.recoveryRetry.disabled = disabled;
+  elements.recoveryReload.disabled = disabled;
+  elements.recoveryHome.disabled = disabled;
+}
+
+async function runServiceRecovery(mode: ServiceRecoveryMode): Promise<void> {
+  const recovery = currentServiceRecovery;
+  setRecoveryActionsDisabled(true);
+  if (elements.recoveryDialog.open) elements.recoveryDialog.close();
+
+  try {
+    const handled = await window.nhd.recoverService(mode);
+    if (!handled && mode !== "home") {
+      throw new Error("That app no longer has a recovery session.");
+    }
+    currentServiceRecovery = null;
+    if (mode === "home") {
+      returnHome(true);
+      showFeedback("Returned to NHD-TV Home.");
+    }
+  } catch (error) {
+    if (currentServiceRecovery === null && recovery !== null) {
+      currentServiceRecovery = recovery;
+    }
+    elements.recoveryCopy.textContent = error instanceof Error ? error.message : String(error);
+    if (!elements.recoveryDialog.open) elements.recoveryDialog.showModal();
+    elements.recoveryRetry.focus();
+  } finally {
+    setRecoveryActionsDisabled(false);
+  }
 }
 
 function hideQuitServicePreview(): void {
@@ -1660,6 +1723,10 @@ function setRemoteFocusedElement(element: HTMLElement | null): void {
 }
 
 function activeNavigationScope(): ParentNode {
+  if (elements.recoveryDialog.open) {
+    return elements.recoveryDialog;
+  }
+
   if (elements.appManageDialog.open) {
     return elements.appManageDialog;
   }
@@ -1786,7 +1853,10 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (elements.remoteDialog.open) {
+  if (elements.recoveryDialog.open) {
+    elements.recoveryHome.click();
+    event.preventDefault();
+  } else if (elements.remoteDialog.open) {
     elements.remoteDialog.close();
     event.preventDefault();
   } else if (elements.appManageDialog.open) {
@@ -1838,6 +1908,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
   }
 
   if (action === "back") {
+    if (elements.recoveryDialog.open) {
+      elements.recoveryHome.click();
+      return;
+    }
+
     if (elements.appManageDialog.open) {
       closeAppManageDialog();
       return;
@@ -1874,9 +1949,15 @@ function handleShellRemoteAction(action: RemoteAction): void {
     }
   }
 
-  if (action === "home" && elements.quitDialog.open) {
-    elements.quitConfirm.click();
-    return;
+  if (action === "home") {
+    if (elements.recoveryDialog.open) {
+      elements.recoveryHome.click();
+      return;
+    }
+    if (elements.quitDialog.open) {
+      elements.quitConfirm.click();
+      return;
+    }
   }
 
   returnHome(true);
@@ -1944,6 +2025,17 @@ elements.quitDialog.addEventListener("cancel", (event) => {
   void cancelServiceQuit();
 });
 
+elements.recoveryRetry.addEventListener("click", () => void runServiceRecovery("retry"));
+elements.recoveryReload.addEventListener("click", () => void runServiceRecovery("reload"));
+elements.recoveryHome.addEventListener("click", () => void runServiceRecovery("home"));
+elements.recoveryDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  elements.recoveryHome.click();
+});
+window.addEventListener("online", renderNetworkState);
+window.addEventListener("offline", renderNetworkState);
+renderNetworkState();
+
 elements.closeServiceButton.addEventListener("click", async () => {
   await window.nhd.closeService();
   showFeedback("Service view closed.");
@@ -1961,6 +2053,7 @@ window.nhd.onRemoteAction(handleShellRemoteAction);
 window.nhd.onRemotePrecisionMoved(() => navigationSounds.playMove());
 window.nhd.onRemoteSearchRequested((query) => openSearchDialog(query, true));
 window.nhd.onRemoteStatusChanged(renderRemoteStatus);
+window.nhd.onServiceRecoveryRequested(showServiceRecovery);
 window.nhd.onServiceQuitRequested((request) => {
   if (request.backgroundDataUrl === null) {
     hideQuitServicePreview();

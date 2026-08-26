@@ -307,6 +307,43 @@ summary:focus-visible {
   line-height: 1.35;
 }
 
+.network-banner {
+  position: fixed;
+  z-index: 48;
+  top: 5.65rem;
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 0.16rem 0.55rem;
+  padding: 0.72rem 1rem;
+  border: 1px solid rgb(251 191 36 / 38%);
+  border-radius: 999px;
+  background: rgb(35 20 5 / 94%);
+  box-shadow: 0 1rem 2.8rem rgb(0 0 0 / 38%);
+  color: #fef3c7;
+  translate: -50% 0;
+  backdrop-filter: blur(18px);
+}
+
+.network-banner > span {
+  grid-row: 1 / 3;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0.8rem rgb(251 191 36 / 70%);
+}
+
+.network-banner strong {
+  font-size: 0.78rem;
+}
+
+.network-banner small {
+  color: #d6c8aa;
+  font-size: 0.66rem;
+}
+
 .remote-chip {
   gap: 0.55rem;
   padding: 0 1rem;
@@ -1858,6 +1895,7 @@ h2 {
 .remote-dialog,
 .search-dialog,
 .app-manage-dialog,
+.recovery-dialog,
 .quit-dialog {
   max-height: 92vh;
   overflow: auto;
@@ -1888,6 +1926,11 @@ h2 {
   border-radius: 1.4rem;
 }
 
+.recovery-dialog {
+  width: min(90vw, 38rem);
+  border-radius: 1.5rem;
+}
+
 .quit-service-preview {
   position: fixed;
   z-index: 70;
@@ -1900,7 +1943,8 @@ h2 {
 
 .remote-dialog::backdrop,
 .search-dialog::backdrop,
-.app-manage-dialog::backdrop {
+.app-manage-dialog::backdrop,
+.recovery-dialog::backdrop {
   background: rgb(1 3 8 / 78%);
   backdrop-filter: blur(16px);
 }
@@ -2438,6 +2482,54 @@ h2 {
   margin: 0.7rem 0 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.recovery-dialog-shell {
+  padding: 1.8rem;
+  background:
+    radial-gradient(circle at 88% 0%, rgb(245 158 11 / 20%), transparent 20rem),
+    linear-gradient(150deg, #14120f, #0b0e15 68%);
+}
+
+.recovery-mark {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 1.1rem;
+  place-items: center;
+  border: 1px solid rgb(251 191 36 / 36%);
+  border-radius: 1rem;
+  background: rgb(146 64 14 / 22%);
+  color: #fbbf24;
+  font-size: 1.45rem;
+  font-weight: 950;
+}
+
+.recovery-dialog h2 {
+  margin: 0.42rem 0 0;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  letter-spacing: -0.045em;
+}
+
+.recovery-dialog p:not(.eyebrow) {
+  max-width: 31rem;
+  margin: 0.75rem 0 0;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.35rem;
+}
+
+.recovery-hint {
+  display: block;
+  margin-top: 1rem;
+  color: #818b9d;
+  font-size: 0.72rem;
 }
 
 [hidden] {

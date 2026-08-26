@@ -8,6 +8,8 @@ import type {
   ProfilePreferences,
   RemoteAction,
   RemoteStatus,
+  ServiceRecoveryMode,
+  ServiceRecoveryRequest,
   ServiceQuitRequest,
   ServiceSummary
 } from "./contracts";
@@ -40,10 +42,12 @@ const IPC_CHANNELS = {
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
   removeCustomService: "nhd:custom-service:remove",
+  recoverService: "nhd:service:recover",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
+  serviceRecoveryRequested: "nhd:service:recovery:requested",
   serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
@@ -115,12 +119,22 @@ contextBridge.exposeInMainWorld("nhd", {
       callback(request);
     });
   },
+  onServiceRecoveryRequested: (
+    callback: (request: ServiceRecoveryRequest) => void
+  ): void => {
+    ipcRenderer.on(
+      IPC_CHANNELS.serviceRecoveryRequested,
+      (_event, request: ServiceRecoveryRequest) => callback(request)
+    );
+  },
   openService: (serviceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.openService, serviceId),
   removeContinueWatching: (itemId: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.removeContinueWatching, itemId),
   removeCustomService: (serviceId: string): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.removeCustomService, serviceId),
+  recoverService: (mode: ServiceRecoveryMode): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.recoverService, mode),
   resumeContinueWatching: (itemId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.resumeContinueWatching, itemId),
   searchCatalog: (query: string): Promise<readonly CatalogSearchResult[]> =>

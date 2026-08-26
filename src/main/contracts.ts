@@ -23,10 +23,12 @@ export const IPC_CHANNELS = {
   remoteStatusChanged: "nhd:remote:status:changed",
   removeContinueWatching: "nhd:continue-watching:remove",
   removeCustomService: "nhd:custom-service:remove",
+  recoverService: "nhd:service:recover",
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
   selectProfile: "nhd:profile:select",
+  serviceRecoveryRequested: "nhd:service:recovery:requested",
   serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
@@ -36,6 +38,7 @@ export const IPC_CHANNELS = {
 export const REMOTE_ACTIONS = [
   "back",
   "down",
+  "force-home",
   "home",
   "left",
   "right",
@@ -44,6 +47,22 @@ export const REMOTE_ACTIONS = [
 ] as const;
 
 export type RemoteAction = (typeof REMOTE_ACTIONS)[number];
+
+export type ServiceRecoveryMode = "home" | "reload" | "retry";
+
+export type ServiceFailureKind =
+  | "crashed"
+  | "load-failed"
+  | "offline"
+  | "resume-failed"
+  | "unresponsive";
+
+export interface ServiceRecoveryRequest {
+  detail: string;
+  kind: ServiceFailureKind;
+  serviceId: string;
+  serviceName: string;
+}
 
 export interface RemotePointerInput {
   phase: "hide" | "move" | "tap";

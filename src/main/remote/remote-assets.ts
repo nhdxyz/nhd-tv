@@ -93,7 +93,7 @@ export const REMOTE_HTML = `<!doctype html>
 
       <section class="remote-card" aria-label="Television remote">
         <div class="remote-top-actions" aria-label="System controls">
-          <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back">
+          <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back. Hold to force return Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
           <span id="remote-mode-label" aria-hidden="true">Navigate</span>
@@ -540,6 +540,8 @@ export const REMOTE_JS = `(() => {
   let directTextEntryReady = false;
   let pendingDirectText = null;
   let textEntryTimer = null;
+  let backHoldTimer = null;
+  let backHoldTriggered = false;
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
@@ -1025,12 +1027,36 @@ export const REMOTE_JS = `(() => {
   });
 
   buttons.forEach((button) => {
-    const release = () => button.classList.remove("is-pressed");
-    button.addEventListener("pointerdown", () => button.classList.add("is-pressed"));
+    const release = () => {
+      button.classList.remove("is-pressed");
+      if (button.dataset.action === "back" && backHoldTimer !== null) {
+        clearTimeout(backHoldTimer);
+        backHoldTimer = null;
+      }
+    };
+    button.addEventListener("pointerdown", () => {
+      button.classList.add("is-pressed");
+      if (button.dataset.action === "back") {
+        backHoldTriggered = false;
+        if (backHoldTimer !== null) clearTimeout(backHoldTimer);
+        backHoldTimer = setTimeout(() => {
+          backHoldTimer = null;
+          backHoldTriggered = true;
+          if (navigator.vibrate) navigator.vibrate(24);
+          void sendAction("force-home", button);
+        }, 1_200);
+      }
+    });
     button.addEventListener("pointerup", release);
     button.addEventListener("pointercancel", release);
     button.addEventListener("pointerleave", release);
-    button.addEventListener("click", () => sendAction(button.dataset.action, button));
+    button.addEventListener("click", () => {
+      if (button.dataset.action === "back" && backHoldTriggered) {
+        backHoldTriggered = false;
+        return;
+      }
+      void sendAction(button.dataset.action, button);
+    });
   });
 
   setEnabled(false);

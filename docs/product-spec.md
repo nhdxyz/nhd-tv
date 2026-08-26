@@ -102,7 +102,7 @@ Voice search initially uses the phone keyboard's native dictation button. Direct
 - Handle sleep, wake, offline state, service crashes, and application updates.
 - Avoid preventing system sleep unless active playback requires it.
 
-The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, reduced motion, and first-remote auto-connect. Audio output, startup-at-login, pointer inactivity, sleep/wake recovery, and updater behavior still require platform-specific qualification.
+The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, reduced motion, and first-remote auto-connect. The host checkpoints before suspend, probes an active service after resume, returns control to a host-owned recovery screen after a load failure, renderer crash, or hang, and offers Retry, Reload app, and Return Home without clearing service data. The phone and gamepad Back buttons provide a deliberate 1.2-second emergency return. Audio output, startup-at-login, pointer inactivity, packaged sleep/wake behavior, and updater behavior still require platform-specific qualification.
 
 ## Future multiview
 

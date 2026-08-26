@@ -9,6 +9,7 @@ import {
   ipcMain,
   nativeImage,
   net,
+  powerMonitor,
   protocol,
   screen,
   session
@@ -27,6 +28,8 @@ import {
   type RemotePointerResult,
   type RemoteStatus,
   type RemoteTextInput,
+  type ServiceRecoveryMode,
+  type ServiceRecoveryRequest,
   type WidevineState
 } from "./contracts";
 import {
@@ -250,6 +253,12 @@ function publishContinueWatching(): void {
       IPC_CHANNELS.continueWatchingChanged,
       continueWatchingStore?.list() ?? []
     );
+  }
+}
+
+function publishServiceRecovery(request: ServiceRecoveryRequest): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.serviceRecoveryRequested, request);
   }
 }
 
@@ -517,6 +526,18 @@ async function handleRemoteSearch(query: string): Promise<void> {
 }
 
 function handleRemoteAction(action: RemoteAction): void {
+  if (action === "force-home") {
+    if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
+      void serviceHost.forceReturnHome();
+    } else if (serviceHost?.hasRecoveryTarget) {
+      void serviceHost.recover("home");
+    }
+    if (mainWindow !== null && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
+    }
+    return;
+  }
+
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
     if (serviceHost.isQuitPromptVisible) {
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
@@ -848,6 +869,17 @@ function registerIpc(): void {
     await serviceHost.open(definition);
   });
 
+  ipcMain.handle(IPC_CHANNELS.recoverService, async (event, mode: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (
+      serviceHost === null ||
+      (mode !== "home" && mode !== "reload" && mode !== "retry")
+    ) {
+      throw new TypeError("A supported service recovery action is required.");
+    }
+    return serviceHost.recover(mode as ServiceRecoveryMode);
+  });
+
   ipcMain.handle(
     IPC_CHANNELS.searchService,
     async (event, serviceId: unknown, query: unknown) => {
@@ -1005,6 +1037,7 @@ async function createMainWindow(): Promise<void> {
         mainWindow.webContents.send(IPC_CHANNELS.serviceQuitRequested, request);
       }
     },
+    publishServiceRecovery,
     handlePlaybackObservation
   );
   phoneRemote = new PhoneRemoteServer({
@@ -1078,6 +1111,12 @@ app.whenReady().then(async () => {
   // after the component updater later reports ready.
   await initializeWidevine();
   await createMainWindow();
+  powerMonitor.on("suspend", () => {
+    void serviceHost?.prepareForSuspend();
+  });
+  powerMonitor.on("resume", () => {
+    void serviceHost?.resumeAfterSuspend();
+  });
   publishHostStatus();
 
   if (process.argv.includes("--netflix-smoke-test")) {

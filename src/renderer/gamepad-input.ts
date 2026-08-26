@@ -3,6 +3,7 @@ import type { RemoteAction } from "../main/contracts";
 const AXIS_DEAD_ZONE = 0.55;
 const INITIAL_REPEAT_DELAY_MS = 420;
 const REPEAT_INTERVAL_MS = 115;
+const FORCE_HOME_HOLD_MS = 1_200;
 
 export interface GamepadButtonLike {
   pressed: boolean;
@@ -63,6 +64,8 @@ function actionPressed(gamepads: readonly GamepadLike[], action: "back" | "home"
 }
 
 export class GamepadActionMapper {
+  #backHeldSince: number | null = null;
+  #backForceSent = false;
   #direction: RemoteAction | null = null;
   #nextRepeatAt = 0;
   #pressedActions = new Set<RemoteAction>();
@@ -95,6 +98,17 @@ export class GamepadActionMapper {
       } else {
         this.#pressedActions.delete(action);
       }
+    }
+
+    const backHeld = actionPressed(connected, "back");
+    if (!backHeld) {
+      this.#backHeldSince = null;
+      this.#backForceSent = false;
+    } else if (this.#backHeldSince === null) {
+      this.#backHeldSince = now;
+    } else if (!this.#backForceSent && now - this.#backHeldSince >= FORCE_HOME_HOLD_MS) {
+      this.#backForceSent = true;
+      actions.push("force-home");
     }
 
     return actions;

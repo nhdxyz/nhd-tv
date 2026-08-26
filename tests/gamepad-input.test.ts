@@ -59,4 +59,16 @@ describe("Xbox-style Gamepad input", () => {
     expect(mapper.update([], 10)).toEqual([]);
     expect(mapper.update([gamepad([0, 15])], 20)).toEqual(["right", "select"]);
   });
+
+  it("forces a return Home after Back is deliberately held", () => {
+    const mapper = new GamepadActionMapper();
+    const back = gamepad([1]);
+
+    expect(mapper.update([back], 100)).toEqual(["back"]);
+    expect(mapper.update([back], 1_299)).toEqual([]);
+    expect(mapper.update([back], 1_300)).toEqual(["force-home"]);
+    expect(mapper.update([back], 1_500)).toEqual([]);
+    expect(mapper.update([gamepad()], 1_600)).toEqual([]);
+    expect(mapper.update([back], 1_700)).toEqual(["back"]);
+  });
 });

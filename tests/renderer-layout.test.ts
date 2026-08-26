@@ -13,6 +13,16 @@ describe("TV catalog layout", () => {
     expect(html).not.toContain("<span>Search</span>");
   });
 
+  it("provides host-owned offline and service recovery surfaces", () => {
+    expect(html).toContain('id="network-banner"');
+    expect(html).toContain('id="recovery-dialog"');
+    expect(html).toContain('id="recovery-retry"');
+    expect(html).toContain('id="recovery-reload"');
+    expect(html).toContain('id="recovery-home"');
+    expect(css).toContain(".recovery-dialog-shell");
+    expect(css).toContain(".network-banner");
+  });
+
   it("uses artwork-first Continue Watching cards with readable titles", () => {
     expect(css).toContain("aspect-ratio: 16 / 9");
     expect(css).toContain("grid-area: 1 / 1");

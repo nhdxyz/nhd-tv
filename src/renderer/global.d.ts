@@ -7,6 +7,8 @@ import type {
   ProfilePreferences,
   RemoteAction,
   RemoteStatus,
+  ServiceRecoveryMode,
+  ServiceRecoveryRequest,
   ServiceQuitRequest,
   ServiceSummary
 } from "../main/contracts";
@@ -38,9 +40,13 @@ declare global {
       onRemoteSearchRequested: (callback: (query: string) => void) => void;
       onRemoteStatusChanged: (callback: (status: RemoteStatus) => void) => void;
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;
+      onServiceRecoveryRequested: (
+        callback: (request: ServiceRecoveryRequest) => void
+      ) => void;
       openService: (serviceId: string) => Promise<void>;
       removeContinueWatching: (itemId: string) => Promise<boolean>;
       removeCustomService: (serviceId: string) => Promise<LocalAppState>;
+      recoverService: (mode: ServiceRecoveryMode) => Promise<boolean>;
       resumeContinueWatching: (itemId: string) => Promise<void>;
       searchCatalog: (query: string) => Promise<readonly CatalogSearchResult[]>;
       searchService: (serviceId: string, query: string) => Promise<void>;

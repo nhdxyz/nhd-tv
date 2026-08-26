@@ -63,6 +63,12 @@
       </span>
     </aside>
 
+    <aside class="network-banner" id="network-banner" role="status" aria-live="polite" hidden>
+      <span aria-hidden="true"></span>
+      <strong>You're offline</strong>
+      <small>Connected apps and show search may be unavailable.</small>
+    </aside>
+
     <main class="tv-shell">
       <section class="app-view home-view" id="home-view" data-view="home">
         <section class="featured" aria-labelledby="featured-title">
@@ -479,6 +485,21 @@
           <button class="secondary-action" id="clear-data-cancel" type="button">Cancel</button>
           <button class="danger-action" id="clear-data-confirm" type="button">Clear data</button>
         </div>
+      </div>
+    </dialog>
+
+    <dialog class="recovery-dialog" id="recovery-dialog" aria-labelledby="recovery-title">
+      <div class="recovery-dialog-shell">
+        <span class="recovery-mark" aria-hidden="true">!</span>
+        <p class="eyebrow">App recovery</p>
+        <h2 id="recovery-title">An app needs attention</h2>
+        <p id="recovery-copy">NHD-TV returned control to Home.</p>
+        <div class="recovery-actions" data-nav-group="service-recovery">
+          <button class="primary-action" id="recovery-retry" type="button">Try again</button>
+          <button class="secondary-action" id="recovery-reload" type="button">Reload app</button>
+          <button class="secondary-action" id="recovery-home" type="button">Return Home</button>
+        </div>
+        <small class="recovery-hint">Your app sign-in data was not cleared.</small>
       </div>
     </dialog>
 

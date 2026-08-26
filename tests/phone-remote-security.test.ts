@@ -81,7 +81,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_CSS).toContain(".remote-card {");
     expect(REMOTE_CSS).toContain("flex: 1;");
     expect(REMOTE_HTML).toContain('class="remote-top-actions"');
-    expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back"');
+    expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back. Hold to force return Home"');
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
     expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(2);
     expect(REMOTE_HTML).not.toContain(">Back<");
@@ -102,6 +102,13 @@ describe("phone remote boundary", () => {
     expect(commandRequest).toBeGreaterThan(-1);
     expect(confirmation).toBeGreaterThan(commandRequest);
     expect(REMOTE_JS).toContain("navigator.vibrate(10)");
+  });
+
+  it("offers a deliberate long-press emergency return without double-sending Back", () => {
+    expect(REMOTE_HTML).toContain("Hold to force return Home");
+    expect(REMOTE_JS).toContain('sendAction("force-home", button)');
+    expect(REMOTE_JS).toContain("backHoldTriggered = true");
+    expect(REMOTE_JS).toContain("}, 1_200)");
   });
 
   it("keeps arrows as the default and offers a bounded relative precision pad", () => {

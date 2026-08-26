@@ -666,7 +666,7 @@ export const REMOTE_JS = `(() => {
       precisionStatusCopy.textContent = "Target locked";
       precisionPad.classList.remove("has-snap", "is-tracking");
       if (controllerToken) {
-        queuePointer({ phase: "hide", scroll: 0, x: 0.5, y: 0.5 }, true);
+        queuePointer({ phase: "hide", scroll: 0, scrollX: 0, x: 0.5, y: 0.5 }, true);
       }
     }
     controlMode.textContent = enabled ? "Use arrow buttons" : "Use precision pad";
@@ -733,15 +733,15 @@ export const REMOTE_JS = `(() => {
     return virtualPointer;
   }
 
-  function pointerInput(point, phase, scroll) {
-    return { phase, scroll: scroll || 0, x: point.x, y: point.y };
+  function pointerInput(point, phase, scroll, scrollX) {
+    return { phase, scroll: scroll || 0, scrollX: scrollX || 0, x: point.x, y: point.y };
   }
 
   function openProviderKeyboard() {
     searchLabel.textContent = "Type your search";
     searchQuery.placeholder = "Search this service";
     searchPanel.hidden = false;
-    searchQuery.focus({ preventScroll: true });
+    searchQuery.focus();
   }
 
   function latestPointerEvent(event) {
@@ -779,9 +779,12 @@ export const REMOTE_JS = `(() => {
     const scroll = pointerGesture.totalDistance >= 8
       ? edgeScroll(point.y, verticalDelta)
       : 0;
+    const scrollX = pointerGesture.totalDistance >= 8
+      ? edgeScroll(point.x, horizontalDelta)
+      : 0;
     pointerGesture.lastX = currentEvent.clientX;
     pointerGesture.lastY = currentEvent.clientY;
-    queuePointer(pointerInput(point, "move", scroll), false);
+    queuePointer(pointerInput(point, "move", scroll, scrollX), false);
   });
   precisionPad.addEventListener("pointercancel", () => {
     pointerGesture = null;

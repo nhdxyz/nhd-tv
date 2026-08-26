@@ -60,9 +60,16 @@ describe("service registry", () => {
     expect(youtube?.allowedOrigins).toContain("https://accounts.youtube.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
     expect(youtube?.fullscreenOrigins).toEqual(["https://www.youtube.com"]);
-    expect(youtube?.remoteTextEntrySelectors).toEqual(["input#search"]);
+    expect(youtube?.remoteTextEntrySelectors).toEqual([
+      "ytd-searchbox input#search",
+      "input#search",
+      'input[name="search_query"]'
+    ]);
     expect(getServiceDefinition("netflix")?.remoteTextEntrySelectors).toEqual([
-      'input[data-uia="search-box-input"]'
+      'input[data-uia="search-box-input"]',
+      'input[type="search"]',
+      'input[aria-label*="search" i]',
+      'input[placeholder*="search" i]'
     ]);
   });
 

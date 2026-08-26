@@ -47,6 +47,7 @@ export type RemoteAction = (typeof REMOTE_ACTIONS)[number];
 export interface RemotePointerInput {
   phase: "hide" | "move" | "tap";
   scroll: number;
+  scrollX: number;
   x: number;
   y: number;
 }

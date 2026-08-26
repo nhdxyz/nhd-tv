@@ -47,7 +47,12 @@ const services: readonly ServiceDefinition[] = [
         "title"
       ]
     },
-    remoteTextEntrySelectors: ['input[data-uia="search-box-input"]'],
+    remoteTextEntrySelectors: [
+      'input[data-uia="search-box-input"]',
+      'input[type="search"]',
+      'input[aria-label*="search" i]',
+      'input[placeholder*="search" i]'
+    ],
     rootUrls: ["https://www.netflix.com/browse"],
     search: {
       baseUrl: "https://www.netflix.com/search",
@@ -85,7 +90,11 @@ const services: readonly ServiceDefinition[] = [
         "title"
       ]
     },
-    remoteTextEntrySelectors: ["input#search"],
+    remoteTextEntrySelectors: [
+      "ytd-searchbox input#search",
+      "input#search",
+      'input[name="search_query"]'
+    ],
     rootUrls: ["https://www.youtube.com/"],
     search: {
       baseUrl: "https://www.youtube.com/results",

@@ -59,7 +59,7 @@ export function parseRemotePointerInput(value: unknown): RemotePointerInput | nu
   }
 
   const candidate = value as Record<string, unknown>;
-  const allowedKeys = new Set(["phase", "scroll", "x", "y"]);
+  const allowedKeys = new Set(["phase", "scroll", "scrollX", "x", "y"]);
   if (Object.keys(candidate).some((key) => !allowedKeys.has(key))) {
     return null;
   }
@@ -77,7 +77,11 @@ export function parseRemotePointerInput(value: unknown): RemotePointerInput | nu
     typeof candidate.scroll !== "number" ||
     !Number.isFinite(candidate.scroll) ||
     candidate.scroll < -1 ||
-    candidate.scroll > 1
+    candidate.scroll > 1 ||
+    typeof candidate.scrollX !== "number" ||
+    !Number.isFinite(candidate.scrollX) ||
+    candidate.scrollX < -1 ||
+    candidate.scrollX > 1
   ) {
     return null;
   }
@@ -85,6 +89,7 @@ export function parseRemotePointerInput(value: unknown): RemotePointerInput | nu
   return {
     phase: candidate.phase,
     scroll: candidate.scroll,
+    scrollX: candidate.scrollX,
     x: candidate.x,
     y: candidate.y
   };

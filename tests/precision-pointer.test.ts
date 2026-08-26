@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPrecisionPointerHideScript,
+  buildShellPrecisionRailScrollScript,
   buildShellPrecisionScrollScript,
   buildPrecisionPointerTargetScript,
   PRECISION_POINTER_IDLE_MS,
@@ -38,10 +39,21 @@ describe("precision pointer page boundary", () => {
 
     expect(precisionShellScrollDelta(1)).toBe(90);
     expect(precisionShellScrollDelta(-1)).toBe(-90);
-    expect(script).toContain("const delta = 45");
+    expect(script).toContain("const deltaY = 45");
     expect(script).toContain("window.scrollBy");
-    expect(script).toContain("top: delta");
+    expect(script).toContain("top: deltaY");
     expect(precisionScrollDelta(1)).toBe(-90);
+  });
+
+  it("scrolls only the horizontal shell rail under the precision cursor", () => {
+    const script = buildShellPrecisionRailScrollScript(0.5, 0.9, 0.6);
+
+    expect(script).toContain("const deltaX = 45");
+    expect(script).toContain("document.elementsFromPoint");
+    expect(script).toContain("element.closest('.horizontal-row')");
+    expect(script).toContain("element.scrollWidth > element.clientWidth + 2");
+    expect(script).toContain("row.scrollBy");
+    expect(script).not.toContain("window.scrollBy");
   });
 
   it("keeps small tap drift on the prior safe target and reverses native macOS wheel deltas", () => {

@@ -28,9 +28,28 @@ export function precisionShellScrollDelta(scroll: number): number {
 
 export function buildShellPrecisionScrollScript(scroll: number): string {
   return `(() => {
-    const delta = ${JSON.stringify(precisionShellScrollDelta(scroll))};
-    if (!Number.isFinite(delta) || delta === 0) return false;
-    window.scrollBy({ behavior: 'auto', left: 0, top: delta });
+    const deltaY = ${JSON.stringify(precisionShellScrollDelta(scroll))};
+    if (!Number.isFinite(deltaY) || deltaY === 0) return false;
+    window.scrollBy({ behavior: 'auto', left: 0, top: deltaY });
+    return true;
+  })()`;
+}
+
+export function buildShellPrecisionRailScrollScript(
+  scrollX: number,
+  x: number,
+  y: number
+): string {
+  return `(() => {
+    const deltaX = ${JSON.stringify(precisionShellScrollDelta(scrollX))};
+    const requestedX = Math.max(0, Math.min(1, ${JSON.stringify(x)})) * innerWidth;
+    const requestedY = Math.max(0, Math.min(1, ${JSON.stringify(y)})) * innerHeight;
+    if (!Number.isFinite(deltaX) || deltaX === 0) return false;
+    const row = document.elementsFromPoint(requestedX, requestedY)
+      .map((element) => element.closest('.horizontal-row'))
+      .find((element) => element instanceof HTMLElement && element.scrollWidth > element.clientWidth + 2);
+    if (!(row instanceof HTMLElement)) return false;
+    row.scrollBy({ behavior: 'auto', left: deltaX, top: 0 });
     return true;
   })()`;
 }
@@ -388,6 +407,25 @@ export async function dispatchPrecisionPointer(
         canScroll: true,
         deltaX: 0,
         deltaY: precisionScrollDelta(input.scroll),
+        hasPreciseScrollingDeltas: true,
+        type: "mouseWheel",
+        x: target.x,
+        y: target.y
+      });
+    }
+  }
+
+  if (input.scrollX !== 0) {
+    if (webContents.getURL().startsWith("app://shell/")) {
+      await webContents.executeJavaScript(
+        buildShellPrecisionRailScrollScript(input.scrollX, input.x, input.y),
+        true
+      );
+    } else {
+      webContents.sendInputEvent({
+        canScroll: true,
+        deltaX: precisionScrollDelta(input.scrollX),
+        deltaY: 0,
         hasPreciseScrollingDeltas: true,
         type: "mouseWheel",
         x: target.x,

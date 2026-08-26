@@ -67,6 +67,23 @@ export interface ContinueWatchingItem {
   updatedAt: number;
 }
 
+export interface LocalProfile {
+  id: string;
+  name: string;
+}
+
+export interface ProfilePreferences {
+  enabledServiceIds: string[];
+  favoriteServiceIds: string[];
+  serviceOrder: string[];
+}
+
+export interface LocalAppState {
+  activeProfileId: string;
+  preferences: ProfilePreferences;
+  profiles: LocalProfile[];
+}
+
 export interface ServiceQuitRequest {
   serviceId: string;
   serviceName: string;

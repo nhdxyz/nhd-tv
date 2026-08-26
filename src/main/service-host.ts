@@ -23,7 +23,8 @@ import type {
   NavigationDiagnostic,
   RemoteAction,
   RemotePointerInput,
-  RemotePointerResult
+  RemotePointerResult,
+  ServiceQuitRequest
 } from "./contracts";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import {
@@ -33,10 +34,7 @@ import {
 import { scoreSpatialCandidate } from "./spatial-navigation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
-export type ServiceQuitListener = (request: {
-  serviceId: string;
-  serviceName: string;
-}) => void;
+export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
 export interface PlaybackObservation {
   artworkUrl: string | null;
   durationSeconds: number;
@@ -81,10 +79,6 @@ const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SERVICE_FOCUS_STYLE = `
-  [data-nhd-tv-focus="true"] {
-    outline: 2px solid rgb(99 230 255 / 58%) !important;
-    outline-offset: -2px !important;
-  }
   html[data-nhd-tv-has-focus="true"]::after {
     position: fixed !important;
     z-index: 2147483647 !important;
@@ -851,7 +845,7 @@ export class ServiceHost {
     }
 
     if (isServiceRootUrl(view.webContents.getURL(), definition.rootUrls)) {
-      this.#requestQuit();
+      await this.#requestQuit();
       return true;
     }
 
@@ -1176,7 +1170,7 @@ export class ServiceHost {
     };
   }
 
-  #requestQuit(): void {
+  async #requestQuit(): Promise<void> {
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1190,9 +1184,26 @@ export class ServiceHost {
     }
 
     this.#quitPromptVisible = true;
+    let backgroundDataUrl: string | null = null;
+    try {
+      const capture = await view.webContents.capturePage();
+      const size = capture.getSize();
+      const preview = size.width > 1_920
+        ? capture.resize({ quality: "good", width: 1_920 })
+        : capture;
+      backgroundDataUrl = preview.toDataURL();
+    } catch {
+      // The prompt remains usable if a protected surface cannot be captured.
+    }
+
+    if (!this.#quitPromptVisible || this.#view !== view) {
+      return;
+    }
+
     this.#window.contentView.removeChildView(view);
     this.#window.webContents.focus();
     this.#onQuitRequested({
+      backgroundDataUrl,
       serviceId: definition.id,
       serviceName: definition.name
     });

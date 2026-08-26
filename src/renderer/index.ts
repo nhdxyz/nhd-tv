@@ -88,6 +88,7 @@ const elements = {
   quitConfirm: requireElement<HTMLButtonElement>("#quit-confirm", "quit-confirm"),
   quitCopy: requireElement<HTMLParagraphElement>("#quit-copy", "quit-copy"),
   quitDialog: requireElement<HTMLDialogElement>("#quit-dialog", "quit-dialog"),
+  quitServicePreview: requireElement<HTMLImageElement>("#quit-service-preview", "quit-service-preview"),
   remoteApproval: requireElement<HTMLDivElement>("#remote-approval", "remote-approval"),
   remoteApprove: requireElement<HTMLButtonElement>("#remote-approve", "remote-approve"),
   remoteClose: requireElement<HTMLButtonElement>("#remote-close", "remote-close"),
@@ -167,9 +168,17 @@ function showFeedback(message: string): void {
   }, 4_000);
 }
 
+function hideQuitServicePreview(): void {
+  elements.quitServicePreview.hidden = true;
+  elements.quitServicePreview.removeAttribute("src");
+}
+
 function renderStatus(status: HostStatus): void {
-  if (status.activeServiceId === null && elements.quitDialog.open) {
-    elements.quitDialog.close();
+  if (status.activeServiceId === null) {
+    if (elements.quitDialog.open) {
+      elements.quitDialog.close();
+    }
+    hideQuitServicePreview();
   }
 
   elements.runtimeStatus.textContent = [
@@ -1772,6 +1781,7 @@ async function cancelServiceQuit(): Promise<void> {
   if (elements.quitDialog.open) {
     elements.quitDialog.close();
   }
+  hideQuitServicePreview();
 
   try {
     await window.nhd.cancelServiceQuit();
@@ -1789,6 +1799,7 @@ async function confirmServiceQuit(): Promise<void> {
     if (elements.quitDialog.open) {
       elements.quitDialog.close();
     }
+    hideQuitServicePreview();
 
     showFeedback("Returned to NHD-TV Home.");
   } catch (error) {
@@ -1819,6 +1830,12 @@ window.nhd.onRemoteAction(handleShellRemoteAction);
 window.nhd.onRemoteSearchRequested((query) => openSearchDialog(query, true));
 window.nhd.onRemoteStatusChanged(renderRemoteStatus);
 window.nhd.onServiceQuitRequested((request) => {
+  if (request.backgroundDataUrl === null) {
+    hideQuitServicePreview();
+  } else {
+    elements.quitServicePreview.src = request.backgroundDataUrl;
+    elements.quitServicePreview.hidden = false;
+  }
   elements.quitCopy.textContent = `You are at ${request.serviceName} Home. Exit to NHD-TV?`;
 
   if (!elements.quitDialog.open) {

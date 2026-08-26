@@ -116,9 +116,13 @@ export function buildPrecisionPointerTargetScript(
     cursor.style.setProperty('opacity', '1', 'important');
     cursor.style.setProperty('left', requestedX + 'px', 'important');
     cursor.style.setProperty('top', requestedY + 'px', 'important');
+    const openDialog = [...document.querySelectorAll('dialog[open]')]
+      .find((element) => element instanceof HTMLDialogElement);
     const cursorHost = document.fullscreenElement instanceof HTMLElement
       ? document.fullscreenElement
-      : document.documentElement;
+      : openDialog instanceof HTMLDialogElement
+        ? openDialog
+        : document.documentElement;
     if (cursor.parentElement !== cursorHost) {
       cursorHost.append(cursor);
     }
@@ -133,6 +137,7 @@ export function buildPrecisionPointerTargetScript(
     }, ${PRECISION_POINTER_IDLE_MS});
     const setCursorSnapped = (snapped) => {
       cursor.dataset.nhdTvSnapped = String(snapped);
+      cursor.style.setProperty('opacity', snapped ? '0' : '1', 'important');
       cursor.style.setProperty('width', snapped ? '22px' : '18px', 'important');
       cursor.style.setProperty('height', snapped ? '22px' : '18px', 'important');
       cursor.style.setProperty(

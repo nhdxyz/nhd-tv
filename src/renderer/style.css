@@ -1714,12 +1714,26 @@ h2 {
   border-radius: 1.4rem;
 }
 
+.quit-service-preview {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
 .remote-dialog::backdrop,
 .search-dialog::backdrop,
-.app-manage-dialog::backdrop,
-.quit-dialog::backdrop {
+.app-manage-dialog::backdrop {
   background: rgb(1 3 8 / 78%);
   backdrop-filter: blur(16px);
+}
+
+.quit-dialog::backdrop {
+  background: rgb(1 3 8 / 56%);
+  backdrop-filter: blur(7px);
 }
 
 .app-manage-shell {

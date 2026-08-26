@@ -135,6 +135,7 @@ export interface CustomServiceManifest {
 }
 
 export interface ServiceQuitRequest {
+  backgroundDataUrl: string | null;
   serviceId: string;
   serviceName: string;
 }

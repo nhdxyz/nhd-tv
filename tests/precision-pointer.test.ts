@@ -22,10 +22,13 @@ describe("precision pointer page boundary", () => {
     expect(script).toContain("element.removeAttribute('data-remote-focused')");
     expect(script).toContain("nhd-tv-precision-cursor");
     expect(script).toContain("document.fullscreenElement instanceof HTMLElement");
+    expect(script).toContain("document.querySelectorAll('dialog[open]')");
+    expect(script).toContain("openDialog instanceof HTMLDialogElement");
     expect(script).toContain("transition:left 48ms linear,top 48ms linear");
     expect(script).toContain("retainForMove");
     expect(script).toContain("cursor.parentElement !== cursorHost");
     expect(script).toContain("cursor.style.setProperty('opacity', '1'");
+    expect(script).toContain("snapped ? '0' : '1'");
     expect(script).toContain(`}, ${PRECISION_POINTER_IDLE_MS});`);
     expect(script).toContain("clearFocus();");
     expect(script).toContain("distance <= 28 && nearest.distance > 0");

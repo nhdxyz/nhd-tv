@@ -34,9 +34,10 @@ function buildRemoteTextEntryResolver(
         rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth &&
         element.closest('[aria-hidden="true"],[inert]') === null;
     };
-    const isEligible = (element) => element instanceof HTMLInputElement &&
+    const isEligible = (element) =>
+      (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) &&
       matchesDeclaredSelector(element) &&
-      ['search', 'text'].includes(element.type) &&
+      (!(element instanceof HTMLInputElement) || ['search', 'text'].includes(element.type)) &&
       !element.disabled &&
       !element.readOnly &&
       !sensitiveBoundary(element) &&
@@ -65,7 +66,7 @@ export function buildRemoteTextEntryAvailabilityScript(
     document.querySelectorAll('[data-nhd-tv-text-entry="true"]').forEach((element) => {
       if (element !== editable) element.removeAttribute('data-nhd-tv-text-entry');
     });
-    if (!(editable instanceof HTMLInputElement)) return false;
+    if (!(editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement)) return false;
     editable.dataset.nhdTvTextEntry = 'true';
     editable.focus({ preventScroll: true });
     return true;
@@ -79,9 +80,12 @@ export function buildRemoteTextEntryScript(
   return `(() => {
     const text = ${JSON.stringify(text)};
     ${buildRemoteTextEntryResolver(remoteTextEntrySelectors)}
-    if (!(editable instanceof HTMLInputElement)) return false;
+    if (!(editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement)) return false;
     editable.dataset.nhdTvTextEntry = 'true';
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    const prototype = editable instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (typeof setter !== 'function') return false;
     editable.focus();
     setter.call(editable, text);

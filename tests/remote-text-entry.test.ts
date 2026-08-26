@@ -5,7 +5,7 @@ import {
 } from "../src/main/remote-text-entry";
 
 describe("provider remote text entry", () => {
-  it("writes only to an active, marked, or unambiguous visible declared search input", () => {
+  it("writes only to an active, marked, or unambiguous visible declared search field", () => {
     const script = buildRemoteTextEntryScript("Breaking Bad", [
       'input[data-uia="search-box-input"]'
     ]);
@@ -15,7 +15,9 @@ describe("provider remote text entry", () => {
     expect(script).toContain('[data-nhd-tv-focus="true"]');
     expect(script).toContain('[data-nhd-tv-text-entry="true"]');
     expect(script).toContain("visibleDeclared.length === 1");
-    expect(script).toContain("Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')");
+    expect(script).toContain("element instanceof HTMLTextAreaElement");
+    expect(script).toContain("HTMLTextAreaElement.prototype");
+    expect(script).toContain("Object.getOwnPropertyDescriptor(prototype, 'value')");
     expect(script).toContain("new InputEvent('input'");
     expect(script).not.toContain("fetch(");
     expect(script).not.toContain("ipcRenderer");

@@ -98,6 +98,7 @@ const services: readonly ServiceDefinition[] = [
       ]
     },
     remoteTextEntrySelectors: [
+      'textarea[name="search_query"]',
       "ytd-searchbox input#search",
       "input#search",
       'input[name="search_query"]'

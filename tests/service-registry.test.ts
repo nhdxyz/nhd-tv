@@ -61,6 +61,7 @@ describe("service registry", () => {
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
     expect(youtube?.fullscreenOrigins).toEqual(["https://www.youtube.com"]);
     expect(youtube?.remoteTextEntrySelectors).toEqual([
+      'textarea[name="search_query"]',
       "ytd-searchbox input#search",
       "input#search",
       'input[name="search_query"]'

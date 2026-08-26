@@ -962,6 +962,10 @@ export class ServiceHost {
         result.textEntryAvailable &&
         definition.remoteTextEntrySelectors.length > 0
       ) {
+        // A launcher can be a valid text-entry trigger before its actual input
+        // exists. Do not report readiness until a declared field is visible and
+        // has been bound for remote entry.
+        textEntryAvailable = false;
         for (const delayMs of REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS) {
           if (delayMs > 0) {
             await new Promise<void>((resolve) => setTimeout(resolve, delayMs));

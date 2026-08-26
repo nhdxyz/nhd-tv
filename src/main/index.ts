@@ -41,6 +41,7 @@ import {
 import { LocalStateStore } from "./local-state-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { dispatchPrecisionPointer } from "./precision-pointer";
+import { buildRemoteTextEntryScript } from "./remote-text-entry";
 import { providerArtworkFallbackUrls } from "./provider-artwork";
 import {
   getServiceDefinition,
@@ -64,6 +65,10 @@ const MAX_CACHED_ARTWORK_BYTES = 3 * 1024 * 1024;
 const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
+const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
+  "#search-input",
+  "#store-search"
+] as const;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -556,7 +561,8 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
     const result = await dispatchPrecisionPointer(
       mainWindow.webContents,
       input,
-      shellPointerSnapKey
+      shellPointerSnapKey,
+      SHELL_REMOTE_TEXT_ENTRY_SELECTORS
     );
     shellPointerSnapKey = result.snapKey;
     if (result.snapChanged) {
@@ -575,14 +581,38 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
 
 async function handleRemoteText(input: RemoteTextInput): Promise<boolean> {
   if (
-    serviceHost === null ||
-    serviceHost.activeServiceId === null ||
-    serviceHost.isQuitPromptVisible
+    serviceHost !== null &&
+    serviceHost.activeServiceId !== null &&
+    !serviceHost.isQuitPromptVisible
+  ) {
+    return serviceHost.sendRemoteText(input);
+  }
+
+  if (
+    mainWindow === null ||
+    mainWindow.isDestroyed() ||
+    serviceHost?.isQuitPromptVisible === true
   ) {
     return false;
   }
 
-  return serviceHost.sendRemoteText(input);
+  try {
+    const accepted = await mainWindow.webContents.executeJavaScript(
+      buildRemoteTextEntryScript(input.text, SHELL_REMOTE_TEXT_ENTRY_SELECTORS),
+      true
+    ) as unknown;
+    if (accepted !== true) return false;
+
+    if (input.submit) {
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+      mainWindow.webContents.sendInputEvent({ keyCode: "Enter", type: "keyDown" });
+      mainWindow.webContents.sendInputEvent({ keyCode: "Enter", type: "keyUp" });
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function registerShellProtocol(): void {

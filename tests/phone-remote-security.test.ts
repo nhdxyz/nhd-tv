@@ -6,6 +6,7 @@ import {
 import {
   movePrecisionPoint,
   precisionEdgeScroll,
+  precisionHorizontalScroll,
   precisionRelativeDelta,
   REMOTE_CSS,
   REMOTE_HTML,
@@ -117,7 +118,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('queuePointer(pointerInput(virtualPointer, "move", 0), true)');
     expect(REMOTE_JS).toContain("pointerGesture.totalDistance < 18 && elapsed < 650");
     expect(REMOTE_JS).toContain("edgeScroll(point.y, verticalDelta)");
-    expect(REMOTE_JS).toContain("edgeScroll(point.x, horizontalDelta)");
+    expect(REMOTE_JS).toContain("horizontalScroll(horizontalDelta, verticalDelta)");
     expect(REMOTE_JS).toContain("virtualPointer = movePrecisionPoint(");
     expect(REMOTE_JS).toContain("event.getCoalescedEvents");
     expect(REMOTE_JS).toContain("clearTimeout(pointerFlushTimer)");
@@ -127,11 +128,14 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('precisionTextEntryAvailable = result.textEntryAvailable === true');
     expect(REMOTE_JS).toContain('phase === "tap" && precisionTextEntryAvailable');
     expect(REMOTE_JS).toContain("searchQuery.focus()");
-    expect(REMOTE_JS).toContain("searchQuery.focus({ preventScroll: true })");
+    expect(REMOTE_JS).toContain('searchPanel.scrollIntoView({ block: "nearest" })');
     expect(REMOTE_JS).toContain('searchQuery.addEventListener("input"');
-    expect(REMOTE_JS).toContain('if (precisionTextEntryAvailable) openProviderKeyboard()');
+    expect(REMOTE_JS).toContain('if (phase === "tap" && precisionTextEntryAvailable) openProviderKeyboard()');
     expect(REMOTE_JS).toContain('result.throttled !== true');
-    expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
+    expect(REMOTE_HTML).not.toContain("Swipe to move");
+    expect(REMOTE_HTML).not.toContain("Follow the cursor on your TV");
+    expect(REMOTE_HTML).not.toContain("precision-status-copy");
+    expect(REMOTE_CSS).toContain("-webkit-user-select: none");
     expect(REMOTE_JS).not.toContain("renderPointerPoint");
     expect(REMOTE_JS).not.toContain("event.clientX - rect.left");
     expect(REMOTE_JS).not.toContain('y < 0.12 ? -1 : y > 0.88 ? 1 : 0');
@@ -166,8 +170,28 @@ describe("phone remote boundary", () => {
 
     expect(pointerDownHandler).not.toContain("moveVirtualPointer");
     expect(pointerDownHandler).not.toContain("queuePointer");
+    expect(pointerDownHandler).not.toContain("openProviderKeyboard");
     expect(REMOTE_JS).toContain('? virtualPointer\n      : moveVirtualPointer');
-    expect(REMOTE_HTML).toContain("Follow the cursor on your TV · Tap anywhere");
+    expect(REMOTE_HTML).not.toContain("Follow the cursor on your TV");
+  });
+
+  it("serializes direct text updates and waits for confirmed TV-field readiness", () => {
+    expect(REMOTE_JS).toContain("const textPump = createTextPump(sendRemoteText, () => {");
+    expect(REMOTE_JS).toContain("if (inFlight || pending === null) return");
+    expect(REMOTE_JS).toContain("pending = {");
+    expect(REMOTE_JS).toContain("if (pending?.submit === true && !submit) return");
+    expect(REMOTE_JS).toContain("directTextEntryReady = false");
+    expect(REMOTE_JS).toContain("confirmProviderKeyboard()");
+    expect(REMOTE_JS).toContain("rejectProviderKeyboard()");
+    expect(REMOTE_JS).toContain("TEXT_ENTRY_DEBOUNCE_MS = 120");
+    expect(REMOTE_JS).toContain("function resetTextEntry() {");
+    expect(REMOTE_JS).toContain('if (document.body.classList.contains("is-typing")) resetTextEntry()');
+    expect(REMOTE_JS).toContain('remoteModeLabel.textContent = "Navigate"');
+  });
+
+  it("waits for committed phone keyboard composition before sending text", () => {
+    expect(REMOTE_JS).toContain("event.isComposing");
+    expect(REMOTE_JS).toContain('searchQuery.addEventListener("compositionend"');
   });
 
   it("scales edge scrolling with deliberate movement and preserves direction", () => {
@@ -177,5 +201,14 @@ describe("phone remote boundary", () => {
     expect(precisionEdgeScroll(0.05, -3)).toBe(-0.17);
     expect(precisionEdgeScroll(0.95, 9)).toBe(0.5);
     expect(precisionEdgeScroll(0.95, 30)).toBe(1);
+  });
+
+  it("turns deliberate horizontal swipes into rail scrolling without stealing vertical motion", () => {
+    expect(precisionHorizontalScroll(2, 0)).toBe(0);
+    expect(precisionHorizontalScroll(12, 14)).toBe(0);
+    expect(precisionHorizontalScroll(4, 1)).toBe(0.18);
+    expect(precisionHorizontalScroll(11, 1)).toBe(0.5);
+    expect(precisionHorizontalScroll(-11, 1)).toBe(-0.5);
+    expect(precisionHorizontalScroll(40, 1)).toBe(1);
   });
 });

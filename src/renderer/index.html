@@ -31,8 +31,10 @@
 
       <div class="topbar-actions" data-nav-group="topbar">
         <button class="search-chip" id="top-search-button" type="button" aria-label="Search your services">
-          <span aria-hidden="true">⌕</span>
-          <span>Search</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="10.75" cy="10.75" r="6.25"></circle>
+            <path d="m15.5 15.5 4.25 4.25"></path>
+          </svg>
         </button>
         <button class="remote-chip" id="top-remote-button" type="button">
           <span class="remote-chip-dot" aria-hidden="true"></span>
@@ -66,7 +68,7 @@
         <section class="featured" aria-labelledby="featured-title">
           <div class="featured-wash" aria-hidden="true"></div>
           <div class="featured-content">
-            <p class="eyebrow">Featured from your lineup</p>
+            <p class="eyebrow" id="featured-eyebrow">Featured from your lineup</p>
             <div class="featured-brand" id="featured-brand" aria-hidden="true"></div>
             <h1 id="featured-title">Your services. One television.</h1>
             <p class="featured-copy" id="featured-copy">
@@ -76,15 +78,12 @@
               <button class="primary-action" id="hero-open" type="button" disabled>
                 Loading services…
               </button>
-              <button class="secondary-action" data-view-target="apps" type="button">
-                Edit lineup
-              </button>
             </div>
           </div>
           <div class="featured-art" id="featured-art" aria-hidden="true">
             <span class="featured-orbit featured-orbit-one"></span>
             <span class="featured-orbit featured-orbit-two"></span>
-            <div class="featured-icon" id="featured-icon"></div>
+            <div class="featured-icon is-lineup" id="featured-icon"></div>
           </div>
         </section>
 
@@ -94,14 +93,14 @@
             <span class="section-hint" id="continue-hint">Saved only on this computer</span>
           </div>
           <div class="horizontal-row" id="continue-actions" data-nav-group="continue-row">
-            <button class="continue-card" id="continue-placeholder" type="button">
+            <button class="continue-card continue-placeholder" id="continue-placeholder" type="button">
               <span class="continue-art" aria-hidden="true">
                 <span class="continue-play">▶</span>
               </span>
               <span class="continue-meta">
                 <strong>Start watching in one of your apps</strong>
                 <small>Long-form playback will appear here automatically</small>
-                <span class="placeholder-progress" aria-hidden="true"><span></span></span>
+                <span class="continue-empty-cue" aria-hidden="true">Choose an app <span>→</span></span>
               </span>
             </button>
           </div>

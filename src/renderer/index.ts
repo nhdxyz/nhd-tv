@@ -63,6 +63,7 @@ const elements = {
   experimentalStoreActions: requireElement<HTMLDivElement>("#experimental-store-actions", "experimental-store-actions"),
   featuredBrand: requireElement<HTMLDivElement>("#featured-brand", "featured-brand"),
   featuredCopy: requireElement<HTMLParagraphElement>("#featured-copy", "featured-copy"),
+  featuredEyebrow: requireElement<HTMLParagraphElement>("#featured-eyebrow", "featured-eyebrow"),
   featuredIcon: requireElement<HTMLDivElement>("#featured-icon", "featured-icon"),
   featuredSection: requireElement<HTMLElement>(".featured", "featured"),
   featuredTitle: requireElement<HTMLHeadingElement>("#featured-title", "featured-title"),
@@ -98,10 +99,10 @@ const elements = {
   remoteDetail: requireElement<HTMLParagraphElement>("#remote-detail", "remote-detail"),
   remoteDialog: requireElement<HTMLDialogElement>("#remote-dialog", "remote-dialog"),
   remoteExpiry: requireElement<HTMLParagraphElement>("#remote-expiry", "remote-expiry"),
-  remotePairingView: requireElement<HTMLDivElement>("#remote-pairing-view", "remote-pairing-view"),
-  remoteQr: requireElement<HTMLImageElement>("#remote-qr", "remote-qr"),
   remoteInvite: requireElement<HTMLElement>("#remote-invite", "remote-invite"),
   remoteInviteQr: requireElement<HTMLImageElement>("#remote-invite-qr", "remote-invite-qr"),
+  remotePairingView: requireElement<HTMLDivElement>("#remote-pairing-view", "remote-pairing-view"),
+  remoteQr: requireElement<HTMLImageElement>("#remote-qr", "remote-qr"),
   remoteReady: requireElement<HTMLDivElement>("#remote-ready", "remote-ready"),
   remoteReadyCopy: requireElement<HTMLSpanElement>("#remote-ready-copy", "remote-ready-copy"),
   remoteStart: requireElement<HTMLButtonElement>("#remote-start", "remote-start"),
@@ -149,6 +150,7 @@ let catalogSearchVersion = 0;
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
+let featuredContinueItemId: string | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
 let localAppState: LocalAppState | null = null;
@@ -391,11 +393,14 @@ function renderContinueWatching(): void {
   title.textContent = "Start watching in one of your apps";
   const detail = document.createElement("small");
   detail.textContent = "Long-form playback will appear here automatically";
-  const progress = document.createElement("span");
-  progress.className = "placeholder-progress";
-  progress.setAttribute("aria-hidden", "true");
-  progress.append(document.createElement("span"));
-  meta.append(title, detail, progress);
+  const cue = document.createElement("span");
+  cue.className = "continue-empty-cue";
+  cue.setAttribute("aria-hidden", "true");
+  cue.append("Choose an app ");
+  const arrow = document.createElement("span");
+  arrow.textContent = "→";
+  cue.append(arrow);
+  meta.append(title, detail, cue);
   placeholder.append(art, meta);
   placeholder.addEventListener("click", () => {
     const firstService = services.find((service) => enabledServiceIds.has(service.id));
@@ -411,6 +416,9 @@ function renderContinueWatching(): void {
 async function initializeContinueWatching(): Promise<void> {
   continueWatchingItems = await window.nhd.getContinueWatching();
   renderContinueWatching();
+  if (services.length > 0) {
+    renderFeatured(orderedEnabledServices());
+  }
 }
 
 async function openService(serviceId: string, serviceName: string): Promise<void> {
@@ -597,12 +605,20 @@ function installedAppCard(service: ServiceSummary): HTMLElement {
 }
 
 function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
-  const featured = enabledServices.find((service) => service.id === "netflix") ?? enabledServices[0];
+  const recentItem = [...continueWatchingItems]
+    .filter((item) => enabledServiceIds.has(item.serviceId))
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  const featured = recentItem === undefined
+    ? enabledServices[0]
+    : enabledServices.find((service) => service.id === recentItem.serviceId) ?? enabledServices[0];
 
   if (featured === undefined) {
+    featuredContinueItemId = null;
     featuredServiceId = null;
     delete elements.featuredSection.dataset.serviceId;
+    elements.featuredEyebrow.textContent = "Your home screen";
     elements.featuredBrand.replaceChildren();
+    elements.featuredIcon.className = "featured-icon is-lineup";
     elements.featuredIcon.replaceChildren();
     elements.featuredTitle.textContent = "Build your lineup.";
     elements.featuredCopy.textContent = "Open the Store and choose which services belong on Home.";
@@ -611,19 +627,56 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
     return;
   }
 
+  featuredContinueItemId = recentItem?.id ?? null;
   featuredServiceId = featured.id;
   elements.featuredSection.dataset.serviceId = featured.id;
   elements.featuredBrand.replaceChildren(createServiceLockup(featured.id, featured.name));
-  elements.featuredIcon.replaceChildren(createServiceMark(featured.id, featured.name));
-  elements.featuredTitle.textContent = `${featured.name} is ready.`;
-  elements.featuredCopy.textContent = "Open your saved local session and browse normally inside NHD-TV.";
+  elements.featuredIcon.replaceChildren();
+
+  if (recentItem?.artworkDataUrl !== null && recentItem?.artworkDataUrl !== undefined) {
+    elements.featuredIcon.className = "featured-icon has-artwork";
+    const image = document.createElement("img");
+    image.className = "featured-poster";
+    image.alt = "";
+    image.src = recentItem.artworkDataUrl;
+    elements.featuredIcon.append(image);
+  } else {
+    elements.featuredIcon.className = "featured-icon is-lineup";
+    const lineup = [
+      featured,
+      ...enabledServices.filter((service) => service.id !== featured.id)
+    ].slice(0, 3);
+    lineup.forEach((service, index) => {
+      const item = document.createElement("span");
+      item.className = `featured-stack-item featured-stack-item-${index + 1}`;
+      item.dataset.serviceId = service.id;
+      item.append(createServiceMark(service.id, service.name));
+      elements.featuredIcon.append(item);
+    });
+  }
+
+  if (recentItem !== undefined) {
+    const remaining = Math.max(0, recentItem.durationSeconds - recentItem.positionSeconds);
+    elements.featuredEyebrow.textContent = "Continue watching";
+    elements.featuredTitle.textContent = `Continue ${recentItem.title}`;
+    elements.featuredCopy.textContent = recentItem.subtitle === null
+      ? `${playbackTime(remaining)} left in ${featured.name}.`
+      : `${recentItem.subtitle} · ${playbackTime(remaining)} left in ${featured.name}.`;
+    elements.heroOpenButton.textContent = "Resume watching";
+  } else {
+    elements.featuredEyebrow.textContent = favoriteServiceIds.has(featured.id)
+      ? "Your favorite app"
+      : "First in your lineup";
+    elements.featuredTitle.textContent = "Your next watch starts here.";
+    elements.featuredCopy.textContent = `Open ${featured.name}, or choose another app below. Your local sign-in stays ready.`;
+    elements.heroOpenButton.textContent = `Open ${featured.name}`;
+  }
   elements.heroOpenButton.disabled = false;
-  elements.heroOpenButton.textContent = `Open ${featured.name}`;
 }
 
-function renderServiceViews(): void {
+function orderedEnabledServices(): ServiceSummary[] {
   const orderIndex = new Map(serviceOrder.map((id, index) => [id, index]));
-  const enabledServices = services
+  return services
     .filter((service) => enabledServiceIds.has(service.id))
     .sort((left, right) => {
       const favoriteDifference = Number(favoriteServiceIds.has(right.id)) -
@@ -632,6 +685,10 @@ function renderServiceViews(): void {
         (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
           (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
     });
+}
+
+function renderServiceViews(): void {
+  const enabledServices = orderedEnabledServices();
   elements.serviceActions.replaceChildren(...enabledServices.map(serviceTile));
   elements.appsActions.replaceChildren(...enabledServices.map(installedAppCard));
   const storeQuery = elements.storeSearch.value.replace(/\s+/g, " ").trim().toLocaleLowerCase();
@@ -1035,6 +1092,37 @@ function updateHorizontalRailControls(): void {
   }
 }
 
+function railSnapPositions(row: HTMLElement): number[] {
+  const items = [...row.children].filter(
+    (element): element is HTMLElement => element instanceof HTMLElement
+  );
+  const firstOffset = items[0]?.offsetLeft ?? 0;
+  return items.map((item) => Math.max(0, item.offsetLeft - firstOffset));
+}
+
+function snapHorizontalRail(row: HTMLElement): void {
+  const positions = railSnapPositions(row);
+  if (positions.length === 0) return;
+  const nearest = positions.reduce((best, position) =>
+    Math.abs(position - row.scrollLeft) < Math.abs(best - row.scrollLeft)
+      ? position
+      : best
+  );
+  if (Math.abs(nearest - row.scrollLeft) > 2) {
+    row.scrollTo({ behavior: "smooth", left: nearest });
+  }
+}
+
+function stepHorizontalRail(row: HTMLElement, direction: -1 | 1): void {
+  const positions = railSnapPositions(row);
+  if (positions.length === 0) return;
+  const current = row.scrollLeft;
+  const target = direction > 0
+    ? positions.find((position) => position > current + 4) ?? positions.at(-1) ?? current
+    : [...positions].reverse().find((position) => position < current - 4) ?? positions[0] ?? current;
+  row.scrollTo({ behavior: "smooth", left: target });
+}
+
 function initializeHorizontalRails(): void {
   for (const row of document.querySelectorAll<HTMLElement>(".rail > .horizontal-row")) {
     if (row.id.length === 0) {
@@ -1064,15 +1152,20 @@ function initializeHorizontalRails(): void {
         (direction < 0 ? "Scroll " : "Show more ") + (heading.querySelector("h2")?.textContent ?? "items")
       );
       button.addEventListener("click", () => {
-        row.scrollBy({
-          behavior: "smooth",
-          left: direction * Math.max(320, row.clientWidth * 0.78)
-        });
+        stepHorizontalRail(row, direction);
       });
       controls.append(button);
     }
     heading.append(controls);
-    row.addEventListener("scroll", updateHorizontalRailControls, { passive: true });
+    let snapTimer: number | null = null;
+    row.addEventListener("scroll", () => {
+      updateHorizontalRailControls();
+      if (snapTimer !== null) window.clearTimeout(snapTimer);
+      snapTimer = window.setTimeout(() => {
+        snapTimer = null;
+        snapHorizontalRail(row);
+      }, 140);
+    }, { passive: true });
     row.addEventListener("wheel", (event) => {
       if (
         row.scrollWidth <= row.clientWidth + 2 ||
@@ -1099,6 +1192,17 @@ for (const target of document.querySelectorAll<HTMLButtonElement>("[data-view-ta
 }
 
 elements.heroOpenButton.addEventListener("click", () => {
+  if (featuredContinueItemId !== null) {
+    const item = continueWatchingItems.find(({ id }) => id === featuredContinueItemId);
+    if (item !== undefined) {
+      showFeedback(`Resuming ${item.title} in ${item.serviceName}…`);
+      void window.nhd.resumeContinueWatching(item.id).catch((error) => {
+        showFeedback(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
+  }
+
   if (featuredServiceId === null) {
     showView("store");
     return;
@@ -1399,7 +1503,11 @@ function remoteExpiryCopy(expiresAt: number | null): string {
 
 function renderRemoteStatus(status: RemoteStatus): void {
   currentRemoteStatus = status;
+  const showInvite = status.connectedControllers === 0
+    && status.state === "pairing"
+    && status.qrDataUrl !== null;
   elements.remoteDetail.textContent = status.detail;
+  elements.remoteInvite.hidden = !showInvite;
   elements.remotePairingView.hidden = status.state !== "pairing" || status.qrDataUrl === null;
   elements.remoteApproval.hidden = status.state !== "awaiting-approval";
   elements.remoteReady.hidden = status.state !== "ready";
@@ -1427,11 +1535,6 @@ function renderRemoteStatus(status: RemoteStatus): void {
       : status.state === "pairing"
         ? "Pairing code is ready to scan"
         : "Pair on your trusted local network";
-
-  const showInvite = status.connectedControllers === 0 &&
-    status.state === "pairing" &&
-    status.qrDataUrl !== null;
-  elements.remoteInvite.hidden = !showInvite;
 
   if (status.qrDataUrl !== null) {
     elements.remoteQr.src = status.qrDataUrl;
@@ -1850,6 +1953,9 @@ window.nhd.onHostStatusChanged(renderStatus);
 window.nhd.onContinueWatchingChanged((items) => {
   continueWatchingItems = items;
   renderContinueWatching();
+  if (services.length > 0) {
+    renderFeatured(orderedEnabledServices());
+  }
 });
 window.nhd.onRemoteAction(handleShellRemoteAction);
 window.nhd.onRemotePrecisionMoved(() => navigationSounds.playMove());

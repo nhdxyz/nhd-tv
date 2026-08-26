@@ -87,7 +87,7 @@ export function buildRemoteTextEntryScript(
       : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (typeof setter !== 'function') return false;
-    editable.focus();
+    editable.focus({ preventScroll: true });
     setter.call(editable, text);
     editable.setSelectionRange(text.length, text.length);
     editable.dispatchEvent(new InputEvent('input', {

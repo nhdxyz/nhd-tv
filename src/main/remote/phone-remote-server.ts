@@ -456,7 +456,10 @@ export class PhoneRemoteServer {
       }
 
       const now = Date.now();
-      if (now - this.#lastPointerAt < MIN_POINTER_INTERVAL_MS) {
+      if (
+        input.phase === "move" &&
+        now - this.#lastPointerAt < MIN_POINTER_INTERVAL_MS
+      ) {
         writeJson(response, 200, {
           ok: true,
           snapChanged: false,

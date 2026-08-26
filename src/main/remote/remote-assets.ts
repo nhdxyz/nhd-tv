@@ -1,3 +1,5 @@
+import { createLatestRemoteTextPump } from "../remote-text-pump";
+
 export function precisionRelativeDelta(deltaPixels: number, extentPixels: number): number {
   if (
     !Number.isFinite(deltaPixels) ||
@@ -49,6 +51,27 @@ export function precisionEdgeScroll(normalizedY: number, verticalDelta: number):
   return direction * Math.round(scaledMagnitude * 100) / 100;
 }
 
+export function precisionHorizontalScroll(
+  horizontalDelta: number,
+  verticalDelta: number
+): number {
+  const horizontalMagnitude = Math.abs(horizontalDelta);
+  const verticalMagnitude = Math.abs(verticalDelta);
+
+  if (
+    !Number.isFinite(horizontalDelta) ||
+    !Number.isFinite(verticalDelta) ||
+    horizontalMagnitude < 2.5 ||
+    horizontalMagnitude <= verticalMagnitude * 1.15
+  ) {
+    return 0;
+  }
+
+  const direction = horizontalDelta < 0 ? -1 : 1;
+  const scaledMagnitude = Math.max(0.18, Math.min(1, horizontalMagnitude / 22));
+  return direction * Math.round(scaledMagnitude * 100) / 100;
+}
+
 export const REMOTE_HTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -73,7 +96,7 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <span aria-hidden="true">Navigate</span>
+          <span id="remote-mode-label" aria-hidden="true">Navigate</span>
           <button class="remote-icon-button" data-action="home" type="button" disabled aria-label="NHD Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10.5 8-6.5 8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" /><path d="M9.5 20v-6h5v6" /></svg>
           </button>
@@ -89,8 +112,7 @@ export const REMOTE_HTML = `<!doctype html>
           </div>
 
           <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
-            <span class="precision-copy">Swipe to move<small>Follow the cursor on your TV · Tap anywhere</small></span>
-            <span class="precision-status" aria-hidden="true"><i></i><span id="precision-status-copy">Target locked</span></span>
+            <span class="precision-status" aria-hidden="true"><i></i></span>
           </div>
         </div>
 
@@ -337,6 +359,13 @@ button {
   color: #eaf2ff;
   text-align: center;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.precision-pad * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 .precision-pad[hidden] { display: none; }
@@ -359,20 +388,7 @@ button {
   pointer-events: none;
   transition: opacity 140ms ease, transform 180ms ease;
 }
-.precision-copy {
-  display: grid;
-  position: relative;
-  z-index: 1;
-  color: rgb(234 242 255 / 58%);
-  font-size: 0.82rem;
-  font-weight: 900;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.precision-copy small { margin-top: 0.35rem; color: #75839a; font-size: 0.65rem; }
 .precision-pad.is-tracking { border-color: #7dbbff; }
-.precision-pad.is-tracking .precision-copy,
-.precision-pad.has-snap .precision-copy { opacity: 0.16; }
 .precision-pad.is-tracking::before { opacity: 0.88; transform: scale(1.16); }
 .precision-pad.has-snap {
   border-color: #7dd3fc;
@@ -384,22 +400,18 @@ button {
   z-index: 3;
   bottom: 0.9rem;
   left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.38rem 0.62rem;
+  display: grid;
+  width: 0.9rem;
+  height: 0.9rem;
+  padding: 0;
+  place-items: center;
   border: 1px solid rgb(125 211 252 / 25%);
   border-radius: 999px;
   background: rgb(4 17 30 / 82%);
-  color: #a5f3fc;
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 0.25rem);
   transition: opacity 120ms ease, transform 120ms ease;
-  white-space: nowrap;
 }
 .precision-status i {
   width: 0.38rem;
@@ -476,6 +488,11 @@ button:disabled { opacity: 0.3; }
 }
 .search-panel p { margin: 0.55rem 0 0; color: #7d899d; font-size: 0.67rem; line-height: 1.4; }
 
+body.is-typing .control-surface,
+body.is-typing .control-mode { display: none; }
+body.is-typing .remote-card { justify-content: flex-start; }
+body.is-typing .search-toggle { margin-top: auto; }
+
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
 
@@ -507,9 +524,9 @@ export const REMOTE_JS = `(() => {
   const searchSubmit = document.querySelector("#search-submit");
   const dpad = document.querySelector(".dpad");
   const precisionPad = document.querySelector("#precision-pad");
-  const precisionStatusCopy = document.querySelector("#precision-status-copy");
   const controlMode = document.querySelector("#control-mode");
   const searchLabel = document.querySelector("#search-label");
+  const remoteModeLabel = document.querySelector("#remote-mode-label");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
   let pointerGesture = null;
@@ -520,11 +537,16 @@ export const REMOTE_JS = `(() => {
   let virtualPointer = { x: 0.5, y: 0.5 };
   let precisionTextEntryAvailable = false;
   let directTextEntry = false;
+  let directTextEntryReady = false;
+  let pendingDirectText = null;
   let textEntryTimer = null;
   const POINTER_INTERVAL_MS = 32;
+  const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
   const edgeScroll = (${precisionEdgeScroll.toString()});
+  const horizontalScroll = (${precisionHorizontalScroll.toString()});
+  const createTextPump = (${createLatestRemoteTextPump.toString()});
 
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
     document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
@@ -545,6 +567,7 @@ export const REMOTE_JS = `(() => {
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
     controlMode.disabled = !enabled;
+    if (!enabled) resetTextEntry();
   }
 
   function confirmCommand(button) {
@@ -630,7 +653,25 @@ export const REMOTE_JS = `(() => {
     });
   }
 
+  function resetTextEntry() {
+    directTextEntry = false;
+    directTextEntryReady = false;
+    pendingDirectText = null;
+    if (textEntryTimer !== null) {
+      clearTimeout(textEntryTimer);
+      textEntryTimer = null;
+    }
+    searchQuery.value = "";
+    searchQuery.blur();
+    searchLabel.textContent = "Search your services";
+    searchQuery.placeholder = "Title, person, or topic";
+    searchPanel.hidden = true;
+    document.body.classList.remove("is-typing");
+    remoteModeLabel.textContent = "Navigate";
+  }
+
   async function sendAction(action, button) {
+    if (document.body.classList.contains("is-typing")) resetTextEntry();
     if (!controllerToken) return;
 
     try {
@@ -682,8 +723,7 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ query })
       });
-      searchQuery.value = "";
-      searchPanel.hidden = true;
+      resetTextEntry();
       confirmCommand(searchToggle);
       setState("Search ready on TV", "connected");
     } catch (error) {
@@ -692,7 +732,11 @@ export const REMOTE_JS = `(() => {
   }
 
   async function sendRemoteText(text, submit) {
-    if (!controllerToken) return;
+    if (!controllerToken) {
+      const error = new Error("Remote disconnected — rescan the TV code");
+      setState(error.message, "error");
+      throw error;
+    }
 
     try {
       await jsonRequest("/api/text", {
@@ -705,15 +749,18 @@ export const REMOTE_JS = `(() => {
       });
       setState(submit ? "Search sent to TV" : "Typing on TV", "connected");
       if (submit) {
-        directTextEntry = false;
-        searchQuery.value = "";
-        searchPanel.hidden = true;
+        resetTextEntry();
         confirmCommand(searchToggle);
       }
     } catch (error) {
       setState(error instanceof Error ? error.message : "Text entry failed", "error");
+      throw error;
     }
   }
+
+  const textPump = createTextPump(sendRemoteText, () => {
+    resetTextEntry();
+  });
 
   function usePrecisionMode(enabled) {
     dpad.hidden = enabled;
@@ -726,7 +773,6 @@ export const REMOTE_JS = `(() => {
       pointerGesture = null;
       precisionTextEntryAvailable = false;
       precisionPad.dataset.textEntryAvailable = "false";
-      precisionStatusCopy.textContent = "Target locked";
       precisionPad.classList.remove("has-snap", "is-tracking");
       if (controllerToken) {
         queuePointer({ phase: "hide", scroll: 0, scrollX: 0, x: 0.5, y: 0.5 }, true);
@@ -754,9 +800,15 @@ export const REMOTE_JS = `(() => {
       if (result.throttled !== true) {
         precisionTextEntryAvailable = result.textEntryAvailable === true;
         precisionPad.dataset.textEntryAvailable = String(precisionTextEntryAvailable);
-        precisionStatusCopy.textContent = precisionTextEntryAvailable ? "Tap to type" : "Target locked";
         precisionPad.classList.toggle("has-snap", result.snapped === true);
-        if (input.phase === "tap" && precisionTextEntryAvailable) openProviderKeyboard();
+        if (input.phase === "tap") {
+          if (precisionTextEntryAvailable) {
+            if (!directTextEntry) openProviderKeyboard();
+            confirmProviderKeyboard();
+          } else {
+            rejectProviderKeyboard();
+          }
+        }
       }
       if (result.snapChanged && navigator.vibrate) navigator.vibrate(7);
     } catch (error) {
@@ -766,6 +818,7 @@ export const REMOTE_JS = `(() => {
       pointerGesture = null;
       precisionTextEntryAvailable = false;
       precisionPad.classList.remove("has-snap", "is-tracking");
+      rejectProviderKeyboard();
       setState(error instanceof Error ? error.message : "Remote disconnected", "error");
     } finally {
       pointerRequestInFlight = false;
@@ -804,10 +857,61 @@ export const REMOTE_JS = `(() => {
   function openProviderKeyboard() {
     if (!directTextEntry) searchQuery.value = "";
     directTextEntry = true;
-    searchLabel.textContent = "Type on your TV";
+    directTextEntryReady = false;
+    pendingDirectText = null;
+    searchLabel.textContent = "Connecting to the TV text box…";
     searchQuery.placeholder = "Type in the selected search box";
     searchPanel.hidden = false;
-    searchQuery.focus({ preventScroll: true });
+    document.body.classList.add("is-typing");
+    remoteModeLabel.textContent = "Typing";
+    searchQuery.focus();
+    searchPanel.scrollIntoView({ block: "nearest" });
+    setTimeout(() => searchPanel.scrollIntoView({ block: "nearest" }), 180);
+  }
+
+  function confirmProviderKeyboard() {
+    if (!directTextEntry) return;
+    directTextEntryReady = true;
+    searchLabel.textContent = "Type on your TV";
+    const pending = pendingDirectText;
+    pendingDirectText = null;
+    if (pending !== null) {
+      if (pending.submit) {
+        directTextEntry = false;
+        directTextEntryReady = false;
+      }
+      textPump.enqueue(pending.text, pending.submit);
+    }
+  }
+
+  function rejectProviderKeyboard() {
+    if (!directTextEntry) return;
+    resetTextEntry();
+    setState("That TV text box is not available", "error");
+  }
+
+  function queueDirectText(text, submit) {
+    if (!directTextEntryReady) {
+      pendingDirectText = { submit, text };
+      return;
+    }
+    if (submit) {
+      directTextEntry = false;
+      directTextEntryReady = false;
+    }
+    textPump.enqueue(text, submit);
+  }
+
+  function scheduleDirectText() {
+    pendingDirectText = { submit: false, text: searchQuery.value };
+    if (!directTextEntryReady) return;
+    if (textEntryTimer !== null) clearTimeout(textEntryTimer);
+    textEntryTimer = setTimeout(() => {
+      textEntryTimer = null;
+      const pending = pendingDirectText;
+      pendingDirectText = null;
+      if (pending !== null) textPump.enqueue(pending.text, pending.submit);
+    }, TEXT_ENTRY_DEBOUNCE_MS);
   }
 
   function latestPointerEvent(event) {
@@ -823,7 +927,6 @@ export const REMOTE_JS = `(() => {
     if (pointerGesture !== null || event.isPrimary === false || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
     }
-    if (precisionTextEntryAvailable) openProviderKeyboard();
     event.preventDefault();
     pointerGesture = {
       id: event.pointerId,
@@ -847,7 +950,7 @@ export const REMOTE_JS = `(() => {
       ? edgeScroll(point.y, verticalDelta)
       : 0;
     const scrollX = pointerGesture.totalDistance >= 8
-      ? edgeScroll(point.x, horizontalDelta)
+      ? horizontalScroll(horizontalDelta, verticalDelta)
       : 0;
     pointerGesture.lastX = currentEvent.clientX;
     pointerGesture.lastY = currentEvent.clientY;
@@ -884,15 +987,18 @@ export const REMOTE_JS = `(() => {
 
   searchToggle.addEventListener("click", () => {
     if (searchToggle.disabled) return;
-    directTextEntry = false;
-    if (textEntryTimer !== null) {
-      clearTimeout(textEntryTimer);
-      textEntryTimer = null;
+    if (!searchPanel.hidden) {
+      resetTextEntry();
+      return;
     }
+    resetTextEntry();
     searchLabel.textContent = "Search your services";
     searchQuery.placeholder = "Title, person, or topic";
-    searchPanel.hidden = !searchPanel.hidden;
-    if (!searchPanel.hidden) searchQuery.focus();
+    searchPanel.hidden = false;
+    document.body.classList.add("is-typing");
+    remoteModeLabel.textContent = "Search";
+    searchQuery.focus();
+    searchPanel.scrollIntoView({ block: "nearest" });
   });
 
   searchPanel.addEventListener("submit", (event) => {
@@ -902,20 +1008,20 @@ export const REMOTE_JS = `(() => {
       textEntryTimer = null;
     }
     if (directTextEntry) {
-      void sendRemoteText(searchQuery.value, true);
+      pendingDirectText = null;
+      queueDirectText(searchQuery.value, true);
       return;
     }
     const query = searchQuery.value.replace(/\\s+/g, " ").trim();
     if (query.length > 0 && query.length <= 120) void sendSearch(query);
   });
 
-  searchQuery.addEventListener("input", () => {
-    if (!directTextEntry) return;
-    if (textEntryTimer !== null) clearTimeout(textEntryTimer);
-    textEntryTimer = setTimeout(() => {
-      textEntryTimer = null;
-      void sendRemoteText(searchQuery.value, false);
-    }, 45);
+  searchQuery.addEventListener("input", (event) => {
+    if (!directTextEntry || event.isComposing) return;
+    scheduleDirectText();
+  });
+  searchQuery.addEventListener("compositionend", () => {
+    if (directTextEntry) scheduleDirectText();
   });
 
   buttons.forEach((button) => {

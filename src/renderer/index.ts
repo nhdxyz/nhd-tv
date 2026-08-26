@@ -41,6 +41,7 @@ function renderStatus(status: HostStatus): void {
     `Acceleration ${status.diagnostics.hardwareAcceleration ?? "checking"}`,
     `Video decode ${status.diagnostics.videoDecode}`,
     `VPx ${status.diagnostics.vpxDecode}`,
+    `Fullscreen window ${status.fullscreen.window} · service HTML ${status.fullscreen.serviceHtml}`,
     serviceProcess === null
       ? "Service process inactive"
       : `Service ${serviceProcess.cpuPercent}% CPU · ${serviceProcess.memoryMegabytes} MB · sandbox ${serviceProcess.sandboxed ?? "unknown"}`,
@@ -58,6 +59,9 @@ async function renderServices(): Promise<void> {
   const services = await window.nhd.getServices();
 
   for (const service of services) {
+    const option = document.createElement("article");
+    option.className = "service-option";
+
     const button = document.createElement("button");
     button.classList.toggle("secondary", service.kind === "test");
     button.dataset.serviceId = service.id;
@@ -73,7 +77,16 @@ async function renderServices(): Promise<void> {
         elements.feedback.textContent = error instanceof Error ? error.message : String(error);
       }
     });
-    elements.serviceActions.append(button);
+    option.append(button);
+
+    if (service.authenticationNote !== undefined) {
+      const note = document.createElement("p");
+      note.className = "authentication-note";
+      note.textContent = service.authenticationNote;
+      option.append(note);
+    }
+
+    elements.serviceActions.append(option);
   }
 }
 

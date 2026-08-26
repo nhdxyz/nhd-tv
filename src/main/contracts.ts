@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
 export type ServiceKind = "commercial" | "test";
 
 export interface ServiceSummary {
+  authenticationNote?: string;
   id: string;
   kind: ServiceKind;
   name: string;
@@ -24,6 +25,10 @@ export interface HostStatus {
     serviceRenderer: ProcessDiagnostics | null;
     videoDecode: string;
     vpxDecode: string;
+  };
+  fullscreen: {
+    serviceHtml: boolean;
+    window: boolean;
   };
   runtime: {
     chrome: string;

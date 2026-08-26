@@ -25,6 +25,8 @@ const services: readonly ServiceDefinition[] = [
   },
   {
     allowedOrigins: ["https://www.youtube.com", "https://accounts.google.com"],
+    authenticationNote:
+      "If Google asks for a passkey but no system prompt appears, choose Try another way, then Enter your password. Native macOS passkeys require a signed, entitled app build.",
     id: "youtube",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.youtube.com"],
@@ -56,5 +58,10 @@ export function getServiceDefinitions(): readonly ServiceDefinition[] {
 }
 
 export function getServiceSummaries(): readonly ServiceSummary[] {
-  return services.map(({ id, kind, name }) => ({ id, kind, name }));
+  return services.map(({ authenticationNote, id, kind, name }) => ({
+    authenticationNote,
+    id,
+    kind,
+    name
+  }));
 }

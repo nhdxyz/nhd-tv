@@ -62,6 +62,10 @@ export class ServiceHost {
     return processId > 0 ? processId : null;
   }
 
+  get isHtmlFullscreen(): boolean {
+    return this.#htmlFullscreen;
+  }
+
   async open(definition: ServiceDefinition): Promise<void> {
     this.close();
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
@@ -101,6 +105,7 @@ export class ServiceHost {
       if (this.#view === view) {
         this.#htmlFullscreen = true;
         this.#window.setFullScreen(true);
+        this.#onStateChanged(this.activeServiceId);
       }
     });
 
@@ -108,6 +113,7 @@ export class ServiceHost {
       if (this.#view === view) {
         this.#htmlFullscreen = false;
         this.#window.setFullScreen(this.#windowWasFullScreenOnOpen);
+        this.#onStateChanged(this.activeServiceId);
       }
     });
 

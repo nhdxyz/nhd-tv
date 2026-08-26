@@ -101,9 +101,25 @@ h1 {
 
 .actions {
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 1rem;
   margin-top: 2rem;
+}
+
+.service-option {
+  width: 20rem;
+}
+
+.service-option button {
+  width: 100%;
+}
+
+.authentication-note {
+  margin: 0.8rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .close-service {

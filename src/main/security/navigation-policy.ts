@@ -1,5 +1,6 @@
 export interface ServiceDefinition {
   allowedOrigins: readonly string[];
+  authenticationNote?: string;
   id: string;
   kind: "commercial" | "test";
   mediaKeySystemOrigins: readonly string[];

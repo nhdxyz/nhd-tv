@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getServiceDefinition, getServiceDefinitions } from "../src/main/service-registry";
+import {
+  getServiceDefinition,
+  getServiceDefinitions,
+  getServiceSummaries
+} from "../src/main/service-registry";
 
 describe("service registry", () => {
   it("returns configured services by stable id", () => {
@@ -22,5 +26,14 @@ describe("service registry", () => {
 
     expect(youtube?.allowedOrigins).toContain("https://accounts.google.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
+  });
+
+  it("surfaces Google sign-in recovery without exposing service URLs", () => {
+    const youtube = getServiceSummaries().find((service) => service.id === "youtube");
+
+    expect(youtube?.authenticationNote).toContain("Try another way");
+    expect(youtube?.authenticationNote).toContain("Enter your password");
+    expect(youtube).not.toHaveProperty("startUrl");
+    expect(youtube).not.toHaveProperty("allowedOrigins");
   });
 });

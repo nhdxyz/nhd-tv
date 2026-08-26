@@ -79,6 +79,10 @@ function hostStatus(): HostStatus {
   return {
     activeServiceId: serviceHost?.activeServiceId ?? null,
     diagnostics: runtimeDiagnostics(),
+    fullscreen: {
+      serviceHtml: serviceHost?.isHtmlFullscreen ?? false,
+      window: mainWindow?.isFullScreen() ?? false
+    },
     runtime: {
       chrome: process.versions.chrome ?? "unknown",
       electron: process.versions.electron ?? "unknown",

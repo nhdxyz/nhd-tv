@@ -61,6 +61,7 @@ The host shell also uses sandboxing, context isolation, disabled Node.js integra
 
 - This verification is macOS-only. Windows 11 is the primary product target and remains mandatory for the service playback matrix.
 - The spike is not packaged or signed.
+- Because the macOS spike is unsigned, Electron's app-specific Touch ID WebAuthn integration is not configured. Google sign-in remains available through its `Try another way` password fallback.
 - Popup handling is intentionally denied pending an explicit OAuth and service-popup policy.
 - Escape immediately removes the service for this spike. Nested Back detection, a quit prompt at the service root, and emergency return behavior are tracked in Issue #4.
 - Streaming-service account sessions were not used or copied into this test.

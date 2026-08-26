@@ -36,7 +36,24 @@ export const REMOTE_HTML = `<!doctype html>
         <div class="system-actions">
           <button data-action="back" type="button" disabled><span aria-hidden="true">↩</span> Back</button>
           <button data-action="home" type="button" disabled><span aria-hidden="true">⌂</span> NHD Home</button>
+          <button class="search-toggle" id="search-toggle" type="button" disabled><span aria-hidden="true">⌕</span> Search</button>
         </div>
+
+        <form class="search-panel" id="search-panel" hidden>
+          <label for="search-query">Search your services</label>
+          <div>
+            <input
+              id="search-query"
+              type="search"
+              maxlength="120"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="Title, person, or topic"
+            />
+            <button id="search-submit" type="submit">Send</button>
+          </div>
+          <p>Use the microphone on your phone keyboard for voice dictation.</p>
+        </form>
 
         <p class="privacy-note"><span aria-hidden="true">●</span> Local, session-only connection</p>
       </section>
@@ -195,7 +212,7 @@ h1 { margin: 0.28rem 0 0; font-size: clamp(2.05rem, 10vw, 3rem); letter-spacing:
 
 button:disabled { opacity: 0.3; }
 
-.system-actions { display: grid; grid-template-columns: 1fr 1.25fr; gap: 0.72rem; }
+.system-actions { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 0.72rem; }
 .system-actions button {
   display: flex;
   min-height: 3.55rem;
@@ -214,6 +231,40 @@ button:disabled { opacity: 0.3; }
 .system-actions button span { color: #9cc9ff; font-size: 1.15rem; }
 .system-actions button:not(:disabled).is-pressed,
 .system-actions button:not(:disabled):active { transform: scale(0.95); filter: brightness(1.25); }
+
+.search-panel {
+  margin-top: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid rgb(125 187 255 / 28%);
+  border-radius: 1rem;
+  background: rgb(5 9 16 / 72%);
+}
+.search-panel[hidden] { display: none; }
+.search-panel label { display: block; margin-bottom: 0.55rem; color: #dbeafe; font-size: 0.76rem; font-weight: 850; }
+.search-panel > div { display: grid; grid-template-columns: 1fr auto; gap: 0.55rem; }
+.search-panel input {
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 0.8rem;
+  outline: none;
+  background: #101622;
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+}
+.search-panel input:focus { border-color: #7dbbff; box-shadow: 0 0 0 0.2rem rgb(125 187 255 / 18%); }
+.search-panel button {
+  min-width: 4rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  color: #101521;
+  font: inherit;
+  font-weight: 900;
+}
+.search-panel p { margin: 0.55rem 0 0; color: #7d899d; font-size: 0.67rem; line-height: 1.4; }
 
 .confirmed { animation: confirmed 220ms ease-out; }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
@@ -236,6 +287,10 @@ button:disabled { opacity: 0.3; }
 export const REMOTE_JS = `(() => {
   const state = document.querySelector("#connection-state");
   const buttons = Array.from(document.querySelectorAll("button[data-action]"));
+  const searchToggle = document.querySelector("#search-toggle");
+  const searchPanel = document.querySelector("#search-panel");
+  const searchQuery = document.querySelector("#search-query");
+  const searchSubmit = document.querySelector("#search-submit");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
 
@@ -248,6 +303,8 @@ export const REMOTE_JS = `(() => {
 
   function setEnabled(enabled) {
     buttons.forEach((button) => { button.disabled = !enabled; });
+    searchToggle.disabled = !enabled;
+    searchSubmit.disabled = !enabled;
   }
 
   function confirmCommand(button) {
@@ -335,6 +392,39 @@ export const REMOTE_JS = `(() => {
       setState(error instanceof Error ? error.message : "Remote disconnected", "error");
     }
   }
+
+  async function sendSearch(query) {
+    if (!controllerToken) return;
+
+    try {
+      await jsonRequest("/api/search", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ query })
+      });
+      searchQuery.value = "";
+      searchPanel.hidden = true;
+      confirmCommand(searchToggle);
+      setState("Search ready on TV", "connected");
+    } catch (error) {
+      setState(error instanceof Error ? error.message : "Search failed", "error");
+    }
+  }
+
+  searchToggle.addEventListener("click", () => {
+    if (searchToggle.disabled) return;
+    searchPanel.hidden = !searchPanel.hidden;
+    if (!searchPanel.hidden) searchQuery.focus();
+  });
+
+  searchPanel.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const query = searchQuery.value.replace(/\\s+/g, " ").trim();
+    if (query.length > 0 && query.length <= 120) void sendSearch(query);
+  });
 
   buttons.forEach((button) => {
     const release = () => button.classList.remove("is-pressed");

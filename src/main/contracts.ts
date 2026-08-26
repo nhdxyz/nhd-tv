@@ -2,15 +2,20 @@ export const IPC_CHANNELS = {
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   closeService: "nhd:service:close",
+  continueWatchingChanged: "nhd:continue-watching:changed",
   confirmServiceQuit: "nhd:service:quit:confirm",
   denyRemotePairing: "nhd:remote:pairing:deny",
+  getContinueWatching: "nhd:continue-watching:list",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
   getRemoteStatus: "nhd:remote:status:get",
   hostStatusChanged: "nhd:host:status:changed",
   openService: "nhd:service:open",
   remoteAction: "nhd:remote:action",
+  remoteSearchRequested: "nhd:remote:search:requested",
   remoteStatusChanged: "nhd:remote:status:changed",
+  resumeContinueWatching: "nhd:continue-watching:resume",
+  searchService: "nhd:service:search",
   serviceQuitRequested: "nhd:service:quit:requested",
   startRemotePairing: "nhd:remote:pairing:start"
 } as const;
@@ -45,6 +50,18 @@ export interface ServiceSummary {
   id: string;
   kind: ServiceKind;
   name: string;
+  searchMode: "browse" | "none" | "query";
+}
+
+export interface ContinueWatchingItem {
+  artworkDataUrl: string | null;
+  durationSeconds: number;
+  id: string;
+  positionSeconds: number;
+  serviceId: string;
+  serviceName: string;
+  title: string;
+  updatedAt: number;
 }
 
 export interface ServiceQuitRequest {

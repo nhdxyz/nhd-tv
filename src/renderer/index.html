@@ -30,6 +30,10 @@
       </nav>
 
       <div class="topbar-actions" data-nav-group="topbar">
+        <button class="search-chip" id="top-search-button" type="button" aria-label="Search your services">
+          <span aria-hidden="true">⌕</span>
+          <span>Search</span>
+        </button>
         <button class="remote-chip" id="top-remote-button" type="button">
           <span class="remote-chip-dot" aria-hidden="true"></span>
           <span id="top-remote-label">Pair a phone</span>
@@ -74,16 +78,16 @@
         <section class="rail continue-rail" aria-labelledby="continue-title">
           <div class="section-heading">
             <h2 id="continue-title">Continue Watching</h2>
-            <span class="section-hint">Local listening arrives next</span>
+            <span class="section-hint" id="continue-hint">Saved only on this computer</span>
           </div>
-          <div class="horizontal-row" data-nav-group="continue-row">
+          <div class="horizontal-row" id="continue-actions" data-nav-group="continue-row">
             <button class="continue-card" id="continue-placeholder" type="button">
               <span class="continue-art" aria-hidden="true">
                 <span class="continue-play">▶</span>
               </span>
               <span class="continue-meta">
-                <strong>Ready for your next show</strong>
-                <small>Recognized playback will appear here</small>
+                <strong>Start watching in one of your apps</strong>
+                <small>Long-form playback will appear here automatically</small>
                 <span class="placeholder-progress" aria-hidden="true"><span></span></span>
               </span>
             </button>
@@ -159,7 +163,7 @@
           <article class="privacy-card">
             <p class="eyebrow">Privacy</p>
             <h2>Local by default</h2>
-            <p>Service cookies remain in separate local partitions. NHD-TV has no analytics or cloud sync, and the phone remote cannot send passwords or arbitrary text.</p>
+            <p>Service cookies remain in separate local partitions. NHD-TV has no analytics or cloud sync. The phone remote can send navigation commands and a search query, but never credential fields.</p>
           </article>
 
           <details class="developer-panel">
@@ -216,8 +220,8 @@
           Start pairing to create a short-lived local QR code.
         </p>
         <p class="remote-safety">
-          Use a trusted home network. The remote cannot send passwords, payment details,
-          or arbitrary text.
+          Use a trusted home network. The remote can send a search phrase, but never
+          passwords, payment details, or service sign-in fields.
         </p>
 
         <div class="remote-pairing-view" id="remote-pairing-view" hidden>
@@ -242,6 +246,41 @@
         <button class="primary-action remote-start" id="remote-start" type="button">
           Create pairing code
         </button>
+      </div>
+    </dialog>
+
+    <dialog class="search-dialog" id="search-dialog" aria-labelledby="search-title">
+      <div class="search-dialog-shell">
+        <header class="search-dialog-header">
+          <div>
+            <p class="eyebrow">Search your lineup</p>
+            <h2 id="search-title">What do you want to watch?</h2>
+          </div>
+          <button class="dialog-close" id="search-close" type="button" aria-label="Close search">×</button>
+        </header>
+        <form class="tv-search-form" id="search-form">
+          <label for="search-input">Title, person, genre, or topic</label>
+          <div>
+            <span aria-hidden="true">⌕</span>
+            <input
+              id="search-input"
+              type="search"
+              maxlength="120"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="Search Netflix, YouTube, and more"
+            />
+            <button class="primary-action" type="submit">Search</button>
+          </div>
+        </form>
+        <p class="search-privacy">Your query stays local until you choose a service. NHD-TV does not save search history.</p>
+        <section class="search-results" aria-labelledby="search-results-title">
+          <div class="section-heading">
+            <h2 id="search-results-title">Choose a service</h2>
+            <span class="section-hint" id="search-result-count">Enter a search above</span>
+          </div>
+          <div class="search-result-row" id="search-results" data-nav-group="search-results"></div>
+        </section>
       </div>
     </dialog>
 

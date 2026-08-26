@@ -9,6 +9,7 @@ import {
   isExpectedAllowedNavigationAbort,
   isServiceRootUrl,
   originForDiagnostics,
+  sanitizePlaybackUrl,
   type ServiceDefinition
 } from "./security/navigation-policy";
 import type { NavigationDiagnostic, RemoteAction } from "./contracts";
@@ -18,6 +19,17 @@ export type ServiceQuitListener = (request: {
   serviceId: string;
   serviceName: string;
 }) => void;
+export interface PlaybackObservation {
+  artworkUrl: string | null;
+  durationSeconds: number;
+  ended: boolean;
+  positionSeconds: number;
+  serviceId: string;
+  serviceName: string;
+  title: string;
+  watchUrl: string;
+}
+export type PlaybackListener = (observation: PlaybackObservation) => void | Promise<void>;
 
 type ServiceSpatialAction = Exclude<RemoteAction, "back" | "home">;
 
@@ -47,14 +59,65 @@ const configuredSessions = new WeakSet<Session>();
 const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
+const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const SERVICE_FOCUS_STYLE = `
   [data-nhd-tv-focus="true"] {
     outline: 4px solid #63e6ff !important;
     outline-offset: 5px !important;
     box-shadow: 0 0 0 2px rgb(2 8 23 / 88%), 0 0 28px rgb(34 211 238 / 82%) !important;
     border-radius: 8px !important;
+    transform: scale(1.025) !important;
+    transition: outline-color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
   }
 `;
+
+interface PlaybackSnapshot {
+  artworkUrl: string | null;
+  currentTime: number;
+  duration: number;
+  ended: boolean;
+  title: string;
+  url: string;
+}
+
+const playbackSnapshotScript = `(() => {
+  const videos = [...document.querySelectorAll("video")]
+    .filter((video) => Number.isFinite(video.duration) && video.duration >= 60)
+    .sort((left, right) => {
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      return rightRect.width * rightRect.height - leftRect.width * leftRect.height;
+    });
+  const video = videos[0];
+  if (!(video instanceof HTMLVideoElement) || video.currentTime < 5) return null;
+
+  const titleCandidates = [
+    document.querySelector('[data-uia="video-title"]')?.textContent,
+    document.querySelector('h1.ytd-watch-metadata')?.textContent,
+    document.querySelector('meta[property="og:title"]')?.getAttribute("content"),
+    document.title
+  ];
+  const title = titleCandidates
+    .find((candidate) => typeof candidate === "string" && candidate.trim().length > 0)
+    ?.replace(/\\s+/g, " ").trim() ?? "";
+  const artworkCandidates = [
+    document.querySelector('meta[property="og:image"]')?.getAttribute("content"),
+    video.poster
+  ];
+  const artworkUrl = artworkCandidates.find((candidate) => {
+    if (typeof candidate !== "string" || candidate.length === 0) return false;
+    try { return new URL(candidate, location.href).protocol === "https:"; } catch { return false; }
+  });
+
+  return {
+    artworkUrl: artworkUrl ? new URL(artworkUrl, location.href).toString() : null,
+    currentTime: video.currentTime,
+    duration: video.duration,
+    ended: video.ended,
+    title,
+    url: location.href
+  };
+})()`;
 
 function shouldUseDomSpatialNavigation(
   definition: ServiceDefinition,
@@ -94,7 +157,11 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
       '[tabindex]:not([tabindex="-1"])'
     ].join(',');
     const candidates = [...document.querySelectorAll(selectors)].filter((element) => {
-      if (!(element instanceof HTMLElement) || element.matches(':disabled,[aria-disabled="true"]')) return false;
+      if (
+        !(element instanceof HTMLElement) ||
+        element.matches(':disabled,[aria-disabled="true"],[aria-hidden="true"],[inert]') ||
+        element.closest('[aria-hidden="true"],[inert]') !== null
+      ) return false;
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
       return (
@@ -102,9 +169,15 @@ function serviceSpatialNavigationScript(action: ServiceSpatialAction): string {
         style.visibility !== 'hidden' &&
         Number(style.opacity) > 0.05 &&
         rect.width >= 12 &&
-        rect.height >= 12
+        rect.height >= 12 &&
+        rect.bottom >= -24 &&
+        rect.top <= innerHeight + 24 &&
+        rect.right >= -24 &&
+        rect.left <= innerWidth + 24
       );
-    });
+    }).filter((element, index, all) => !all.some((other, otherIndex) =>
+      otherIndex < index && other.contains(element) && other.getBoundingClientRect().width === element.getBoundingClientRect().width
+    ));
 
     if (candidates.length === 0) return false;
 
@@ -299,23 +372,28 @@ export class ServiceHost {
   readonly #window: BrowserWindow;
   readonly #onStateChanged: ServiceStateListener;
   readonly #onQuitRequested: ServiceQuitListener;
+  readonly #onPlayback: PlaybackListener;
   #activeDefinition: ServiceDefinition | null = null;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
   #popupWindow: BrowserWindow | null = null;
   #quitPromptVisible = false;
   #replayingInput = false;
+  #playbackCheckpoint: Promise<void> | null = null;
+  #playbackTimer: NodeJS.Timeout | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
 
   constructor(
     window: BrowserWindow,
     onStateChanged: ServiceStateListener,
-    onQuitRequested: ServiceQuitListener
+    onQuitRequested: ServiceQuitListener,
+    onPlayback: PlaybackListener = () => undefined
   ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
     this.#onQuitRequested = onQuitRequested;
+    this.#onPlayback = onPlayback;
     this.#window.on("resize", () => this.#resize());
   }
 
@@ -344,8 +422,12 @@ export class ServiceHost {
     return this.#lastBlockedNavigation;
   }
 
-  async open(definition: ServiceDefinition): Promise<void> {
-    this.close();
+  async open(definition: ServiceDefinition, initialUrl = definition.startUrl): Promise<void> {
+    if (!isAllowedServiceUrl(initialUrl, definition.allowedOrigins)) {
+      throw new Error(`Initial service URL is outside the ${definition.name} boundary.`);
+    }
+
+    await this.closeWithCheckpoint();
     this.#lastBlockedNavigation = null;
     this.#windowWasFullScreenOnOpen = this.#window.isFullScreen();
 
@@ -467,6 +549,22 @@ export class ServiceHost {
       if (this.#view === view && definition.spatialNavigation === "dom") {
         void view.webContents.insertCSS(SERVICE_FOCUS_STYLE).catch(() => undefined);
       }
+
+      if (this.#view === view) {
+        void this.#checkpointPlayback();
+      }
+    });
+
+    view.webContents.on("did-navigate-in-page", () => {
+      if (this.#view === view) {
+        void this.#checkpointPlayback();
+      }
+    });
+
+    view.webContents.on("media-paused", () => {
+      if (this.#view === view) {
+        void this.#checkpointPlayback();
+      }
     });
 
     view.webContents.on("enter-html-full-screen", () => {
@@ -489,6 +587,8 @@ export class ServiceHost {
       if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
         event.preventDefault();
         this.#recordBlockedNavigation("navigation", url, definition);
+      } else {
+        void this.#checkpointPlayback();
       }
     });
 
@@ -510,9 +610,12 @@ export class ServiceHost {
     this.#window.contentView.addChildView(view);
     this.#resize();
     this.#onStateChanged(definition.id);
+    this.#playbackTimer = setInterval(() => {
+      void this.#checkpointPlayback();
+    }, PLAYBACK_CHECKPOINT_INTERVAL_MS);
 
     try {
-      await view.webContents.loadURL(definition.startUrl);
+      await view.webContents.loadURL(initialUrl);
     } catch (error) {
       if (
         isExpectedAllowedNavigationAbort(
@@ -532,6 +635,11 @@ export class ServiceHost {
   close(): void {
     const view = this.#view;
     const viewWasAttached = view !== null && !this.#quitPromptVisible;
+
+    if (this.#playbackTimer !== null) {
+      clearInterval(this.#playbackTimer);
+      this.#playbackTimer = null;
+    }
 
     if (this.#popupWindow !== null && !this.#popupWindow.isDestroyed()) {
       this.#popupWindow.close();
@@ -560,6 +668,11 @@ export class ServiceHost {
     this.#onStateChanged(null);
   }
 
+  async closeWithCheckpoint(): Promise<void> {
+    await this.#checkpointPlayback();
+    this.close();
+  }
+
   cancelQuit(): void {
     const view = this.#view;
 
@@ -574,9 +687,9 @@ export class ServiceHost {
     this.#onStateChanged(this.activeServiceId);
   }
 
-  confirmQuit(): void {
+  async confirmQuit(): Promise<void> {
     if (this.#quitPromptVisible) {
-      this.close();
+      await this.closeWithCheckpoint();
     }
   }
 
@@ -606,6 +719,8 @@ export class ServiceHost {
       this.#requestQuit();
       return true;
     }
+
+    await this.#checkpointPlayback();
 
     if (view.webContents.navigationHistory.canGoBack()) {
       view.webContents.navigationHistory.goBack();
@@ -866,6 +981,63 @@ export class ServiceHost {
     } catch {
       return false;
     }
+  }
+
+  async #checkpointPlayback(): Promise<void> {
+    if (this.#playbackCheckpoint !== null) {
+      return this.#playbackCheckpoint;
+    }
+
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (
+      view === null ||
+      definition === null ||
+      definition.playback === null ||
+      view.webContents.isDestroyed()
+    ) {
+      return;
+    }
+
+    this.#playbackCheckpoint = (async () => {
+      try {
+        const snapshot = await view.webContents.executeJavaScript(
+          playbackSnapshotScript,
+          true
+        ) as PlaybackSnapshot | null;
+        if (snapshot === null || this.#view !== view) {
+          return;
+        }
+
+        const watchUrl = sanitizePlaybackUrl(snapshot.url, definition);
+        if (
+          watchUrl === null ||
+          !Number.isFinite(snapshot.currentTime) ||
+          !Number.isFinite(snapshot.duration) ||
+          snapshot.currentTime < 5 ||
+          snapshot.duration < 60
+        ) {
+          return;
+        }
+
+        await this.#onPlayback({
+          artworkUrl: typeof snapshot.artworkUrl === "string" ? snapshot.artworkUrl : null,
+          durationSeconds: snapshot.duration,
+          ended: snapshot.ended === true,
+          positionSeconds: snapshot.currentTime,
+          serviceId: definition.id,
+          serviceName: definition.name,
+          title: typeof snapshot.title === "string" ? snapshot.title : definition.name,
+          watchUrl
+        });
+      } catch {
+        // A page navigation can replace the document during a passive snapshot.
+      }
+    })().finally(() => {
+      this.#playbackCheckpoint = null;
+    });
+
+    return this.#playbackCheckpoint;
   }
 
   #sendKey(action: Exclude<RemoteAction, "home">): void {

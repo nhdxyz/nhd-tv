@@ -7,23 +7,35 @@ import type { ServiceSummary } from "./contracts";
 const services: readonly ServiceDefinition[] = [
   {
     allowedOrigins: ["https://shaka-project.github.io"],
+    artworkHosts: [],
     id: "shaka-demo",
     kind: "test",
     mediaKeySystemOrigins: ["https://shaka-project.github.io"],
     name: "Shaka Player DRM Demo",
     partition: "persist:service-shaka-demo",
+    playback: null,
     rootUrls: ["https://shaka-project.github.io/shaka-player-release/demo/"],
+    search: null,
     spatialNavigation: "native",
     startUrl: "https://shaka-project.github.io/shaka-player-release/demo/"
   },
   {
     allowedOrigins: ["https://www.netflix.com"],
+    artworkHosts: ["nflximg.net", "nflxso.net"],
     id: "netflix",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.netflix.com"],
     name: "Netflix",
     partition: "persist:service-netflix",
+    playback: {
+      pathPrefixes: ["/watch/"],
+      queryParameters: []
+    },
     rootUrls: ["https://www.netflix.com/browse"],
+    search: {
+      baseUrl: "https://www.netflix.com/search",
+      queryParameter: "q"
+    },
     spatialNavigation: "dom",
     startUrl: "https://www.netflix.com/browse"
   },
@@ -33,6 +45,7 @@ const services: readonly ServiceDefinition[] = [
       "https://accounts.google.com",
       "https://accounts.youtube.com"
     ],
+    artworkHosts: ["i.ytimg.com"],
     authenticationNote:
       "If Google asks for a passkey but no system prompt appears, choose Try another way, then Enter your password. Native macOS passkeys require a signed, entitled app build.",
     id: "youtube",
@@ -40,18 +53,35 @@ const services: readonly ServiceDefinition[] = [
     mediaKeySystemOrigins: ["https://www.youtube.com"],
     name: "YouTube",
     partition: "persist:service-youtube",
+    playback: {
+      pathPrefixes: ["/watch", "/shorts/"],
+      queryParameters: ["v"]
+    },
     rootUrls: ["https://www.youtube.com/"],
+    search: {
+      baseUrl: "https://www.youtube.com/results",
+      queryParameter: "search_query"
+    },
     spatialNavigation: "dom",
     startUrl: "https://www.youtube.com/"
   },
   {
     allowedOrigins: ["https://www.disneyplus.com"],
+    artworkHosts: ["disney-plus.net"],
     id: "disney-plus",
     kind: "commercial",
     mediaKeySystemOrigins: ["https://www.disneyplus.com"],
     name: "Disney+",
     partition: "persist:service-disney-plus",
+    playback: {
+      pathPrefixes: ["/play/", "/video/"],
+      queryParameters: []
+    },
     rootUrls: ["https://www.disneyplus.com/home"],
+    search: {
+      baseUrl: "https://www.disneyplus.com/search",
+      queryParameter: null
+    },
     spatialNavigation: "dom",
     startUrl: "https://www.disneyplus.com/home"
   }
@@ -70,10 +100,11 @@ export function getServiceDefinitions(): readonly ServiceDefinition[] {
 }
 
 export function getServiceSummaries(): readonly ServiceSummary[] {
-  return services.map(({ authenticationNote, id, kind, name }) => ({
+  return services.map(({ authenticationNote, id, kind, name, search }) => ({
     authenticationNote,
     id,
     kind,
-    name
+    name,
+    searchMode: search === null ? "none" : search.queryParameter === null ? "browse" : "query"
   }));
 }

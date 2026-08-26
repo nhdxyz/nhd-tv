@@ -1,12 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
   assertValidServiceDefinition,
+  buildServiceSearchUrl,
+  isAllowedArtworkUrl,
   isAllowedServiceUrl,
   isExpectedAllowedNavigationAbort,
   isServiceRootUrl,
+  isPlaybackUrl,
   normalizeOrigin,
-  originForDiagnostics
+  normalizeSearchQuery,
+  originForDiagnostics,
+  sanitizePlaybackUrl,
+  type ServiceDefinition
 } from "../src/main/security/navigation-policy";
+
+const validDefinition: ServiceDefinition = {
+  allowedOrigins: ["https://example.com"],
+  artworkHosts: ["images.example.com"],
+  id: "example",
+  kind: "test",
+  mediaKeySystemOrigins: ["https://example.com"],
+  name: "Example",
+  partition: "persist:service-example",
+  playback: {
+    pathPrefixes: ["/watch/"],
+    queryParameters: ["id"]
+  },
+  rootUrls: ["https://example.com"],
+  search: {
+    baseUrl: "https://example.com/search",
+    queryParameter: "q"
+  },
+  spatialNavigation: "native",
+  startUrl: "https://example.com"
+};
 
 describe("service navigation policy", () => {
   it("accepts only HTTPS origins", () => {
@@ -21,6 +48,39 @@ describe("service navigation policy", () => {
     expect(isAllowedServiceUrl("https://example.com/watch/1", allowed)).toBe(true);
     expect(isAllowedServiceUrl("https://example.com.evil.test/watch/1", allowed)).toBe(false);
     expect(isAllowedServiceUrl("https://cdn.example.com/watch/1", allowed)).toBe(false);
+  });
+
+  it("allows only HTTPS artwork on an exact host or subdomain", () => {
+    const hosts = ["images.example.com"];
+
+    expect(isAllowedArtworkUrl("https://images.example.com/poster.jpg", hosts)).toBe(true);
+    expect(isAllowedArtworkUrl("https://cdn.images.example.com/poster.jpg", hosts)).toBe(true);
+    expect(isAllowedArtworkUrl("https://images.example.com.evil.test/poster.jpg", hosts)).toBe(false);
+    expect(isAllowedArtworkUrl("http://images.example.com/poster.jpg", hosts)).toBe(false);
+  });
+
+  it("recognizes and strips sensitive playback URL state", () => {
+    const candidate = "https://example.com/watch/42?id=episode-2&token=secret#time";
+
+    expect(isPlaybackUrl(candidate, validDefinition)).toBe(true);
+    expect(sanitizePlaybackUrl(candidate, validDefinition)).toBe(
+      "https://example.com/watch/42?id=episode-2"
+    );
+    expect(sanitizePlaybackUrl("https://example.com/browse", validDefinition)).toBeNull();
+  });
+
+  it("normalizes bounded search text and encodes it into declared service URLs", () => {
+    expect(normalizeSearchQuery("  better   call saul  ")).toBe("better call saul");
+    expect(normalizeSearchQuery(" ")).toBeNull();
+    expect(normalizeSearchQuery("x".repeat(121))).toBeNull();
+    expect(buildServiceSearchUrl(validDefinition, "A&B / test")).toBe(
+      "https://example.com/search?q=A%26B+%2F+test"
+    );
+
+    expect(buildServiceSearchUrl({
+      ...validDefinition,
+      search: { baseUrl: "https://example.com/search", queryParameter: null }
+    }, "show name")).toBe("https://example.com/search");
   });
 
   it("matches service roots without treating nested pages as roots", () => {
@@ -51,29 +111,15 @@ describe("service navigation policy", () => {
   it("rejects invalid service definitions", () => {
     expect(() =>
       assertValidServiceDefinition({
-        allowedOrigins: ["https://example.com"],
+        ...validDefinition,
         id: "Example Service",
-        kind: "test",
-        mediaKeySystemOrigins: ["https://example.com"],
-        name: "Example",
-        partition: "persist:service-example",
-        rootUrls: ["https://example.com"],
-        spatialNavigation: "native",
-        startUrl: "https://example.com"
       })
     ).toThrow(/Invalid service id/);
 
     expect(() =>
       assertValidServiceDefinition({
-        allowedOrigins: ["https://example.com"],
-        id: "example",
-        kind: "test",
-        mediaKeySystemOrigins: ["https://example.com"],
-        name: "Example",
+        ...validDefinition,
         partition: "default",
-        rootUrls: ["https://example.com"],
-        spatialNavigation: "native",
-        startUrl: "https://example.com"
       })
     ).toThrow(/persistent and isolated/);
   });
@@ -81,15 +127,8 @@ describe("service navigation policy", () => {
   it("limits media-key-system permission to declared navigation origins", () => {
     expect(() =>
       assertValidServiceDefinition({
-        allowedOrigins: ["https://example.com"],
-        id: "example",
-        kind: "commercial",
+        ...validDefinition,
         mediaKeySystemOrigins: ["https://login.example.com"],
-        name: "Example",
-        partition: "persist:service-example",
-        rootUrls: ["https://example.com"],
-        spatialNavigation: "native",
-        startUrl: "https://example.com"
       })
     ).toThrow(/media-key-system origins/);
   });

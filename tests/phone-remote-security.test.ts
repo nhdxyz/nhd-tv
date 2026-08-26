@@ -24,11 +24,15 @@ describe("phone remote boundary", () => {
     }, null)).toBe(false);
   });
 
-  it("does not expose a credential or arbitrary-text control in the static page", () => {
-    expect(REMOTE_HTML).not.toContain("input");
+  it("exposes only the bounded search text field and no credential controls", () => {
+    expect(REMOTE_HTML.match(/<input\b/g)).toHaveLength(1);
+    expect(REMOTE_HTML).toContain('type="search"');
+    expect(REMOTE_HTML).toContain('maxlength="120"');
+    expect(REMOTE_HTML).not.toMatch(/type="(?:email|password|tel)"/);
     expect(REMOTE_HTML).not.toContain("textarea");
     expect(REMOTE_JS).not.toContain("innerHTML");
     expect(REMOTE_JS).not.toMatch(/https?:\/\//);
+    expect(REMOTE_JS).toContain('await jsonRequest("/api/search"');
   });
 
   it("confirms accepted commands with optional haptic feedback", () => {

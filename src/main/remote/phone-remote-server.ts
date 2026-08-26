@@ -8,6 +8,7 @@ import {
 import { networkInterfaces } from "node:os";
 import QRCode from "qrcode";
 import type { RemoteAction, RemoteStatus } from "../contracts";
+import { normalizeSearchQuery } from "../security/navigation-policy";
 import { PairingManager, parseRemoteAction } from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 
@@ -24,6 +25,7 @@ const REMOTE_CSP = [
 
 export interface PhoneRemoteServerOptions {
   onAction: (action: RemoteAction) => void;
+  onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
 }
 
@@ -117,6 +119,7 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
+  readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   #expiresAt: number | null = null;
   #networkAddress: string | null = null;
@@ -126,6 +129,7 @@ export class PhoneRemoteServer {
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
+    this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
   }
 
@@ -346,6 +350,34 @@ export class PhoneRemoteServer {
       }
 
       this.#onAction(action);
+      writeJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/search") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "Search origin rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+
+      if (!this.#manager.authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      const query = normalizeSearchQuery(body?.query);
+      if (query === null) {
+        writeJson(response, 400, { error: "Search must be between 1 and 120 characters" });
+        return;
+      }
+
+      await this.#onSearch(query);
       writeJson(response, 200, { ok: true });
       return;
     }

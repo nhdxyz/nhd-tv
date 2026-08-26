@@ -5,6 +5,7 @@ import {
   BrowserWindow,
   components,
   ipcMain,
+  nativeImage,
   net,
   protocol,
   session
@@ -12,18 +13,27 @@ import {
 import {
   IPC_CHANNELS,
   type HostStatus,
+  type ContinueWatchingItem,
   type ProcessDiagnostics,
   type RemoteAction,
   type RemoteStatus,
   type WidevineState
 } from "./contracts";
+import { ContinueWatchingStore } from "./continue-watching-store";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { getServiceDefinition, getServiceSummaries } from "./service-registry";
-import { ServiceHost } from "./service-host";
+import { ServiceHost, type PlaybackObservation } from "./service-host";
 import { isTrustedShellUrl } from "./security/sender-policy";
+import {
+  buildServiceSearchUrl,
+  isAllowedArtworkUrl,
+  normalizeSearchQuery,
+  sanitizePlaybackUrl
+} from "./security/navigation-policy";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
+const MAX_ARTWORK_BYTES = 5 * 1024 * 1024;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -40,11 +50,13 @@ protocol.registerSchemesAsPrivileged([
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
+let continueWatchingStore: ContinueWatchingStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
+const artworkRequests = new Set<string>();
 
 type AppMetric = ReturnType<typeof app.getAppMetrics>[number];
 
@@ -125,6 +137,106 @@ function publishRemoteStatus(status: RemoteStatus): void {
   }
 }
 
+function publishContinueWatching(): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(
+      IPC_CHANNELS.continueWatchingChanged,
+      continueWatchingStore?.list() ?? []
+    );
+  }
+}
+
+async function cacheArtwork(
+  item: ContinueWatchingItem,
+  artworkUrl: string,
+  serviceId: string
+): Promise<void> {
+  const definition = getServiceDefinition(serviceId);
+  const store = continueWatchingStore;
+  if (
+    definition === null ||
+    store === null ||
+    item.artworkDataUrl !== null ||
+    artworkRequests.has(item.id) ||
+    !isAllowedArtworkUrl(artworkUrl, definition.artworkHosts)
+  ) {
+    return;
+  }
+
+  artworkRequests.add(item.id);
+
+  try {
+    const serviceSession = session.fromPartition(definition.partition, { cache: true });
+    const response = await serviceSession.fetch(artworkUrl, { redirect: "follow" });
+    const contentLength = Number(response.headers.get("content-length") ?? 0);
+    const contentType = response.headers.get("content-type") ?? "";
+
+    if (
+      !response.ok ||
+      !contentType.toLowerCase().startsWith("image/") ||
+      contentLength > MAX_ARTWORK_BYTES ||
+      !isAllowedArtworkUrl(response.url, definition.artworkHosts)
+    ) {
+      return;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0 || buffer.length > MAX_ARTWORK_BYTES) {
+      return;
+    }
+
+    const source = nativeImage.createFromBuffer(buffer);
+    if (source.isEmpty()) {
+      return;
+    }
+
+    const size = source.getSize();
+    const resized = size.width > 640
+      ? source.resize({ quality: "good", width: 640 })
+      : source;
+    const artworkDataUrl = `data:image/jpeg;base64,${resized.toJPEG(78).toString("base64")}`;
+
+    if (await store.updateArtwork(item.id, artworkDataUrl)) {
+      publishContinueWatching();
+    }
+  } catch {
+    // Artwork is optional. Playback progress remains useful if a provider
+    // rejects, redirects, or removes an image.
+  } finally {
+    artworkRequests.delete(item.id);
+  }
+}
+
+async function handlePlaybackObservation(observation: PlaybackObservation): Promise<void> {
+  if (
+    continueWatchingStore === null ||
+    process.argv.includes("--netflix-smoke-test") ||
+    process.argv.includes("--youtube-auth-smoke-test")
+  ) {
+    return;
+  }
+
+  const item = await continueWatchingStore.upsert(observation);
+  publishContinueWatching();
+
+  if (item !== null && observation.artworkUrl !== null) {
+    void cacheArtwork(item, observation.artworkUrl, observation.serviceId);
+  }
+}
+
+async function handleRemoteSearch(query: string): Promise<void> {
+  const normalizedQuery = normalizeSearchQuery(query);
+  if (normalizedQuery === null) {
+    return;
+  }
+
+  await serviceHost?.closeWithCheckpoint();
+
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.remoteSearchRequested, normalizedQuery);
+  }
+}
+
 function handleRemoteAction(action: RemoteAction): void {
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
     if (serviceHost.isQuitPromptVisible) {
@@ -135,7 +247,7 @@ function handleRemoteAction(action: RemoteAction): void {
     }
 
     if (action === "home") {
-      serviceHost.close();
+      void serviceHost.closeWithCheckpoint();
       return;
     }
 
@@ -184,6 +296,11 @@ function validateShellSender(senderUrl: string): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle(IPC_CHANNELS.getContinueWatching, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return continueWatchingStore?.list() ?? [];
+  });
+
   ipcMain.handle(IPC_CHANNELS.getServices, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return getServiceSummaries();
@@ -245,9 +362,48 @@ function registerIpc(): void {
     await serviceHost.open(definition);
   });
 
-  ipcMain.handle(IPC_CHANNELS.closeService, (event) => {
+  ipcMain.handle(
+    IPC_CHANNELS.searchService,
+    async (event, serviceId: unknown, query: unknown) => {
+      validateShellSender(event.senderFrame?.url ?? "");
+
+      if (typeof serviceId !== "string" || serviceHost === null) {
+        throw new TypeError("A known service id is required for search.");
+      }
+
+      const definition = getServiceDefinition(serviceId);
+      if (definition === null) {
+        throw new Error(`Unknown service: ${serviceId}`);
+      }
+
+      const searchUrl = buildServiceSearchUrl(definition, query);
+      if (searchUrl === null) {
+        throw new Error(`${definition.name} does not support this search.`);
+      }
+
+      await serviceHost.open(definition, searchUrl);
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.resumeContinueWatching, async (event, itemId: unknown) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    serviceHost?.close();
+
+    const target = continueWatchingStore?.resumeTarget(itemId) ?? null;
+    const definition = target === null ? null : getServiceDefinition(target.serviceId);
+    const watchUrl = target === null || definition === null
+      ? null
+      : sanitizePlaybackUrl(target.watchUrl, definition);
+
+    if (definition === null || watchUrl === null || serviceHost === null) {
+      throw new Error("That Continue Watching item is no longer available.");
+    }
+
+    await serviceHost.open(definition, watchUrl);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.closeService, async (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    await serviceHost?.closeWithCheckpoint();
   });
 
   ipcMain.handle(IPC_CHANNELS.cancelServiceQuit, (event) => {
@@ -255,9 +411,9 @@ function registerIpc(): void {
     serviceHost?.cancelQuit();
   });
 
-  ipcMain.handle(IPC_CHANNELS.confirmServiceQuit, (event) => {
+  ipcMain.handle(IPC_CHANNELS.confirmServiceQuit, async (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    serviceHost?.confirmQuit();
+    await serviceHost?.confirmQuit();
   });
 }
 
@@ -320,10 +476,12 @@ async function createMainWindow(): Promise<void> {
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.serviceQuitRequested, request);
       }
-    }
+    },
+    handlePlaybackObservation
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
+    onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus
   });
 
@@ -347,6 +505,10 @@ async function createMainWindow(): Promise<void> {
 app.whenReady().then(async () => {
   registerShellProtocol();
   configureShellSession();
+  continueWatchingStore = new ContinueWatchingStore(
+    path.join(app.getPath("userData"), "continue-watching.json")
+  );
+  await continueWatchingStore.initialize();
   registerIpc();
 
   // ECS requires Widevine component initialization to finish before any

@@ -1,5 +1,6 @@
 import "./style.css";
 import type {
+  ContinueWatchingItem,
   HostStatus,
   RemoteAction,
   RemoteStatus,
@@ -28,6 +29,8 @@ function requireElement<T>(selector: string, name: string): T {
 
 const elements = {
   closeServiceButton: requireElement<HTMLButtonElement>("#close-service", "close-service"),
+  continueActions: requireElement<HTMLDivElement>("#continue-actions", "continue-actions"),
+  continueHint: requireElement<HTMLSpanElement>("#continue-hint", "continue-hint"),
   diagnosticsStatus: requireElement<HTMLParagraphElement>("#diagnostics-status", "diagnostics-status"),
   featuredBrand: requireElement<HTMLDivElement>("#featured-brand", "featured-brand"),
   featuredCopy: requireElement<HTMLParagraphElement>("#featured-copy", "featured-copy"),
@@ -57,6 +60,12 @@ const elements = {
   runtimeStatus: requireElement<HTMLParagraphElement>("#runtime-status", "runtime-status"),
   serviceActions: requireElement<HTMLDivElement>("#service-actions", "service-actions"),
   serviceStatus: requireElement<HTMLParagraphElement>("#service-status", "service-status"),
+  searchClose: requireElement<HTMLButtonElement>("#search-close", "search-close"),
+  searchDialog: requireElement<HTMLDialogElement>("#search-dialog", "search-dialog"),
+  searchForm: requireElement<HTMLFormElement>("#search-form", "search-form"),
+  searchInput: requireElement<HTMLInputElement>("#search-input", "search-input"),
+  searchResultCount: requireElement<HTMLSpanElement>("#search-result-count", "search-result-count"),
+  searchResults: requireElement<HTMLDivElement>("#search-results", "search-results"),
   settingsRemoteButton: requireElement<HTMLButtonElement>("#settings-remote-button", "settings-remote-button"),
   settingsRemoteCopy: requireElement<HTMLElement>("#settings-remote-copy", "settings-remote-copy"),
   soundToggle: requireElement<HTMLButtonElement>("#sound-toggle", "sound-toggle"),
@@ -64,11 +73,13 @@ const elements = {
   storeActions: requireElement<HTMLDivElement>("#store-actions", "store-actions"),
   topRemoteButton: requireElement<HTMLButtonElement>("#top-remote-button", "top-remote-button"),
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
+  topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
   widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status")
 };
 
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
+let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
@@ -158,6 +169,109 @@ function saveEnabledServices(): void {
   } catch {
     showFeedback("NHD-TV could not save the lineup on this computer.");
   }
+}
+
+function playbackTime(seconds: number): string {
+  const roundedMinutes = Math.max(1, Math.round(seconds / 60));
+  if (roundedMinutes < 60) {
+    return `${roundedMinutes} min`;
+  }
+
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
+}
+
+function continueCard(item: ContinueWatchingItem): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.className = "continue-card continue-card-item";
+  button.dataset.serviceId = item.serviceId;
+  button.type = "button";
+  button.setAttribute("aria-label", `Resume ${item.title} in ${item.serviceName}`);
+
+  const art = document.createElement("span");
+  art.className = "continue-art";
+  if (item.artworkDataUrl !== null) {
+    const image = document.createElement("img");
+    image.alt = "";
+    image.src = item.artworkDataUrl;
+    art.append(image);
+  } else {
+    art.append(createServiceMark(item.serviceId, item.serviceName));
+  }
+
+  const play = document.createElement("span");
+  play.className = "continue-play";
+  play.setAttribute("aria-hidden", "true");
+  play.textContent = "▶";
+  art.append(play);
+
+  const meta = document.createElement("span");
+  meta.className = "continue-meta";
+  const service = document.createElement("small");
+  service.className = "continue-service";
+  service.textContent = item.serviceName;
+  const title = document.createElement("strong");
+  title.textContent = item.title;
+  const remaining = Math.max(0, item.durationSeconds - item.positionSeconds);
+  const detail = document.createElement("small");
+  detail.textContent = `${playbackTime(remaining)} left`;
+  const progress = document.createElement("span");
+  progress.className = "placeholder-progress";
+  progress.setAttribute("aria-hidden", "true");
+  const progressValue = document.createElement("span");
+  progressValue.style.width = `${Math.min(100, Math.max(0, item.positionSeconds / item.durationSeconds * 100))}%`;
+  progress.append(progressValue);
+  meta.append(service, title, detail, progress);
+  button.append(art, meta);
+  button.addEventListener("click", async () => {
+    showFeedback(`Resuming ${item.title} in ${item.serviceName}…`);
+    try {
+      await window.nhd.resumeContinueWatching(item.id);
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : String(error));
+    }
+  });
+  return button;
+}
+
+function renderContinueWatching(): void {
+  const visibleItems = continueWatchingItems.filter(
+    (item) => enabledServiceIds.has(item.serviceId)
+  );
+  elements.continueHint.textContent = visibleItems.length === 0
+    ? "Saved only on this computer"
+    : `${visibleItems.length} ${visibleItems.length === 1 ? "item" : "items"} saved locally`;
+
+  if (visibleItems.length > 0) {
+    elements.continueActions.replaceChildren(...visibleItems.map(continueCard));
+    return;
+  }
+
+  const placeholder = document.createElement("button");
+  placeholder.className = "continue-card continue-placeholder";
+  placeholder.type = "button";
+  placeholder.innerHTML = `
+    <span class="continue-art" aria-hidden="true"><span class="continue-play">▶</span></span>
+    <span class="continue-meta">
+      <strong>Start watching in one of your apps</strong>
+      <small>Long-form playback will appear here automatically</small>
+      <span class="placeholder-progress" aria-hidden="true"><span></span></span>
+    </span>`;
+  placeholder.addEventListener("click", () => {
+    const firstService = services.find((service) => enabledServiceIds.has(service.id));
+    if (firstService === undefined) {
+      showView("store");
+    } else {
+      void openService(firstService.id, firstService.name);
+    }
+  });
+  elements.continueActions.replaceChildren(placeholder);
+}
+
+async function initializeContinueWatching(): Promise<void> {
+  continueWatchingItems = await window.nhd.getContinueWatching();
+  renderContinueWatching();
 }
 
 async function openService(serviceId: string, serviceName: string): Promise<void> {
@@ -282,7 +396,91 @@ function renderServiceViews(): void {
   }
 
   renderFeatured(enabledServices);
+  renderContinueWatching();
+
+  if (elements.searchDialog.open && elements.searchInput.value.trim().length > 0) {
+    renderSearchResults(elements.searchInput.value);
+  }
 }
+
+function renderSearchResults(rawQuery: string): void {
+  const query = rawQuery.replace(/\s+/g, " ").trim();
+  const searchable = services.filter(
+    (service) => enabledServiceIds.has(service.id) && service.searchMode !== "none"
+  );
+
+  if (query.length === 0) {
+    elements.searchResults.replaceChildren();
+    elements.searchResultCount.textContent = "Enter a search above";
+    return;
+  }
+
+  const buttons = searchable.map((service) => {
+    const button = document.createElement("button");
+    button.className = "search-result-card";
+    button.dataset.serviceId = service.id;
+    button.type = "button";
+    button.setAttribute("aria-label", service.searchMode === "query"
+      ? `Search ${service.name} for ${query}`
+      : `Open ${service.name} search`);
+    button.append(createServiceMark(service.id, service.name));
+
+    const copy = document.createElement("span");
+    const title = document.createElement("strong");
+    title.textContent = service.searchMode === "query"
+      ? `Search ${service.name}`
+      : `Open ${service.name} Search`;
+    const detail = document.createElement("small");
+    detail.textContent = service.searchMode === "query"
+      ? `“${query}”`
+      : "Continue your search inside the service";
+    copy.append(title, detail);
+    button.append(copy);
+    button.addEventListener("click", async () => {
+      showFeedback(`Opening ${service.name} search…`);
+      try {
+        await window.nhd.searchService(service.id, query);
+        elements.searchDialog.close();
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : String(error));
+      }
+    });
+    return button;
+  });
+
+  elements.searchResults.replaceChildren(...buttons);
+  elements.searchResultCount.textContent = buttons.length === 0
+    ? "Add a searchable service from the Store"
+    : `${buttons.length} ${buttons.length === 1 ? "service" : "services"}`;
+}
+
+function openSearchDialog(query = "", remote = false): void {
+  if (!elements.searchDialog.open) {
+    elements.searchDialog.showModal();
+  }
+
+  elements.searchInput.value = query;
+  renderSearchResults(query);
+  if (remote && query.length > 0) {
+    const firstResult = elements.searchResults.querySelector<HTMLButtonElement>("button");
+    firstResult?.focus({ preventScroll: true });
+    setRemoteFocusedElement(firstResult ?? null);
+  } else {
+    elements.searchInput.focus();
+  }
+}
+
+elements.topSearchButton.addEventListener("click", () => openSearchDialog());
+elements.searchClose.addEventListener("click", () => elements.searchDialog.close());
+elements.searchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  renderSearchResults(elements.searchInput.value);
+  elements.searchResults.querySelector<HTMLButtonElement>("button")?.focus();
+});
+elements.searchDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  elements.searchDialog.close();
+});
 
 async function initializeServices(): Promise<void> {
   services = await window.nhd.getServices();
@@ -333,10 +531,6 @@ elements.heroOpenButton.addEventListener("click", () => {
   if (featured !== undefined) {
     void openService(featured.id, featured.name);
   }
-});
-
-requireElement<HTMLButtonElement>("#continue-placeholder", "continue-placeholder").addEventListener("click", () => {
-  showFeedback("Continue Watching will populate from the local playback listener in Issue #5.");
 });
 
 for (const selector of ["#profile-button", "#profile-card"]) {
@@ -475,6 +669,10 @@ function activeNavigationScope(): ParentNode {
     return elements.remoteDialog;
   }
 
+  if (elements.searchDialog.open) {
+    return elements.searchDialog;
+  }
+
   return document;
 }
 
@@ -531,6 +729,10 @@ function returnHome(remote = false): void {
     elements.remoteDialog.close();
   }
 
+  if (elements.searchDialog.open) {
+    elements.searchDialog.close();
+  }
+
   if (elements.quitDialog.open) {
     return;
   }
@@ -544,6 +746,10 @@ document.addEventListener("keydown", (event) => {
   const direction = arrowDirections[event.key];
 
   if (direction !== undefined) {
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+
     setRemoteFocusedElement(null);
 
     if (moveSpatialFocus(direction)) {
@@ -562,6 +768,9 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
   } else if (elements.quitDialog.open) {
     elements.quitCancel.click();
+    event.preventDefault();
+  } else if (elements.searchDialog.open) {
+    elements.searchDialog.close();
     event.preventDefault();
   } else if (currentView !== "home") {
     returnHome();
@@ -604,6 +813,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
 
     if (elements.quitDialog.open) {
       elements.quitCancel.click();
+      return;
+    }
+
+    if (elements.searchDialog.open) {
+      elements.searchDialog.close();
       return;
     }
 
@@ -664,7 +878,12 @@ elements.closeServiceButton.addEventListener("click", async () => {
 });
 
 window.nhd.onHostStatusChanged(renderStatus);
+window.nhd.onContinueWatchingChanged((items) => {
+  continueWatchingItems = items;
+  renderContinueWatching();
+});
 window.nhd.onRemoteAction(handleShellRemoteAction);
+window.nhd.onRemoteSearchRequested((query) => openSearchDialog(query, true));
 window.nhd.onRemoteStatusChanged(renderRemoteStatus);
 window.nhd.onServiceQuitRequested((request) => {
   elements.quitCopy.textContent = `You are at ${request.serviceName} Home. Exit to NHD-TV?`;
@@ -676,6 +895,7 @@ window.nhd.onServiceQuitRequested((request) => {
   elements.quitCancel.focus();
 });
 void refreshStatus();
+void initializeContinueWatching();
 void initializeServices();
 void refreshRemoteStatus();
 window.setInterval(() => void refreshStatus().catch(() => undefined), 5_000);

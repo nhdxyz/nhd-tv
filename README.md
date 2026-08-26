@@ -39,7 +39,7 @@ pnpm check
 pnpm start
 ```
 
-In the feasibility shell, select **Open Shaka DRM demo**, choose a Widevine asset, and press Escape to return to NHD-TV. Escape is a temporary spike behavior; the nested Back and quit flow is tracked separately.
+In the feasibility shell, select a service from the matrix and press Escape to return to NHD-TV. The Shaka entry is the public Widevine test; commercial-service credentials must be entered directly into their isolated service pages. Escape is a temporary spike behavior; the nested Back and quit flow is tracked separately.
 
 ## Project documents
 
@@ -47,6 +47,7 @@ In the feasibility shell, select **Open Shaka DRM demo**, choose a Widevine asse
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
 - [DRM host feasibility result](docs/feasibility/drm-host.md)
+- [Commercial-service compatibility matrix](docs/feasibility/service-matrix.md)
 
 Streaming-service credentials and cookies stay in per-service persistent Electron session partitions and must never be committed.
 

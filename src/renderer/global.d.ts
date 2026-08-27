@@ -25,12 +25,14 @@ declare global {
       confirmServiceQuit: () => Promise<void>;
       createProfile: (name: string) => Promise<LocalAppState>;
       denyRemotePairing: () => Promise<RemoteStatus>;
+      dismissAmbientDisplay: () => Promise<void>;
       getContinueWatching: () => Promise<readonly ContinueWatchingItem[]>;
       getServices: () => Promise<readonly ServiceSummary[]>;
       getHostStatus: () => Promise<HostStatus>;
       getLocalAppState: () => Promise<LocalAppState>;
       getRemoteStatus: () => Promise<RemoteStatus>;
       sendInputAction: (action: RemoteAction) => Promise<boolean>;
+      onAmbientDisplayChanged: (callback: (visible: boolean) => void) => void;
       onHostStatusChanged: (callback: (status: HostStatus) => void) => void;
       onContinueWatchingChanged: (
         callback: (items: readonly ContinueWatchingItem[]) => void
@@ -44,6 +46,7 @@ declare global {
         callback: (request: ServiceRecoveryRequest) => void
       ) => void;
       openService: (serviceId: string) => Promise<void>;
+      previewAmbientDisplay: () => Promise<boolean>;
       removeContinueWatching: (itemId: string) => Promise<boolean>;
       removeCustomService: (serviceId: string) => Promise<LocalAppState>;
       recoverService: (mode: ServiceRecoveryMode) => Promise<boolean>;

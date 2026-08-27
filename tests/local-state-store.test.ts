@@ -32,6 +32,9 @@ describe("local profile state", () => {
       activeProfileId: "default",
       customServices: [],
       devicePreferences: {
+        ambientClockStyle: "digital",
+        ambientDisplayDelayMinutes: 10,
+        ambientDisplayEnabled: true,
         autoApproveFirstRemote: true,
         fullscreen: true,
         reducedMotion: false,
@@ -75,7 +78,7 @@ describe("local profile state", () => {
       },
       profiles: expect.arrayContaining([{ id: childId, name: "Kids Room" }])
     });
-    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(4);
+    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(6);
   });
 
   it("persists a profile-scoped recent-app list independently of viewing history", async () => {
@@ -104,6 +107,9 @@ describe("local profile state", () => {
     const { filePath, store } = await testStore();
     await store.createProfile("Guest");
     await store.updateDevicePreferences({
+      ambientClockStyle: "orbit",
+      ambientDisplayDelayMinutes: 30,
+      ambientDisplayEnabled: false,
       autoApproveFirstRemote: false,
       fullscreen: false,
       reducedMotion: true,
@@ -115,6 +121,9 @@ describe("local profile state", () => {
     const restored = new LocalStateStore(filePath, ["youtube"], ["youtube"]);
     await restored.initialize();
     expect(restored.snapshot().devicePreferences).toEqual({
+      ambientClockStyle: "orbit",
+      ambientDisplayDelayMinutes: 30,
+      ambientDisplayEnabled: false,
       autoApproveFirstRemote: false,
       fullscreen: false,
       reducedMotion: true,
@@ -143,6 +152,7 @@ describe("local profile state", () => {
     const { filePath } = await testStore();
     await writeFile(filePath, JSON.stringify({
       activeProfileId: "missing",
+      devicePreferences: { ambientClockStyle: "unknown-theme" },
       preferences: { valid: { enabledServiceIds: ["youtube"] } },
       profiles: [
         { createdAt: 1, id: "valid", name: "  Guest  " },
@@ -154,7 +164,10 @@ describe("local profile state", () => {
     await restored.initialize();
     expect(restored.snapshot()).toMatchObject({
       activeProfileId: "valid",
-      devicePreferences: { autoApproveFirstRemote: true },
+      devicePreferences: {
+        ambientClockStyle: "digital",
+        autoApproveFirstRemote: true
+      },
       profiles: [{ id: "valid", name: "Guest" }]
     });
     await expect(restored.selectProfile("missing")).rejects.toThrow("does not exist");

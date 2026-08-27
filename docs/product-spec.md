@@ -101,8 +101,11 @@ Voice search initially uses the phone keyboard's native dictation button. Direct
 - Restore focus predictably when returning home.
 - Handle sleep, wake, offline state, service crashes, and application updates.
 - Avoid preventing system sleep unless active playback requires it.
+- Offer a low-distraction ambient clock while the television UI is idle.
 
-The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, reduced motion, and first-remote auto-connect. The host checkpoints before suspend, probes an active service after resume, returns control to a host-owned recovery screen after a load failure, renderer crash, or hang, and offers Retry, Reload app, and Return Home without clearing service data. The phone and gamepad Back buttons provide a deliberate 1.2-second emergency return. Audio output, startup-at-login, pointer inactivity, packaged sleep/wake behavior, and updater behavior still require platform-specific qualification.
+The current device-settings foundation remembers fullscreen, selected display, compact/standard/wide safe-area margins, reduced motion, first-remote auto-connect, and ambient-display preferences. Ambient display is enabled by default after ten idle minutes and offers Digital, Analog, Minimal, Flip, Neon, and Orbit clock themes, selectable five-, ten-, or thirty-minute delays, and an immediate Preview action. It does not activate during reported media playback, preserves the active service in place, subtly changes clock position over time to reduce static-image retention, and consumes the first wake input before restoring the service.
+
+The host checkpoints before suspend, probes an active service after resume, returns control to a host-owned recovery screen after a load failure, renderer crash, or hang, and offers Retry, Reload app, and Return Home without clearing service data. The phone and gamepad Back buttons provide a deliberate 1.2-second emergency return. Weather is a potential later ambient mode because it adds location consent, data-source, caching, attribution, and offline-state decisions that the clock-only release does not need. Audio output, startup-at-login, pointer inactivity outside the ambient display, packaged sleep/wake behavior, and updater behavior still require platform-specific qualification.
 
 ## Future multiview
 

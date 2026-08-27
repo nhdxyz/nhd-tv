@@ -43,4 +43,22 @@ describe("TV catalog layout", () => {
     expect(css).toContain(".quit-service-preview");
     expect(css).toContain(".quit-dialog::backdrop");
   });
+
+  it("offers multiple ambient clock styles with a burn-in-conscious full-screen surface", () => {
+    expect(html).toContain('id="ambient-display-toggle"');
+    expect(html).toContain('id="ambient-clock-style"');
+    expect(html).toContain('id="ambient-display-delay"');
+    expect(html).toContain('id="ambient-display-preview"');
+    expect(html).toContain('class="ambient-clock ambient-clock-digital"');
+    expect(html).toContain('class="ambient-clock ambient-clock-analog"');
+    expect(html).toContain('class="ambient-clock ambient-clock-minimal"');
+    expect(html).toContain('class="ambient-clock ambient-clock-flip"');
+    expect(html).toContain('class="ambient-clock ambient-clock-neon"');
+    expect(html).toContain('class="ambient-clock ambient-clock-orbit"');
+    expect(css).toContain('.ambient-stage[data-anchor="bottom-right"]');
+    expect(css).toContain('.ambient-stage[data-clock-style="analog"]');
+    expect(css).toContain('.ambient-stage[data-clock-style="flip"]');
+    expect(css).toContain('.ambient-stage[data-clock-style="neon"]');
+    expect(css).toContain('.ambient-stage[data-clock-style="orbit"]');
+  });
 });

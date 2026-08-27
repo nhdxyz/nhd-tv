@@ -1,5 +1,6 @@
 export const IPC_CHANNELS = {
   addCustomService: "nhd:custom-service:add",
+  ambientDisplayChanged: "nhd:ambient-display:changed",
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
@@ -9,6 +10,7 @@ export const IPC_CHANNELS = {
   confirmServiceQuit: "nhd:service:quit:confirm",
   createProfile: "nhd:profile:create",
   denyRemotePairing: "nhd:remote:pairing:deny",
+  dismissAmbientDisplay: "nhd:ambient-display:dismiss",
   getContinueWatching: "nhd:continue-watching:list",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
@@ -17,6 +19,7 @@ export const IPC_CHANNELS = {
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
+  previewAmbientDisplay: "nhd:ambient-display:preview",
   remoteAction: "nhd:remote:action",
   remotePrecisionMoved: "nhd:remote:precision:moved",
   remoteSearchRequested: "nhd:remote:search:requested",
@@ -160,7 +163,21 @@ export interface ProfilePreferences {
   serviceOrder: string[];
 }
 
+export const AMBIENT_CLOCK_STYLES = [
+  "digital",
+  "analog",
+  "minimal",
+  "flip",
+  "neon",
+  "orbit"
+] as const;
+
+export type AmbientClockStyle = (typeof AMBIENT_CLOCK_STYLES)[number];
+
 export interface DevicePreferences {
+  ambientClockStyle: AmbientClockStyle;
+  ambientDisplayDelayMinutes: 5 | 10 | 30;
+  ambientDisplayEnabled: boolean;
   autoApproveFirstRemote: boolean;
   fullscreen: boolean;
   reducedMotion: boolean;

@@ -86,7 +86,9 @@ Lineup removal and service-data clearing are deliberately separate. The first ch
 
 Application-owned secrets must use operating-system-backed encryption where available. Linux must expose degraded-security states rather than silently treating weak storage as secure.
 
-Device preferences share the versioned local-state document but are not profile-scoped. The host owns display enumeration, window movement, and fullscreen state; the shell receives only display labels/counts and submits a narrow preference object. Safe-area and reduced-motion choices are expressed as fixed enums rather than arbitrary CSS.
+Device preferences share the versioned local-state document but are not profile-scoped. The host owns display enumeration, window movement, fullscreen state, and ambient-display activation; the shell receives only display labels/counts and submits a narrow preference object. Safe-area, reduced-motion, ambient clock style, and ambient delay choices are expressed as fixed enums rather than arbitrary CSS.
+
+The ambient display is a host-owned idle policy rendered by the trusted shell. It activates only when both application input and Electron's system-idle signal have exceeded the selected delay, the main window is visible, and no service reports active playback. The host temporarily detaches the live service view instead of navigating or destroying it, so any session and page state remain intact. Keyboard, pointer, remote, resume, unlock, or service-state activity dismisses the overlay; the first wake input is consumed so it cannot also operate the underlying service.
 
 ## Search boundary
 

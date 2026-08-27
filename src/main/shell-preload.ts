@@ -19,6 +19,7 @@ import type {
 // the HostStatus import is type-only and is erased by TypeScript.
 const IPC_CHANNELS = {
   addCustomService: "nhd:custom-service:add",
+  ambientDisplayChanged: "nhd:ambient-display:changed",
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
   clearServiceData: "nhd:service:data:clear",
@@ -28,6 +29,7 @@ const IPC_CHANNELS = {
   confirmServiceQuit: "nhd:service:quit:confirm",
   createProfile: "nhd:profile:create",
   denyRemotePairing: "nhd:remote:pairing:deny",
+  dismissAmbientDisplay: "nhd:ambient-display:dismiss",
   getContinueWatching: "nhd:continue-watching:list",
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
@@ -36,6 +38,7 @@ const IPC_CHANNELS = {
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
+  previewAmbientDisplay: "nhd:ambient-display:preview",
   remoteAction: "nhd:remote:action",
   remotePrecisionMoved: "nhd:remote:precision:moved",
   remoteSearchRequested: "nhd:remote:search:requested",
@@ -72,6 +75,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.createProfile, name),
   denyRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.denyRemotePairing),
+  dismissAmbientDisplay: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.dismissAmbientDisplay),
   getServices: (): Promise<readonly ServiceSummary[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.getServices),
   getContinueWatching: (): Promise<readonly ContinueWatchingItem[]> =>
@@ -95,6 +100,11 @@ contextBridge.exposeInMainWorld("nhd", {
       IPC_CHANNELS.continueWatchingChanged,
       (_event, items: readonly ContinueWatchingItem[]) => callback(items)
     );
+  },
+  onAmbientDisplayChanged: (callback: (visible: boolean) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.ambientDisplayChanged, (_event, visible: boolean) => {
+      callback(visible);
+    });
   },
   onRemoteAction: (callback: (action: RemoteAction) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.remoteAction, (_event, action: RemoteAction) => {
@@ -129,6 +139,8 @@ contextBridge.exposeInMainWorld("nhd", {
   },
   openService: (serviceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.openService, serviceId),
+  previewAmbientDisplay: (): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.previewAmbientDisplay),
   removeContinueWatching: (itemId: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.removeContinueWatching, itemId),
   removeCustomService: (serviceId: string): Promise<LocalAppState> =>

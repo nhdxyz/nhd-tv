@@ -531,6 +531,7 @@ export class ServiceHost {
   readonly #onPlayback: PlaybackListener;
   readonly #onSystemVolume: SystemVolumeListener;
   #activeDefinition: ServiceDefinition | null = null;
+  #ambientDisplayVisible = false;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
   #popupWindow: BrowserWindow | null = null;
@@ -538,6 +539,7 @@ export class ServiceHost {
   #recoveryTarget: ServiceRecoveryTarget | null = null;
   #replayingInput = false;
   #playbackCheckpoint: Promise<void> | null = null;
+  #playbackActive = false;
   #playbackQualificationTimer: NodeJS.Timeout | null = null;
   #playbackTimer: NodeJS.Timeout | null = null;
   #pointerSnapKey: string | null = null;
@@ -574,6 +576,10 @@ export class ServiceHost {
     return processId > 0 ? processId : null;
   }
 
+  get isPlaybackActive(): boolean {
+    return this.#playbackActive;
+  }
+
   get isHtmlFullscreen(): boolean {
     return this.#htmlFullscreen;
   }
@@ -588,6 +594,46 @@ export class ServiceHost {
 
   get lastBlockedNavigation(): NavigationDiagnostic | null {
     return this.#lastBlockedNavigation;
+  }
+
+  presentAmbientDisplay(): boolean {
+    const view = this.#view;
+    if (
+      this.#playbackActive ||
+      this.#quitPromptVisible ||
+      (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+    ) {
+      return false;
+    }
+
+    if (this.#ambientDisplayVisible) {
+      return true;
+    }
+
+    this.#ambientDisplayVisible = true;
+    if (view !== null && !view.webContents.isDestroyed()) {
+      this.#window.contentView.removeChildView(view);
+      this.#window.webContents.focus();
+    }
+    return true;
+  }
+
+  restoreFromAmbientDisplay(): void {
+    const view = this.#view;
+    if (!this.#ambientDisplayVisible) {
+      return;
+    }
+
+    this.#ambientDisplayVisible = false;
+    if (
+      view !== null &&
+      !view.webContents.isDestroyed() &&
+      !this.#quitPromptVisible
+    ) {
+      this.#window.contentView.addChildView(view);
+      this.#resize();
+      view.webContents.focus();
+    }
   }
 
   async open(definition: ServiceDefinition, initialUrl = definition.startUrl): Promise<void> {
@@ -780,7 +826,9 @@ export class ServiceHost {
 
     view.webContents.on("media-paused", () => {
       if (this.#view === view) {
+        this.#playbackActive = false;
         void this.#checkpointPlayback();
+        this.#onStateChanged(this.activeServiceId);
       }
     });
 
@@ -788,6 +836,9 @@ export class ServiceHost {
       if (this.#view !== view) {
         return;
       }
+
+      this.#playbackActive = true;
+      this.#onStateChanged(this.activeServiceId);
 
       if (this.#playbackQualificationTimer !== null) {
         clearTimeout(this.#playbackQualificationTimer);
@@ -894,7 +945,9 @@ export class ServiceHost {
 
   close(): void {
     const view = this.#view;
-    const viewWasAttached = view !== null && !this.#quitPromptVisible;
+    const viewWasAttached = view !== null &&
+      !this.#quitPromptVisible &&
+      !this.#ambientDisplayVisible;
 
     if (this.#playbackTimer !== null) {
       clearInterval(this.#playbackTimer);
@@ -912,6 +965,8 @@ export class ServiceHost {
 
     this.#view = null;
     this.#activeDefinition = null;
+    this.#ambientDisplayVisible = false;
+    this.#playbackActive = false;
     this.#pointerSnapKey = null;
     this.#popupWindow = null;
     this.#quitPromptVisible = false;
@@ -1481,6 +1536,7 @@ export class ServiceHost {
     const definition = this.#activeDefinition;
 
     if (
+      this.#ambientDisplayVisible ||
       this.#quitPromptVisible ||
       view === null ||
       definition === null ||

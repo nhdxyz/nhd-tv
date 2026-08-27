@@ -69,6 +69,64 @@
       <small>Connected apps and show search may be unavailable.</small>
     </aside>
 
+    <section class="ambient-display" id="ambient-display" aria-label="Ambient display" hidden>
+      <div class="ambient-stage" id="ambient-stage" data-anchor="top-left" data-clock-style="digital">
+        <div class="ambient-clock ambient-clock-digital">
+          <time class="ambient-digital-time" id="ambient-digital-time"></time>
+          <p class="ambient-date"></p>
+        </div>
+
+        <div class="ambient-clock ambient-clock-analog" aria-hidden="true">
+          <div class="ambient-analog-face">
+            <span class="ambient-analog-number ambient-analog-twelve">12</span>
+            <span class="ambient-analog-number ambient-analog-three">3</span>
+            <span class="ambient-analog-number ambient-analog-six">6</span>
+            <span class="ambient-analog-number ambient-analog-nine">9</span>
+            <span class="ambient-analog-hand ambient-analog-hour" id="ambient-analog-hour"></span>
+            <span class="ambient-analog-hand ambient-analog-minute" id="ambient-analog-minute"></span>
+            <span class="ambient-analog-center"></span>
+          </div>
+          <p class="ambient-date"></p>
+        </div>
+
+        <div class="ambient-clock ambient-clock-minimal">
+          <time class="ambient-minimal-time">
+            <span id="ambient-minimal-hour"></span>
+            <span id="ambient-minimal-minute"></span>
+            <small id="ambient-minimal-period"></small>
+          </time>
+          <p class="ambient-date"></p>
+        </div>
+
+        <div class="ambient-clock ambient-clock-flip">
+          <time class="ambient-flip-time" id="ambient-flip-time">
+            <span class="ambient-flip-card" id="ambient-flip-hour"></span>
+            <span class="ambient-flip-separator" aria-hidden="true">:</span>
+            <span class="ambient-flip-card" id="ambient-flip-minute"></span>
+            <small id="ambient-flip-period"></small>
+          </time>
+          <p class="ambient-date"></p>
+        </div>
+
+        <div class="ambient-clock ambient-clock-neon">
+          <span class="ambient-neon-label" aria-hidden="true">NHD · AFTER DARK</span>
+          <time class="ambient-neon-time" id="ambient-neon-time"></time>
+          <p class="ambient-date"></p>
+        </div>
+
+        <div class="ambient-clock ambient-clock-orbit">
+          <div class="ambient-orbit-face" id="ambient-orbit-face">
+            <div class="ambient-orbit-core">
+              <time id="ambient-orbit-time"></time>
+              <small>local time</small>
+            </div>
+          </div>
+          <p class="ambient-date"></p>
+        </div>
+      </div>
+      <p class="ambient-wake-hint">Move or press any control to return</p>
+    </section>
+
     <main class="tv-shell">
       <section class="app-view home-view" id="home-view" data-view="home">
         <section class="featured" aria-labelledby="featured-title">
@@ -264,6 +322,37 @@
             <span>
               <strong>Reduce motion</strong>
               <small id="motion-copy">Off</small>
+            </span>
+          </button>
+        </section>
+
+        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Ambient display settings" data-nav-group="settings-ambient">
+          <button class="settings-card settings-card-accent" id="ambient-display-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">TIME</span>
+            <span>
+              <strong>Ambient display</strong>
+              <small id="ambient-display-copy">On · starts after 10 minutes</small>
+            </span>
+          </button>
+          <button class="settings-card" id="ambient-clock-style" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">STYLE</span>
+            <span>
+              <strong>Clock theme</strong>
+              <small id="ambient-clock-style-copy">Digital</small>
+            </span>
+          </button>
+          <button class="settings-card" id="ambient-display-delay" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">WAIT</span>
+            <span>
+              <strong>Starts after</strong>
+              <small id="ambient-display-delay-copy">10 minutes</small>
+            </span>
+          </button>
+          <button class="settings-card" id="ambient-display-preview" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">VIEW</span>
+            <span>
+              <strong>Preview clock</strong>
+              <small>Wake it with any remote or input</small>
             </span>
           </button>
         </section>

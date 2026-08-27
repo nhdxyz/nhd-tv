@@ -37,6 +37,10 @@ import {
   normalizeCatalogQuery,
   parseTvmazeSearchPayload
 } from "./catalog-search";
+import {
+  AMBIENT_IDLE_POLL_MS,
+  shouldActivateAmbientDisplay
+} from "./ambient-display";
 import { ContinueWatchingStore } from "./continue-watching-store";
 import {
   buildRasterTranscodeScript,
@@ -100,6 +104,12 @@ let localStateStore: LocalStateStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
+let ambientDisplayPreview = false;
+let ambientLastSystemIdleSeconds = 0;
+let ambientDisplayVisible = false;
+let ambientIdleTimer: NodeJS.Timeout | null = null;
+let ambientLastActivityAt = Date.now();
+let lastServicePlaybackActive = false;
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
@@ -115,6 +125,115 @@ const catalogCache = new Map<string, {
   results: readonly CatalogSearchResult[];
 }>();
 const catalogImageCache = new Map<string, string | null>();
+
+function dismissAmbientDisplay(): void {
+  if (!ambientDisplayVisible) {
+    return;
+  }
+
+  ambientDisplayVisible = false;
+  ambientDisplayPreview = false;
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.ambientDisplayChanged, false);
+    serviceHost?.restoreFromAmbientDisplay();
+  }
+}
+
+function markAmbientActivity(): void {
+  ambientLastActivityAt = Date.now();
+  dismissAmbientDisplay();
+}
+
+function presentAmbientDisplay(preview = false): boolean {
+  const window = mainWindow;
+  const preferences = localStateStore?.snapshot().devicePreferences;
+  if (
+    window === null ||
+    window.isDestroyed() ||
+    (!preview && preferences?.ambientDisplayEnabled !== true) ||
+    serviceHost?.hasRecoveryTarget === true ||
+    serviceHost?.presentAmbientDisplay() === false
+  ) {
+    return false;
+  }
+
+  ambientDisplayVisible = true;
+  ambientDisplayPreview = preview;
+  try {
+    ambientLastSystemIdleSeconds = powerMonitor.getSystemIdleTime();
+  } catch {
+    ambientLastSystemIdleSeconds = 0;
+  }
+  window.webContents.send(IPC_CHANNELS.ambientDisplayChanged, true);
+  window.webContents.focus();
+  return true;
+}
+
+function pollAmbientDisplay(): void {
+  const window = mainWindow;
+  const preferences = localStateStore?.snapshot().devicePreferences;
+  if (window === null || window.isDestroyed() || preferences === undefined) {
+    return;
+  }
+
+  let systemIdleSeconds: number;
+  try {
+    systemIdleSeconds = powerMonitor.getSystemIdleTime();
+  } catch {
+    return;
+  }
+
+  if (ambientDisplayVisible) {
+    const systemActivityObserved = systemIdleSeconds + 1 < ambientLastSystemIdleSeconds;
+    ambientLastSystemIdleSeconds = systemIdleSeconds;
+    if (
+      (!preferences.ambientDisplayEnabled && !ambientDisplayPreview) ||
+      serviceHost?.isPlaybackActive === true ||
+      serviceHost?.hasRecoveryTarget === true ||
+      systemActivityObserved
+    ) {
+      markAmbientActivity();
+    }
+    return;
+  }
+
+  if (shouldActivateAmbientDisplay({
+    appIdleMilliseconds: Date.now() - ambientLastActivityAt,
+    playbackActive: serviceHost?.isPlaybackActive ?? false,
+    preferences,
+    presentationBlocked: serviceHost?.isQuitPromptVisible === true ||
+      serviceHost?.hasRecoveryTarget === true,
+    systemIdleSeconds,
+    windowVisible: window.isVisible() && !window.isMinimized()
+  })) {
+    presentAmbientDisplay();
+  }
+}
+
+function startAmbientDisplayMonitor(): void {
+  if (ambientIdleTimer !== null) {
+    clearInterval(ambientIdleTimer);
+  }
+  ambientLastActivityAt = Date.now();
+  ambientIdleTimer = setInterval(pollAmbientDisplay, AMBIENT_IDLE_POLL_MS);
+}
+
+function stopAmbientDisplayMonitor(): void {
+  if (ambientIdleTimer !== null) {
+    clearInterval(ambientIdleTimer);
+    ambientIdleTimer = null;
+  }
+  dismissAmbientDisplay();
+}
+
+function handleServiceStateChanged(): void {
+  const playbackActive = serviceHost?.isPlaybackActive ?? false;
+  if (playbackActive || (lastServicePlaybackActive && !playbackActive)) {
+    markAmbientActivity();
+  }
+  lastServicePlaybackActive = playbackActive;
+  publishHostStatus();
+}
 
 function artworkCacheState(store: ContinueWatchingStore): ArtworkCacheState {
   const existing = artworkCacheStates.get(store);
@@ -265,6 +384,7 @@ function publishContinueWatching(): void {
 }
 
 function publishServiceRecovery(request: ServiceRecoveryRequest): void {
+  markAmbientActivity();
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.serviceRecoveryRequested, request);
   }
@@ -538,6 +658,11 @@ function recentRemoteServices(): RemoteServiceShortcut[] {
 }
 
 async function handleRemoteServiceLaunch(serviceId: string): Promise<boolean> {
+  if (ambientDisplayVisible) {
+    markAmbientActivity();
+    return true;
+  }
+  markAmbientActivity();
   if (!recentRemoteServices().some((service) => service.id === serviceId)) {
     return false;
   }
@@ -549,6 +674,11 @@ async function handleRemoteServiceLaunch(serviceId: string): Promise<boolean> {
 }
 
 async function handleRemoteSearch(query: string): Promise<void> {
+  if (ambientDisplayVisible) {
+    markAmbientActivity();
+    return;
+  }
+  markAmbientActivity();
   const destination = resolveRemoteSearchDestination(
     serviceHost?.activeServiceId ?? null,
     query
@@ -575,6 +705,12 @@ interface RemoteActionOutcome {
 }
 
 async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOutcome> {
+  if (ambientDisplayVisible && action !== "force-home") {
+    markAmbientActivity();
+    return { handled: true };
+  }
+  markAmbientActivity();
+
   if (action === "force-home") {
     if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
       await serviceHost.forceReturnHome();
@@ -616,6 +752,14 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
 }
 
 async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
+  if (input.phase !== "hide") {
+    if (ambientDisplayVisible) {
+      markAmbientActivity();
+      return { snapChanged: false, snapped: false, textEntryAvailable: false };
+    }
+    markAmbientActivity();
+  }
+
   if (
     serviceHost !== null &&
     serviceHost.activeServiceId !== null &&
@@ -656,6 +800,12 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
 }
 
 async function handleRemoteText(input: RemoteTextInput): Promise<boolean> {
+  if (ambientDisplayVisible) {
+    markAmbientActivity();
+    return true;
+  }
+  markAmbientActivity();
+
   if (
     serviceHost !== null &&
     serviceHost.activeServiceId !== null &&
@@ -727,6 +877,16 @@ function validateShellSender(senderUrl: string): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle(IPC_CHANNELS.dismissAmbientDisplay, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    markAmbientActivity();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.previewAmbientDisplay, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return presentAmbientDisplay(true);
+  });
+
   ipcMain.handle(IPC_CHANNELS.getContinueWatching, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
     return continueWatchingStore?.list() ?? [];
@@ -814,6 +974,7 @@ function registerIpc(): void {
       }
 
       const state = await localStateStore.updateDevicePreferences(preferences);
+      markAmbientActivity();
       mainWindow?.setFullScreen(state.devicePreferences.fullscreen);
       publishHostStatus();
       return state;
@@ -1085,7 +1246,7 @@ async function createMainWindow(): Promise<void> {
 
   serviceHost = new ServiceHost(
     mainWindow,
-    publishHostStatus,
+    handleServiceStateChanged,
     (request) => {
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.serviceQuitRequested, request);
@@ -1129,6 +1290,7 @@ async function createMainWindow(): Promise<void> {
   mainWindow.on("closed", () => {
     const remoteToStop = phoneRemote;
 
+    stopAmbientDisplayMonitor();
     phoneRemote = null;
     serviceHost = null;
     mainWindow = null;
@@ -1137,6 +1299,7 @@ async function createMainWindow(): Promise<void> {
 
   await mainWindow.loadURL("app://shell/index.html");
   mainWindow.show();
+  startAmbientDisplayMonitor();
 
   if (process.argv.includes("--devtools")) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
@@ -1169,11 +1332,15 @@ app.whenReady().then(async () => {
   await initializeWidevine();
   await createMainWindow();
   powerMonitor.on("suspend", () => {
+    markAmbientActivity();
     void serviceHost?.prepareForSuspend();
   });
   powerMonitor.on("resume", () => {
+    markAmbientActivity();
     void serviceHost?.resumeAfterSuspend();
   });
+  powerMonitor.on("lock-screen", markAmbientActivity);
+  powerMonitor.on("unlock-screen", markAmbientActivity);
   publishHostStatus();
 
   if (process.argv.includes("--netflix-smoke-test")) {

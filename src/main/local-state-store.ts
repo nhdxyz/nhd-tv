@@ -1,19 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type {
-  DevicePreferences,
-  CustomServiceManifest,
-  LocalAppState,
-  LocalProfile,
-  ProfilePreferences
+import {
+  AMBIENT_CLOCK_STYLES,
+  type AmbientClockStyle,
+  type DevicePreferences,
+  type CustomServiceManifest,
+  type LocalAppState,
+  type LocalProfile,
+  type ProfilePreferences
 } from "./contracts";
 
-const STORE_VERSION = 4;
+const STORE_VERSION = 6;
 const DEFAULT_PROFILE_ID = "default";
 const MAX_PROFILES = 8;
 const MAX_PROFILE_NAME_LENGTH = 32;
 const MAX_RECENT_SERVICES = 12;
+
+function isAmbientClockStyle(value: unknown): value is AmbientClockStyle {
+  return AMBIENT_CLOCK_STYLES.some((style) => style === value);
+}
 
 interface StoredProfile extends LocalProfile {
   createdAt: number;
@@ -66,6 +72,14 @@ function devicePreferences(value: unknown): DevicePreferences {
     ? value as Partial<DevicePreferences>
     : {};
   return {
+    ambientClockStyle: isAmbientClockStyle(candidate.ambientClockStyle)
+      ? candidate.ambientClockStyle
+      : AMBIENT_CLOCK_STYLES[0],
+    ambientDisplayDelayMinutes: candidate.ambientDisplayDelayMinutes === 5 ||
+      candidate.ambientDisplayDelayMinutes === 30
+      ? candidate.ambientDisplayDelayMinutes
+      : 10,
+    ambientDisplayEnabled: candidate.ambientDisplayEnabled !== false,
     autoApproveFirstRemote: candidate.autoApproveFirstRemote !== false,
     fullscreen: candidate.fullscreen !== false,
     reducedMotion: candidate.reducedMotion === true,
@@ -157,7 +171,7 @@ export class LocalStateStore {
 
       const document = parsed as Partial<StoredLocalState>;
       if (
-        ![1, 2, 3, STORE_VERSION].includes(document.version ?? -1) ||
+        ![1, 2, 3, 4, 5, STORE_VERSION].includes(document.version ?? -1) ||
         !Array.isArray(document.profiles)
       ) {
         return;

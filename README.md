@@ -51,7 +51,7 @@ Store choices belong to the active local profile. Services can be favorited and 
 
 The Store also accepts declarative custom services with a name and HTTPS start page. NHD-TV derives an exact same-origin navigation boundary and a dedicated local session; custom entries cannot execute plugin code, observe playback, or inject search behavior. Removing a custom integration clears its partition and removes it from all local profiles.
 
-Device-wide television settings persist the selected display, launch-fullscreen behavior, safe-area margin, and reduced-motion preference. The display card cycles NHD-TV across connected screens; audio routing and startup-at-login remain platform milestones.
+Device-wide television settings persist the selected display, launch-fullscreen behavior, safe-area margin, reduced-motion preference, and ambient-display choices. The default-on ambient display appears after ten idle minutes, pauses while video is playing, and offers Digital, Analog, Minimal, Flip, Neon, and Orbit clock themes with five-, ten-, or thirty-minute delays plus an immediate Preview action. The display card cycles NHD-TV across connected screens; audio routing and startup-at-login remain platform milestones.
 
 ### Production Widevine signing
 

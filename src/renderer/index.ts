@@ -1,14 +1,16 @@
 import "./style.css";
-import type {
-  CatalogSearchResult,
-  ContinueWatchingItem,
-  HostStatus,
-  LocalAppState,
-  RemoteAction,
-  RemoteStatus,
-  ServiceRecoveryMode,
-  ServiceRecoveryRequest,
-  ServiceSummary
+import {
+  AMBIENT_CLOCK_STYLES,
+  type AmbientClockStyle,
+  type CatalogSearchResult,
+  type ContinueWatchingItem,
+  type HostStatus,
+  type LocalAppState,
+  type RemoteAction,
+  type RemoteStatus,
+  type ServiceRecoveryMode,
+  type ServiceRecoveryRequest,
+  type ServiceSummary
 } from "../main/contracts";
 import {
   isMediaAction,
@@ -25,6 +27,15 @@ import {
 
 type AppView = "apps" | "home" | "settings" | "store";
 
+const AMBIENT_CLOCK_LABELS: Record<AmbientClockStyle, string> = {
+  analog: "Analog",
+  digital: "Digital",
+  flip: "Flip",
+  minimal: "Minimal",
+  neon: "Neon",
+  orbit: "Orbit"
+};
+
 function requireElement<T>(selector: string, name: string): T {
   const element = document.querySelector(selector);
 
@@ -36,6 +47,29 @@ function requireElement<T>(selector: string, name: string): T {
 }
 
 const elements = {
+  ambientAnalogHour: requireElement<HTMLElement>("#ambient-analog-hour", "ambient-analog-hour"),
+  ambientAnalogMinute: requireElement<HTMLElement>("#ambient-analog-minute", "ambient-analog-minute"),
+  ambientClockStyle: requireElement<HTMLButtonElement>("#ambient-clock-style", "ambient-clock-style"),
+  ambientClockStyleCopy: requireElement<HTMLElement>("#ambient-clock-style-copy", "ambient-clock-style-copy"),
+  ambientDates: Array.from(document.querySelectorAll<HTMLElement>(".ambient-date")),
+  ambientDigitalTime: requireElement<HTMLTimeElement>("#ambient-digital-time", "ambient-digital-time"),
+  ambientDisplay: requireElement<HTMLElement>("#ambient-display", "ambient-display"),
+  ambientDisplayCopy: requireElement<HTMLElement>("#ambient-display-copy", "ambient-display-copy"),
+  ambientDisplayDelay: requireElement<HTMLButtonElement>("#ambient-display-delay", "ambient-display-delay"),
+  ambientDisplayDelayCopy: requireElement<HTMLElement>("#ambient-display-delay-copy", "ambient-display-delay-copy"),
+  ambientDisplayPreview: requireElement<HTMLButtonElement>("#ambient-display-preview", "ambient-display-preview"),
+  ambientDisplayToggle: requireElement<HTMLButtonElement>("#ambient-display-toggle", "ambient-display-toggle"),
+  ambientFlipHour: requireElement<HTMLElement>("#ambient-flip-hour", "ambient-flip-hour"),
+  ambientFlipMinute: requireElement<HTMLElement>("#ambient-flip-minute", "ambient-flip-minute"),
+  ambientFlipPeriod: requireElement<HTMLElement>("#ambient-flip-period", "ambient-flip-period"),
+  ambientFlipTime: requireElement<HTMLTimeElement>("#ambient-flip-time", "ambient-flip-time"),
+  ambientMinimalHour: requireElement<HTMLElement>("#ambient-minimal-hour", "ambient-minimal-hour"),
+  ambientMinimalMinute: requireElement<HTMLElement>("#ambient-minimal-minute", "ambient-minimal-minute"),
+  ambientMinimalPeriod: requireElement<HTMLElement>("#ambient-minimal-period", "ambient-minimal-period"),
+  ambientNeonTime: requireElement<HTMLTimeElement>("#ambient-neon-time", "ambient-neon-time"),
+  ambientOrbitFace: requireElement<HTMLElement>("#ambient-orbit-face", "ambient-orbit-face"),
+  ambientOrbitTime: requireElement<HTMLTimeElement>("#ambient-orbit-time", "ambient-orbit-time"),
+  ambientStage: requireElement<HTMLElement>("#ambient-stage", "ambient-stage"),
   appManageBrand: requireElement<HTMLDivElement>("#app-manage-brand", "app-manage-brand"),
   appManageClear: requireElement<HTMLButtonElement>("#app-manage-clear", "app-manage-clear"),
   appManageClose: requireElement<HTMLButtonElement>("#app-manage-close", "app-manage-close"),
@@ -161,6 +195,9 @@ let currentServiceRecovery: ServiceRecoveryRequest | null = null;
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let catalogSearchTimer: number | null = null;
 let catalogSearchVersion = 0;
+let ambientAnchorTimer: number | null = null;
+let ambientClockTimer: number | null = null;
+let ambientShownAt = 0;
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
@@ -303,6 +340,18 @@ function applyLocalAppState(state: LocalAppState): void {
   elements.profileName.textContent = name;
   elements.profileAvatar.textContent = name.slice(0, 1).toUpperCase();
   elements.profileCardCopy.textContent = `${name} · separate lineup and viewing history`;
+  elements.ambientDisplayToggle.setAttribute(
+    "aria-pressed",
+    String(state.devicePreferences.ambientDisplayEnabled)
+  );
+  elements.ambientDisplayCopy.textContent = state.devicePreferences.ambientDisplayEnabled
+    ? `On · starts after ${state.devicePreferences.ambientDisplayDelayMinutes} minutes`
+    : "Off";
+  elements.ambientClockStyleCopy.textContent =
+    AMBIENT_CLOCK_LABELS[state.devicePreferences.ambientClockStyle];
+  elements.ambientDisplayDelayCopy.textContent =
+    `${state.devicePreferences.ambientDisplayDelayMinutes} minutes`;
+  elements.ambientStage.dataset.clockStyle = state.devicePreferences.ambientClockStyle;
   document.body.dataset.safeArea = state.devicePreferences.safeArea;
   document.body.dataset.reducedMotion = String(state.devicePreferences.reducedMotion);
   elements.fullscreenToggle.setAttribute("aria-pressed", String(state.devicePreferences.fullscreen));
@@ -339,6 +388,123 @@ async function saveDevicePreferences(
     ...changes
   }));
 }
+
+const ambientAnchors = [
+  "top-left",
+  "bottom-right",
+  "top-right",
+  "bottom-left",
+  "center"
+] as const;
+const ambientTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit"
+});
+const ambientDateFormatter = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "long",
+  weekday: "long"
+});
+
+function updateAmbientClock(): void {
+  const now = new Date();
+  const formattedTime = ambientTimeFormatter.format(now);
+  const formattedDate = ambientDateFormatter.format(now);
+  const timeParts = ambientTimeFormatter.formatToParts(now);
+  const hour = timeParts.find((part) => part.type === "hour")?.value ?? String(now.getHours());
+  const minute = timeParts.find((part) => part.type === "minute")?.value ??
+    String(now.getMinutes()).padStart(2, "0");
+  const period = timeParts.find((part) => part.type === "dayPeriod")?.value ?? "";
+
+  elements.ambientDigitalTime.textContent = formattedTime;
+  elements.ambientDigitalTime.dateTime = now.toISOString();
+  elements.ambientFlipHour.textContent = hour.padStart(2, "0");
+  elements.ambientFlipMinute.textContent = minute;
+  elements.ambientFlipPeriod.textContent = period;
+  elements.ambientFlipPeriod.hidden = period.length === 0;
+  elements.ambientFlipTime.dateTime = now.toISOString();
+  elements.ambientMinimalHour.textContent = hour;
+  elements.ambientMinimalMinute.textContent = minute;
+  elements.ambientMinimalPeriod.textContent = period;
+  elements.ambientMinimalPeriod.hidden = period.length === 0;
+  elements.ambientNeonTime.textContent = formattedTime;
+  elements.ambientNeonTime.dateTime = now.toISOString();
+  elements.ambientOrbitTime.textContent = formattedTime;
+  elements.ambientOrbitTime.dateTime = now.toISOString();
+  for (const date of elements.ambientDates) {
+    date.textContent = formattedDate;
+  }
+
+  const minuteAngle = now.getMinutes() * 6 + now.getSeconds() * 0.1;
+  const hourAngle = (now.getHours() % 12) * 30 + now.getMinutes() * 0.5;
+  elements.ambientAnalogHour.style.setProperty("--ambient-hand-angle", `${hourAngle}deg`);
+  elements.ambientAnalogMinute.style.setProperty("--ambient-hand-angle", `${minuteAngle}deg`);
+  elements.ambientOrbitFace.style.setProperty("--ambient-minute-angle", `${minuteAngle}deg`);
+  elements.ambientOrbitFace.style.setProperty(
+    "--ambient-second-angle",
+    `${now.getSeconds() * 6}deg`
+  );
+  elements.ambientDisplay.setAttribute(
+    "aria-label",
+    `Ambient display. ${formattedTime}, ${formattedDate}. Move or press any control to return.`
+  );
+}
+
+function updateAmbientAnchor(): void {
+  const index = Math.floor(Date.now() / 60_000) % ambientAnchors.length;
+  elements.ambientStage.dataset.anchor = ambientAnchors[index] ?? "center";
+}
+
+function setAmbientDisplayVisible(visible: boolean): void {
+  if (elements.ambientDisplay.hidden === !visible) {
+    return;
+  }
+
+  elements.ambientDisplay.hidden = !visible;
+  document.body.dataset.ambientDisplay = String(visible);
+  if (!visible) {
+    if (ambientClockTimer !== null) window.clearInterval(ambientClockTimer);
+    if (ambientAnchorTimer !== null) window.clearInterval(ambientAnchorTimer);
+    ambientClockTimer = null;
+    ambientAnchorTimer = null;
+    return;
+  }
+
+  ambientShownAt = performance.now();
+  elements.ambientStage.dataset.clockStyle =
+    localAppState?.devicePreferences.ambientClockStyle ?? "digital";
+  updateAmbientClock();
+  updateAmbientAnchor();
+  ambientClockTimer = window.setInterval(updateAmbientClock, 1_000);
+  ambientAnchorTimer = window.setInterval(updateAmbientAnchor, 60_000);
+}
+
+function dismissAmbientDisplayFromInput(): void {
+  if (elements.ambientDisplay.hidden) {
+    return;
+  }
+
+  setAmbientDisplayVisible(false);
+  void window.nhd.dismissAmbientDisplay().catch(() => undefined);
+}
+
+function captureAmbientWake(event: Event): void {
+  if (elements.ambientDisplay.hidden) {
+    return;
+  }
+  if (event.type === "pointermove" && performance.now() - ambientShownAt < 1_500) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  dismissAmbientDisplayFromInput();
+}
+
+document.addEventListener("keydown", captureAmbientWake, { capture: true });
+document.addEventListener("pointerdown", captureAmbientWake, { capture: true });
+document.addEventListener("pointermove", captureAmbientWake, { capture: true });
+document.addEventListener("wheel", captureAmbientWake, { capture: true, passive: false });
 
 function playbackTime(seconds: number): string {
   const roundedMinutes = Math.max(1, Math.round(seconds / 60));
@@ -1670,6 +1836,40 @@ elements.soundToggle.addEventListener("click", () => {
 
 renderSoundPreference();
 
+elements.ambientDisplayToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.ambientDisplayEnabled ?? true);
+  void saveDevicePreferences({ ambientDisplayEnabled: enabled })
+    .then(() => showFeedback(`Ambient display ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.ambientClockStyle.addEventListener("click", () => {
+  const current = localAppState?.devicePreferences.ambientClockStyle ?? "digital";
+  const next = AMBIENT_CLOCK_STYLES[
+    (AMBIENT_CLOCK_STYLES.indexOf(current) + 1) % AMBIENT_CLOCK_STYLES.length
+  ] ?? AMBIENT_CLOCK_STYLES[0];
+  void saveDevicePreferences({ ambientClockStyle: next })
+    .then(() => showFeedback(`Ambient clock theme set to ${AMBIENT_CLOCK_LABELS[next]}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.ambientDisplayDelay.addEventListener("click", () => {
+  const values = [5, 10, 30] as const;
+  const current = localAppState?.devicePreferences.ambientDisplayDelayMinutes ?? 10;
+  const next = values[(values.indexOf(current) + 1) % values.length] ?? 10;
+  void saveDevicePreferences({ ambientDisplayDelayMinutes: next })
+    .then(() => showFeedback(`Ambient display will start after ${next} minutes.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.ambientDisplayPreview.addEventListener("click", () => {
+  void window.nhd.previewAmbientDisplay()
+    .then((shown) => {
+      if (!shown) showFeedback("Finish playback or close the current prompt before previewing.");
+    })
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
 elements.remoteAutoConnectToggle.addEventListener("click", () => {
   const enabled = !(localAppState?.devicePreferences.autoApproveFirstRemote ?? true);
   void saveDevicePreferences({ autoApproveFirstRemote: enabled })
@@ -2065,6 +2265,7 @@ elements.closeServiceButton.addEventListener("click", async () => {
   showFeedback("Service view closed.");
 });
 
+window.nhd.onAmbientDisplayChanged(setAmbientDisplayVisible);
 window.nhd.onHostStatusChanged(renderStatus);
 window.nhd.onContinueWatchingChanged((items) => {
   continueWatchingItems = items;

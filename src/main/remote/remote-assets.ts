@@ -85,18 +85,24 @@ export const REMOTE_HTML = `<!doctype html>
     <main class="remote-shell">
       <header class="remote-header">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">N</span>
-          <strong>NHD Remote</strong>
+          <strong class="brand-wordmark">NHD<span>/</span>TV</strong>
+          <small>Remote</small>
         </div>
         <p id="connection-state" role="status"><span aria-hidden="true"></span>Requesting approval</p>
       </header>
 
       <section class="remote-card" aria-label="Television remote">
+        <div class="remote-context" aria-live="polite">
+          <span>Controlling</span>
+          <strong id="active-service-label">NHD Home</strong>
+          <small id="remote-mode-label">Navigate</small>
+        </div>
+
         <div class="remote-top-actions" aria-label="System controls">
           <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back. Hold to force return Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <span id="remote-mode-label" aria-hidden="true">Navigate</span>
+          <span class="remote-top-caption" aria-hidden="true">Control</span>
           <button class="remote-icon-button" data-action="home" type="button" disabled aria-label="NHD Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10.5 8-6.5 8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" /><path d="M9.5 20v-6h5v6" /></svg>
           </button>
@@ -104,11 +110,11 @@ export const REMOTE_HTML = `<!doctype html>
 
         <div class="control-surface">
           <div class="dpad" aria-label="Directional pad">
-            <button class="up" data-action="up" type="button" disabled aria-label="Up"><span aria-hidden="true"></span></button>
-            <button class="left" data-action="left" type="button" disabled aria-label="Left"><span aria-hidden="true"></span></button>
+            <button class="up" data-action="up" data-repeat="true" type="button" disabled aria-label="Up"><span aria-hidden="true"></span></button>
+            <button class="left" data-action="left" data-repeat="true" type="button" disabled aria-label="Left"><span aria-hidden="true"></span></button>
             <button class="select" data-action="select" type="button" disabled aria-label="Select"><span aria-hidden="true"></span></button>
-            <button class="right" data-action="right" type="button" disabled aria-label="Right"><span aria-hidden="true"></span></button>
-            <button class="down" data-action="down" type="button" disabled aria-label="Down"><span aria-hidden="true"></span></button>
+            <button class="right" data-action="right" data-repeat="true" type="button" disabled aria-label="Right"><span aria-hidden="true"></span></button>
+            <button class="down" data-action="down" data-repeat="true" type="button" disabled aria-label="Down"><span aria-hidden="true"></span></button>
           </div>
 
           <div class="precision-pad" id="precision-pad" role="button" tabindex="0" aria-label="Swipe anywhere to move the cursor, lift and continue, or tap to select" hidden>
@@ -143,12 +149,15 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="control-mode utility-button" id="control-mode" type="button" disabled aria-label="Use precision pointer">
             <svg class="pointer-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 6.7 16 2.2-6.1 6.1-2.2z" /></svg>
             <svg class="arrows-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18m-4-4 4 4-4 4M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4" /></svg>
+            <span id="control-mode-copy">Pointer</span>
           </button>
           <button class="quick-launch-toggle utility-button" id="quick-launch-toggle" type="button" disabled aria-label="Recent apps">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>
+            <span>Apps</span>
           </button>
           <button class="search-toggle utility-button" id="search-toggle" type="button" disabled aria-label="Search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4 4" /></svg>
+            <span id="search-toggle-copy">Search</span>
           </button>
         </div>
 
@@ -190,7 +199,11 @@ export const REMOTE_HTML = `<!doctype html>
 </html>`;
 
 export const REMOTE_CSS = `:root {
-  color: #f8fafc;
+  --accent: #d7ff55;
+  --accent-ink: #11120e;
+  --panel: #171716;
+  --panel-raised: #222220;
+  color: #f2f2ee;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: dark;
   -webkit-font-smoothing: antialiased;
@@ -202,11 +215,35 @@ body {
   height: 100dvh;
   min-height: 100dvh;
   margin: 0;
-  padding: max(0.65rem, env(safe-area-inset-top)) 0.8rem max(0.7rem, env(safe-area-inset-bottom));
+  padding: max(0.7rem, env(safe-area-inset-top)) 0.8rem max(0.75rem, env(safe-area-inset-bottom));
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% -18%, rgb(69 93 145 / 18%), transparent 24rem),
-    #07090d;
+  background: #090909;
+}
+
+body::before {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 0.18rem;
+  background: var(--accent);
+  content: "";
+  opacity: 0.9;
+}
+
+body[data-active-service="youtube"] {
+  --accent: #ff2642;
+  --accent-ink: #fff;
+}
+
+body[data-active-service="netflix"] {
+  --accent: #e50914;
+  --accent-ink: #fff;
+}
+
+body[data-active-service="disney-plus"] {
+  --accent: #88a6ff;
+  --accent-ink: #071023;
 }
 
 html,
@@ -232,7 +269,7 @@ input {
 
 .remote-shell {
   display: flex;
-  width: min(100%, 25rem);
+  width: min(100%, 24rem);
   height: 100%;
   min-height: 0;
   margin: 0 auto;
@@ -241,26 +278,26 @@ input {
 
 .remote-header {
   display: flex;
-  min-height: 2rem;
+  min-height: 2.55rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.brand { display: flex; align-items: center; gap: 0.4rem; color: #aab2c0; }
-.brand-mark {
-  display: grid;
-  width: 1.55rem;
-  height: 1.55rem;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 0.48rem;
-  background: #171b23;
-  color: #e7ebf2;
-  font-size: 0.67rem;
-  font-weight: 850;
+.brand { display: flex; align-items: baseline; gap: 0.45rem; color: #f1f1ed; }
+.brand-wordmark {
+  font-size: 0.82rem;
+  font-weight: 950;
+  letter-spacing: -0.035em;
 }
-.brand strong { font-size: 0.7rem; font-weight: 750; letter-spacing: 0.01em; }
+.brand-wordmark span { color: var(--accent); }
+.brand small {
+  color: #777773;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
 
 #connection-state {
   display: flex;
@@ -270,58 +307,106 @@ input {
   align-items: center;
   justify-content: flex-end;
   gap: 0.38rem;
-  color: #d6b978;
-  font-size: 0.62rem;
+  color: #d8b56c;
+  font-size: 0.66rem;
   font-weight: 700;
   line-height: 1.2;
   text-align: right;
 }
 #connection-state span {
-  width: 0.38rem;
-  height: 0.38rem;
+  width: 0.46rem;
+  height: 0.46rem;
   border-radius: 50%;
   background: currentColor;
 }
-#connection-state.connected { color: #9dd6ad; }
+#connection-state.connected { color: #9bd8a8; }
 #connection-state.error { color: #fda4af; }
 
 .remote-card {
   display: flex;
   min-height: 0;
   margin-top: 0.45rem;
-  padding: 0.8rem;
+  padding: 0.72rem;
   flex: 1;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 1.8rem;
-  background: #0e1117;
-  box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 28%);
+  border: 1px solid #30302d;
+  border-radius: 1.7rem;
+  background: #151514;
+  box-shadow: inset 0 1px rgb(255 255 255 / 4%), 0 1.4rem 3.2rem rgb(0 0 0 / 44%);
+}
+
+.remote-context {
+  display: grid;
+  min-height: 3.2rem;
+  padding: 0.48rem 0.62rem 0.58rem;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 0.8rem;
+  border-bottom: 1px solid #2b2b29;
+}
+.remote-context > span {
+  grid-column: 1;
+  color: #74746f;
+  font-size: 0.5rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.remote-context > strong {
+  grid-column: 1;
+  overflow: hidden;
+  color: #f2f2ee;
+  font-size: 0.98rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-context > small {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  padding: 0;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.remote-context > small::before {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
 .remote-top-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  min-height: 3.55rem;
   justify-content: space-between;
 }
-.remote-top-actions > span {
-  color: #707986;
-  font-size: 0.56rem;
+.remote-top-caption {
+  color: #666660;
+  font-size: 0.52rem;
   font-weight: 750;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 .remote-icon-button {
   display: grid;
-  width: 2.85rem;
-  height: 2.85rem;
+  width: 2.8rem;
+  height: 2.8rem;
   place-items: center;
-  border: 0;
   border-radius: 999px;
-  background: transparent;
-  color: #c5cbd5;
+  border: 1px solid #30302d;
+  background: #1e1e1c;
+  color: #c9c9c4;
 }
 .remote-icon-button svg {
   width: 1.25rem;
@@ -333,30 +418,35 @@ input {
   stroke-width: 1.9;
 }
 .remote-icon-button:not(:disabled).is-pressed,
-.remote-icon-button:not(:disabled):active { background: #1a1f28; transform: scale(0.94); }
+.remote-icon-button:not(:disabled):active {
+  border-color: #494945;
+  background: #292927;
+  transform: scale(0.94);
+}
 
 .control-surface {
   display: grid;
   min-height: 0;
-  padding: 0.35rem 0 0.55rem;
+  padding: 0.25rem 0 0.7rem;
   flex: 1 1 auto;
   place-items: center;
 }
 .control-surface > * { grid-area: 1 / 1; }
 
 .dpad {
+  position: relative;
   display: grid;
-  width: min(81vw, 39dvh, 19rem);
+  width: min(78vw, 35dvh, 18rem);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
   gap: 0;
   margin: 0 auto;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 9%);
+  border: 1px solid #3a3a36;
   border-radius: 50%;
-  background: #171b22;
-  box-shadow: inset 0 1px rgb(255 255 255 / 5%), 0 1rem 2.8rem rgb(0 0 0 / 20%);
+  background: #20201e;
+  box-shadow: inset 0 1px rgb(255 255 255 / 6%), inset 0 -1rem 2rem rgb(0 0 0 / 18%), 0 1rem 2.4rem rgb(0 0 0 / 32%);
 }
 .dpad[hidden] { display: none; }
 
@@ -364,7 +454,7 @@ input {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #9ea7b5;
+  color: #a7a7a1;
   font: inherit;
 }
 .dpad button span { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; }
@@ -377,10 +467,10 @@ input {
 .dpad .left span::before,
 .dpad .right span::before,
 .dpad .down span::before {
-  width: 0.68rem;
-  height: 0.68rem;
-  border-top: 1.5px solid currentColor;
-  border-left: 1.5px solid currentColor;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
   content: "";
 }
 .dpad .up span::before { transform: translateY(0.15rem) rotate(45deg); }
@@ -388,37 +478,38 @@ input {
 .dpad .right span::before { transform: translateX(-0.15rem) rotate(135deg); }
 .dpad .down span::before { transform: translateY(-0.15rem) rotate(225deg); }
 .dpad .select span {
-  width: 4.1rem;
-  height: 4.1rem;
+  width: 4.45rem;
+  height: 4.45rem;
   margin: auto;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 2px solid var(--accent);
   border-radius: 50%;
-  background: #20252e;
-  box-shadow: inset 0 1px rgb(255 255 255 / 6%);
+  background: #111110;
+  box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 0.7rem 1.5rem rgb(0 0 0 / 34%);
 }
 
 .dpad button:not(:disabled).is-pressed span,
+.dpad button:not(:disabled).is-repeating span,
 .dpad button:not(:disabled):active span {
-  background-color: rgb(255 255 255 / 5%);
+  background-color: rgb(255 255 255 / 9%);
   color: #fff;
 }
 .dpad button:not(:disabled):active { transform: scale(0.96); }
 .dpad .select:not(:disabled).is-pressed span,
-.dpad .select:not(:disabled):active span { background: #e8ebf0; }
+.dpad .select:not(:disabled):active span { background: var(--accent); border-color: var(--accent); transform: scale(0.93); }
 
 .precision-pad {
   position: relative;
   display: grid;
-  width: min(81vw, 39dvh, 19rem);
+  width: min(78vw, 35dvh, 18rem);
   aspect-ratio: 1;
   margin: 0 auto;
   place-content: center;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 9%);
+  border: 1px solid #3a3a36;
   border-radius: 50%;
   outline: 0;
-  background: radial-gradient(circle, #1c2129, #151920 72%);
-  color: #eaf2ff;
+  background: #20201e;
+  color: #e9e9e4;
   text-align: center;
   touch-action: none;
   -webkit-touch-callout: none;
@@ -450,13 +541,13 @@ input {
   pointer-events: none;
   transition: opacity 140ms ease, transform 180ms ease;
 }
-.precision-pad.is-tracking { border-color: rgb(167 191 229 / 48%); }
+.precision-pad.is-tracking { border-color: var(--accent); }
 .precision-pad.is-tracking::before { opacity: 0.88; transform: scale(1.16); }
 .precision-pad.has-snap {
-  border-color: rgb(175 204 226 / 48%);
-  box-shadow: inset 0 0 0 1px rgb(175 204 226 / 8%);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%);
 }
-.precision-pad.has-snap::before { background: radial-gradient(circle, rgb(148 184 216 / 18%), transparent 68%); }
+.precision-pad.has-snap::before { background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 68%); }
 .precision-status {
   position: absolute;
   z-index: 3;
@@ -469,7 +560,7 @@ input {
   place-items: center;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
-  background: rgb(4 17 30 / 82%);
+  background: #10100f;
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 0.25rem);
@@ -479,7 +570,7 @@ input {
   width: 0.38rem;
   height: 0.38rem;
   border-radius: 50%;
-  background: #dbe5ef;
+  background: var(--accent);
 }
 .precision-pad.has-snap .precision-status { opacity: 1; transform: translate(-50%, 0); }
 
@@ -489,35 +580,47 @@ input {
   overflow: hidden;
   flex: 0 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 8%);
+  gap: 0.38rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: transparent;
 }
-.playback-controls { margin-bottom: 0.45rem; }
-.volume-controls { margin-bottom: 0.55rem; }
+.playback-controls { margin-bottom: 0.42rem; }
+.volume-controls {
+  margin-bottom: 0.5rem;
+  gap: 0;
+  border: 1px solid #30302d;
+  background: #1c1c1a;
+}
 .playback-controls button,
 .volume-controls button {
   display: grid;
   place-items: center;
-  border: 0;
-  border-radius: 0;
-  background: #171b22;
-  color: #b9c1cd;
+  border: 1px solid #30302d;
+  border-radius: 0.82rem;
+  background: var(--panel-raised);
+  color: #cacac5;
   font: inherit;
   font-size: 1rem;
   font-weight: 750;
 }
 .playback-controls button { min-height: 2.85rem; }
-.volume-controls button { min-height: 2.35rem; }
+.volume-controls button {
+  min-height: 2.35rem;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  background: transparent;
+}
+.volume-controls button:last-child { border-right: 0; }
 .playback-controls button.media-primary {
-  background: #e8ebef;
-  color: #11141a;
+  border-color: #deded8;
+  background: #deded8;
+  color: #111110;
 }
 .playback-controls button:not(:disabled).is-pressed,
 .playback-controls button:not(:disabled):active,
 .volume-controls button:not(:disabled).is-pressed,
-.volume-controls button:not(:disabled):active { background: #262c35; }
+.volume-controls button:not(:disabled):active { background: #30302d; }
 .playback-controls button.media-primary:not(:disabled).is-pressed,
 .playback-controls button.media-primary:not(:disabled):active { background: #fff; }
 .playback-controls span,
@@ -529,22 +632,26 @@ input {
 .pause-shape { opacity: 0.88; }
 
 .remote-utilities {
-  display: flex;
-  min-height: 2.85rem;
+  display: grid;
+  min-height: 3rem;
   margin-bottom: 0;
   align-items: center;
-  justify-content: center;
-  gap: 1.1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38rem;
 }
 .utility-button {
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #8f98a6;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 2.95rem;
+  padding: 0 0.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border: 1px solid #2d2d2a;
+  border-radius: 0.78rem;
+  background: #1a1a19;
+  color: #9f9f99;
 }
 .utility-button svg {
   width: 1.18rem;
@@ -555,7 +662,14 @@ input {
   stroke-linejoin: round;
   stroke-width: 1.7;
 }
-.utility-button:not(:disabled):active { background: #1c2129; color: #fff; transform: scale(0.94); }
+.utility-button > span {
+  overflow: hidden;
+  font-size: 0.62rem;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.utility-button:not(:disabled):active { background: #2a2a27; color: #fff; transform: scale(0.96); }
 .control-mode .arrows-icon { display: none; }
 .control-mode.is-precision .pointer-icon { display: none; }
 .control-mode.is-precision .arrows-icon { display: block; }
@@ -565,9 +679,9 @@ input {
   padding: 0.75rem;
   flex: 1 1 auto;
   overflow-y: auto;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 1.15rem;
-  background: #141820;
+  border: 1px solid #30302d;
+  border-radius: 0.95rem;
+  background: #1a1a18;
 }
 .quick-launch-panel[hidden] { display: none; }
 .quick-launch-heading {
@@ -579,7 +693,7 @@ input {
 }
 .quick-launch-heading div { display: grid; gap: 0.08rem; }
 .quick-launch-heading small {
-  color: #7f8998;
+  color: #85857f;
   font-size: 0.56rem;
   font-weight: 900;
   letter-spacing: 0.11em;
@@ -591,8 +705,8 @@ input {
   height: 2.35rem;
   border: 0;
   border-radius: 50%;
-  background: #1d222b;
-  color: #d8d5e5;
+  background: #292927;
+  color: #deded9;
   font: inherit;
   font-size: 1.15rem;
 }
@@ -604,9 +718,9 @@ input {
   grid-template-columns: 2.25rem 1fr auto;
   align-items: center;
   gap: 0.65rem;
-  border: 1px solid rgb(255 255 255 / 7%);
-  border-radius: 0.85rem;
-  background: #1a1f27;
+  border: 1px solid #30302d;
+  border-radius: 0.75rem;
+  background: #222220;
   color: #f8fafc;
   font: inherit;
   text-align: left;
@@ -617,50 +731,50 @@ input {
   height: 2.25rem;
   place-items: center;
   border-radius: 0.7rem;
-  background: #2a303b;
+  background: #30302d;
   font-size: 0.8rem;
   font-weight: 950;
 }
 .quick-app strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.quick-app small { color: #9aa8bb; font-size: 0.6rem; font-weight: 850; }
+.quick-app small { color: #9c9c95; font-size: 0.6rem; font-weight: 850; }
 .quick-app:active { transform: scale(0.98); filter: brightness(1.2); }
-#quick-launch-empty { margin: 1.1rem 0; color: #8e9bad; font-size: 0.7rem; line-height: 1.45; text-align: center; }
+#quick-launch-empty { margin: 1.1rem 0; color: #8b8b84; font-size: 0.7rem; line-height: 1.45; text-align: center; }
 
-button:disabled { opacity: 0.3; }
+button:disabled { opacity: 0.42; }
 
 .search-panel {
   margin-top: 0.65rem;
   padding: 0.8rem;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 1.15rem;
-  background: #141820;
+  border: 1px solid #30302d;
+  border-radius: 0.95rem;
+  background: #1a1a18;
 }
 .search-panel[hidden] { display: none; }
-.search-panel label { display: block; margin-bottom: 0.55rem; color: #d9dde5; font-size: 0.74rem; font-weight: 750; }
+.search-panel label { display: block; margin-bottom: 0.55rem; color: #deded9; font-size: 0.74rem; font-weight: 750; }
 .search-panel > div { display: grid; grid-template-columns: 1fr auto; gap: 0.55rem; }
 .search-panel input {
   min-width: 0;
   min-height: 3rem;
   padding: 0 0.85rem;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid #3a3a36;
   border-radius: 0.8rem;
   outline: none;
-  background: #0d1016;
+  background: #111110;
   color: #fff;
   font: inherit;
   font-size: 1rem;
 }
-.search-panel input:focus { border-color: #8996aa; box-shadow: 0 0 0 0.16rem rgb(148 163 184 / 10%); }
+.search-panel input:focus { border-color: var(--accent); box-shadow: 0 0 0 0.13rem color-mix(in srgb, var(--accent) 14%, transparent); }
 .search-panel button {
   min-width: 4rem;
   border: 0;
   border-radius: 0.8rem;
-  background: #e8ebef;
-  color: #11141a;
+  background: #deded8;
+  color: #111110;
   font: inherit;
   font-weight: 900;
 }
-.search-panel p { margin: 0.55rem 0 0; color: #7d899d; font-size: 0.67rem; line-height: 1.4; }
+.search-panel p { margin: 0.55rem 0 0; color: #808079; font-size: 0.67rem; line-height: 1.4; }
 
 body.is-typing .control-surface,
 body.is-typing .control-mode,
@@ -677,21 +791,23 @@ body.is-launching .volume-controls { display: none; }
 body.is-launching .remote-utilities { display: none; }
 
 .confirmed { animation: confirmed 220ms ease-out; }
+.is-repeating { filter: brightness(1.16); }
 @keyframes confirmed { 50% { filter: brightness(1.4); } }
 
-.privacy-note { display: flex; margin: 0.45rem 0 0; flex: 0 0 auto; align-items: center; justify-content: center; gap: 0.32rem; color: #6f7784; font-size: 0.58rem; text-align: center; }
+.privacy-note { display: flex; margin: 0.42rem 0 0; flex: 0 0 auto; align-items: center; justify-content: center; gap: 0.32rem; color: #70706a; font-size: 0.58rem; text-align: center; }
 .privacy-note span { width: 0.32rem; height: 0.32rem; border-radius: 50%; background: #75b486; }
 body:not(.is-connected) .privacy-note { display: none; }
-.footnote { margin: 0.5rem 0 0; color: #616a77; font-size: 0.58rem; text-align: center; }
+.footnote { margin: 0.45rem 0 0; color: #5f5f5a; font-size: 0.58rem; text-align: center; }
 body.is-connected .footnote { display: none; }
 
 @media (max-height: 700px) {
   .remote-card { padding: 0.75rem; }
   .remote-icon-button { width: 2.8rem; height: 2.8rem; }
+  .remote-context { min-height: 3rem; padding-block: 0.5rem; }
   .dpad,
-  .precision-pad { width: min(78vw, 31dvh, 15rem); }
+  .precision-pad { width: min(78vw, 30dvh, 15rem); }
   .remote-utilities { min-height: 2.5rem; }
-  .utility-button { width: 2.45rem; height: 2.45rem; }
+  .utility-button { height: 2.75rem; }
   .playback-controls button { min-height: 2.65rem; }
   .volume-controls button { min-height: 2.35rem; }
   .privacy-note { margin-top: 0.5rem; }
@@ -719,6 +835,9 @@ export const REMOTE_JS = `(() => {
   const quickLaunchEmpty = document.querySelector("#quick-launch-empty");
   const searchLabel = document.querySelector("#search-label");
   const remoteModeLabel = document.querySelector("#remote-mode-label");
+  const activeServiceLabel = document.querySelector("#active-service-label");
+  const controlModeCopy = document.querySelector("#control-mode-copy");
+  const searchToggleCopy = document.querySelector("#search-toggle-copy");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
   let pointerGesture = null;
@@ -734,8 +853,11 @@ export const REMOTE_JS = `(() => {
   let textEntryTimer = null;
   let backHoldTimer = null;
   let backHoldTriggered = false;
+  let currentSearchLabel = "Search NHD-TV";
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
+  const DIRECTION_REPEAT_DELAY_MS = 380;
+  const DIRECTION_REPEAT_INTERVAL_MS = 115;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
   const edgeScroll = (${precisionEdgeScroll.toString()});
@@ -761,6 +883,26 @@ export const REMOTE_JS = `(() => {
     state.className = kind || "";
   }
 
+  function renderContext(context) {
+    if (!context || typeof context !== "object") return;
+    const serviceName = typeof context.activeServiceName === "string"
+      ? context.activeServiceName.replace(/\\s+/g, " ").trim().slice(0, 48)
+      : "";
+    const serviceId = typeof context.activeServiceId === "string" &&
+      /^[a-z0-9-]{1,64}$/.test(context.activeServiceId)
+      ? context.activeServiceId
+      : "home";
+    const searchCopy = typeof context.searchLabel === "string"
+      ? context.searchLabel.replace(/\\s+/g, " ").trim().slice(0, 64)
+      : "";
+    document.body.dataset.activeService = serviceId;
+    activeServiceLabel.textContent = serviceName || "NHD Home";
+    currentSearchLabel = searchCopy || "Search NHD-TV";
+    searchToggle.setAttribute("aria-label", currentSearchLabel);
+    searchToggleCopy.textContent = serviceId === "home" ? "Search" : serviceName || "Search";
+    if (!directTextEntry && searchPanel.hidden) searchLabel.textContent = currentSearchLabel;
+  }
+
   function setEnabled(enabled) {
     document.body.classList.toggle("is-connected", enabled);
     buttons.forEach((button) => { button.disabled = !enabled; });
@@ -774,12 +916,12 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  function confirmCommand(button) {
+  function confirmCommand(button, haptic = true) {
     button.classList.remove("confirmed");
     void button.offsetWidth;
     button.classList.add("confirmed");
     setTimeout(() => button.classList.remove("confirmed"), 240);
-    if (navigator.vibrate) navigator.vibrate(10);
+    if (haptic && navigator.vibrate) navigator.vibrate(10);
   }
 
   async function jsonRequest(path, options) {
@@ -875,7 +1017,7 @@ export const REMOTE_JS = `(() => {
     }
     searchQuery.value = "";
     searchQuery.blur();
-    searchLabel.textContent = "Search your services";
+    searchLabel.textContent = currentSearchLabel;
     searchQuery.placeholder = "Title, person, or topic";
     searchPanel.hidden = true;
     document.body.classList.remove("is-typing");
@@ -928,6 +1070,7 @@ export const REMOTE_JS = `(() => {
       const result = await jsonRequest("/api/apps", {
         headers: { "Authorization": "Bearer " + controllerToken }
       });
+      renderContext(result.context);
       quickLaunchEmpty.textContent = "Open an app on NHD-TV and it will appear here.";
       renderRecentApps(result.services);
     } catch (error) {
@@ -945,7 +1088,7 @@ export const REMOTE_JS = `(() => {
     if (!controllerToken) return;
     button.disabled = true;
     try {
-      await jsonRequest("/api/launch", {
+      const result = await jsonRequest("/api/launch", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -953,6 +1096,7 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ serviceId: service.id })
       });
+      renderContext(result.context);
       confirmCommand(button);
       closeQuickLaunch();
       setState(service.name + " opened", "connected");
@@ -962,7 +1106,7 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  async function sendAction(action, button) {
+  async function sendAction(action, button, quiet = false) {
     if (document.body.classList.contains("is-typing")) {
       resetTextEntry();
       if (action === "back") {
@@ -988,7 +1132,8 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ action })
       });
-      if (result.handled !== false) confirmCommand(button);
+      renderContext(result.context);
+      if (result.handled !== false) confirmCommand(button, !quiet);
       const feedback = result.detail || button.dataset.feedback;
       if (feedback) setState(feedback, result.handled === false ? "error" : "connected");
     } catch (error) {
@@ -1004,7 +1149,7 @@ export const REMOTE_JS = `(() => {
   async function sendHeartbeat() {
     if (!controllerToken) return;
     try {
-      await jsonRequest("/api/heartbeat", {
+      const result = await jsonRequest("/api/heartbeat", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -1012,6 +1157,7 @@ export const REMOTE_JS = `(() => {
         },
         body: "{}"
       });
+      renderContext(result.context);
     } catch (error) {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
@@ -1024,7 +1170,7 @@ export const REMOTE_JS = `(() => {
     if (!controllerToken) return;
 
     try {
-      await jsonRequest("/api/search", {
+      const result = await jsonRequest("/api/search", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -1032,6 +1178,7 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ query })
       });
+      renderContext(result.context);
       resetTextEntry();
       confirmCommand(searchToggle);
       setState("Search ready on TV", "connected");
@@ -1048,7 +1195,7 @@ export const REMOTE_JS = `(() => {
     }
 
     try {
-      await jsonRequest("/api/text", {
+      const result = await jsonRequest("/api/text", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -1056,6 +1203,7 @@ export const REMOTE_JS = `(() => {
         },
         body: JSON.stringify({ submit, text })
       });
+      renderContext(result.context);
       setState(submit ? "Search sent to TV" : "Typing on TV", "connected");
       if (submit) {
         resetTextEntry();
@@ -1089,6 +1237,7 @@ export const REMOTE_JS = `(() => {
     }
     controlMode.classList.toggle("is-precision", enabled);
     controlMode.setAttribute("aria-label", enabled ? "Use arrow buttons" : "Use precision pointer");
+    controlModeCopy.textContent = enabled ? "Arrows" : "Pointer";
     showNavigationMode();
   }
 
@@ -1304,7 +1453,7 @@ export const REMOTE_JS = `(() => {
     }
     closeQuickLaunch();
     resetTextEntry();
-    searchLabel.textContent = "Search your services";
+    searchLabel.textContent = currentSearchLabel;
     searchQuery.placeholder = "Title, person, or topic";
     searchPanel.hidden = false;
     document.body.classList.add("is-typing");
@@ -1347,15 +1496,39 @@ export const REMOTE_JS = `(() => {
   });
 
   buttons.forEach((button) => {
-    const release = () => {
+    let directionHoldTimer = null;
+    let directionRepeatTimer = null;
+    let pointerDispatched = false;
+    const stopDirectionRepeat = () => {
+      if (directionHoldTimer !== null) clearTimeout(directionHoldTimer);
+      if (directionRepeatTimer !== null) clearInterval(directionRepeatTimer);
+      directionHoldTimer = null;
+      directionRepeatTimer = null;
+      button.classList.remove("is-repeating");
+    };
+    const release = (expectClick) => {
       button.classList.remove("is-pressed");
+      stopDirectionRepeat();
+      if (!expectClick) pointerDispatched = false;
       if (button.dataset.action === "back" && backHoldTimer !== null) {
         clearTimeout(backHoldTimer);
         backHoldTimer = null;
       }
     };
-    button.addEventListener("pointerdown", () => {
+    button.addEventListener("pointerdown", (event) => {
+      if (button.disabled || event.isPrimary === false) return;
       button.classList.add("is-pressed");
+      if (button.dataset.repeat === "true") {
+        pointerDispatched = true;
+        void sendAction(button.dataset.action, button);
+        directionHoldTimer = setTimeout(() => {
+          directionHoldTimer = null;
+          button.classList.add("is-repeating");
+          directionRepeatTimer = setInterval(() => {
+            void sendAction(button.dataset.action, button, true);
+          }, DIRECTION_REPEAT_INTERVAL_MS);
+        }, DIRECTION_REPEAT_DELAY_MS);
+      }
       if (button.dataset.action === "back") {
         backHoldTriggered = false;
         if (backHoldTimer !== null) clearTimeout(backHoldTimer);
@@ -1367,10 +1540,14 @@ export const REMOTE_JS = `(() => {
         }, 1_200);
       }
     });
-    button.addEventListener("pointerup", release);
-    button.addEventListener("pointercancel", release);
-    button.addEventListener("pointerleave", release);
+    button.addEventListener("pointerup", () => release(true));
+    button.addEventListener("pointercancel", () => release(false));
+    button.addEventListener("pointerleave", () => release(false));
     button.addEventListener("click", () => {
+      if (button.dataset.repeat === "true" && pointerDispatched) {
+        pointerDispatched = false;
+        return;
+      }
       if (button.dataset.action === "back" && backHoldTriggered) {
         backHoldTriggered = false;
         return;

@@ -324,6 +324,20 @@
               <small id="motion-copy">Off</small>
             </span>
           </button>
+          <button class="settings-card settings-card-accent" id="youtube-tv-toggle" type="button" aria-pressed="true">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">YT</span>
+            <span>
+              <strong>YouTube TV Mode</strong>
+              <small id="youtube-tv-copy">On · remote-friendly layout</small>
+            </span>
+          </button>
+          <button class="settings-card" id="youtube-tv-scale" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">SIZE</span>
+            <span>
+              <strong>YouTube interface size</strong>
+              <small id="youtube-tv-scale-copy">Standard</small>
+            </span>
+          </button>
         </section>
 
         <section class="settings-row settings-row-secondary horizontal-row" aria-label="Ambient display settings" data-nav-group="settings-ambient">
@@ -444,6 +458,27 @@
         <button class="primary-action remote-start" id="remote-start" type="button">
           Create pairing code
         </button>
+      </div>
+    </dialog>
+
+    <dialog class="remote-dialog" id="gamepad-dialog" aria-labelledby="gamepad-title">
+      <div class="remote-dialog-shell gamepad-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">Input diagnostics</p>
+            <h2 id="gamepad-title">Controller test</h2>
+          </div>
+          <button class="dialog-close" id="gamepad-close" type="button" aria-label="Close controller test">×</button>
+        </header>
+        <p class="remote-detail" id="gamepad-diagnostic-status" role="status" aria-live="polite">
+          Connect a controller, then press its D-pad and buttons.
+        </p>
+        <div class="controller-readout">
+          <span>Last mapped input</span>
+          <strong id="gamepad-last-action">Waiting…</strong>
+        </div>
+        <p class="remote-safety">Expected standard mapping: D-pad or left stick moves, primary selects, secondary goes back, and holding Back returns Home. NHD-TV owns controller input inside hosted YouTube to prevent duplicate moves.</p>
+        <button class="primary-action remote-start" id="gamepad-done" type="button">Done</button>
       </div>
     </dialog>
 

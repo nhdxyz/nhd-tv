@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "test": "vitest run",
     "verify:build": "node scripts/verify-build.mjs",
+    "verify:youtube-tv": "electron scripts/verify-youtube-tv-extension.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "start": "electron .",
     "dev": "pnpm build && electron . --devtools",

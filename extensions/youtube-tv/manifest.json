@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "NHD YouTube TV Mode",
+  "version": "0.5.0",
+  "description": "A remote-friendly presentation and navigation layer for the real YouTube desktop website.",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "YouTube TV Mode"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/selectors.js",
+        "src/navigation.js",
+        "src/content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "styles/tv.css"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ]
+    }
+  ]
+}

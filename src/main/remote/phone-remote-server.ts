@@ -9,6 +9,7 @@ import { networkInterfaces } from "node:os";
 import QRCode from "qrcode";
 import type {
   RemoteAction,
+  RemoteControlContext,
   RemotePointerInput,
   RemotePointerResult,
   RemoteServiceShortcut,
@@ -42,6 +43,7 @@ export interface PhoneRemoteServerOptions {
     { detail?: string; handled: boolean } |
     Promise<{ detail?: string; handled: boolean }>;
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
+  onGetContext: () => RemoteControlContext | Promise<RemoteControlContext>;
   onGetRecentServices: () =>
     readonly RemoteServiceShortcut[] |
     Promise<readonly RemoteServiceShortcut[]>;
@@ -149,6 +151,7 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
+  readonly #onGetContext: PhoneRemoteServerOptions["onGetContext"];
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
   readonly #onGetRecentServices: PhoneRemoteServerOptions["onGetRecentServices"];
   readonly #onLaunchService: PhoneRemoteServerOptions["onLaunchService"];
@@ -166,6 +169,7 @@ export class PhoneRemoteServer {
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
+    this.#onGetContext = options.onGetContext;
     this.#onGetRecentServices = options.onGetRecentServices;
     this.#onLaunchService = options.onLaunchService;
     this.#onPointer = options.onPointer;
@@ -399,8 +403,11 @@ export class PhoneRemoteServer {
         return;
       }
 
-      const services = [...await this.#onGetRecentServices()].slice(0, 3);
-      writeJson(response, 200, { services });
+      const [services, context] = await Promise.all([
+        this.#onGetRecentServices(),
+        this.#onGetContext()
+      ]);
+      writeJson(response, 200, { context, services: [...services].slice(0, 3) });
       return;
     }
 
@@ -434,7 +441,7 @@ export class PhoneRemoteServer {
       }
 
       const result = await this.#onAction(action);
-      writeJson(response, 200, { ok: true, ...result });
+      writeJson(response, 200, { context: await this.#onGetContext(), ok: true, ...result });
       return;
     }
 
@@ -472,7 +479,11 @@ export class PhoneRemoteServer {
         return;
       }
 
-      writeJson(response, 200, { handled: true, ok: true });
+      writeJson(response, 200, {
+        context: await this.#onGetContext(),
+        handled: true,
+        ok: true
+      });
       return;
     }
 
@@ -500,7 +511,7 @@ export class PhoneRemoteServer {
       }
 
       await this.#onSearch(query);
-      writeJson(response, 200, { ok: true });
+      writeJson(response, 200, { context: await this.#onGetContext(), ok: true });
       return;
     }
 
@@ -576,7 +587,7 @@ export class PhoneRemoteServer {
         return;
       }
 
-      writeJson(response, 200, { ok: true });
+      writeJson(response, 200, { context: await this.#onGetContext(), ok: true });
       return;
     }
 
@@ -602,7 +613,7 @@ export class PhoneRemoteServer {
         return;
       }
 
-      writeJson(response, 200, { ok: true });
+      writeJson(response, 200, { context: await this.#onGetContext(), ok: true });
       return;
     }
 

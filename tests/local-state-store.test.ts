@@ -39,7 +39,9 @@ describe("local profile state", () => {
         fullscreen: true,
         reducedMotion: false,
         safeArea: "standard",
-        selectedDisplayId: null
+        selectedDisplayId: null,
+        youtubeTvModeEnabled: true,
+        youtubeTvScale: "standard"
       },
       preferences: {
         enabledServiceIds: ["netflix", "youtube", "disney-plus"],
@@ -114,7 +116,9 @@ describe("local profile state", () => {
       fullscreen: false,
       reducedMotion: true,
       safeArea: "compact",
-      selectedDisplayId: "42"
+      selectedDisplayId: "42",
+      youtubeTvModeEnabled: false,
+      youtubeTvScale: "large"
     });
     await store.selectProfile("default");
 
@@ -128,7 +132,9 @@ describe("local profile state", () => {
       fullscreen: false,
       reducedMotion: true,
       safeArea: "compact",
-      selectedDisplayId: "42"
+      selectedDisplayId: "42",
+      youtubeTvModeEnabled: false,
+      youtubeTvScale: "large"
     });
   });
 

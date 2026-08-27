@@ -88,7 +88,11 @@ function devicePreferences(value: unknown): DevicePreferences {
       : "standard",
     selectedDisplayId: typeof candidate.selectedDisplayId === "string"
       ? candidate.selectedDisplayId
-      : null
+      : null,
+    youtubeTvModeEnabled: candidate.youtubeTvModeEnabled !== false,
+    youtubeTvScale: candidate.youtubeTvScale === "compact" || candidate.youtubeTvScale === "large"
+      ? candidate.youtubeTvScale
+      : "standard"
   };
 }
 

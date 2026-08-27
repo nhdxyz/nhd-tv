@@ -24,6 +24,7 @@ import {
   type ProfilePreferences,
   type ProcessDiagnostics,
   type RemoteAction,
+  type RemoteControlContext,
   type RemotePointerInput,
   type RemotePointerResult,
   type RemoteServiceShortcut,
@@ -98,6 +99,11 @@ protocol.registerSchemesAsPrivileged([
 
 app.enableSandbox();
 
+const ownsSingleInstanceLock = app.requestSingleInstanceLock();
+if (!ownsSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 let continueWatchingStore: ContinueWatchingStore | null = null;
 let localStateStore: LocalStateStore | null = null;
@@ -125,6 +131,37 @@ const catalogCache = new Map<string, {
   results: readonly CatalogSearchResult[];
 }>();
 const catalogImageCache = new Map<string, string | null>();
+
+function presentMainWindow(): void {
+  const window = mainWindow;
+  if (window === null || window.isDestroyed()) {
+    return;
+  }
+
+  if (window.isMinimized()) {
+    window.restore();
+  }
+
+  // Fullscreen windows can be created on a remembered television display or
+  // macOS Space without becoming the foreground application. Explicitly
+  // activate and focus the host so a launch request always presents NHD-TV.
+  if (process.platform === "darwin") {
+    app.focus({ steal: true });
+  }
+  window.show();
+  window.focus();
+  markAmbientActivity();
+}
+
+function youtubeTvPreferencesFor(
+  preferences: LocalAppState["devicePreferences"] | undefined
+) {
+  return {
+    enabled: preferences?.youtubeTvModeEnabled !== false,
+    safeArea: preferences?.safeArea ?? "standard",
+    scale: preferences?.youtubeTvScale ?? "standard"
+  } as const;
+}
 
 function dismissAmbientDisplay(): void {
   if (!ambientDisplayVisible) {
@@ -657,6 +694,20 @@ function recentRemoteServices(): RemoteServiceShortcut[] {
     .map(({ id, name }) => ({ id, name }));
 }
 
+function remoteControlContext(): RemoteControlContext {
+  const activeServiceId = serviceHost?.activeServiceId ?? null;
+  const definition = activeServiceId === null ? null : getServiceDefinition(activeServiceId);
+  const activeServiceName = definition?.name ?? "NHD Home";
+
+  return {
+    activeServiceId,
+    activeServiceName,
+    searchLabel: definition?.search === null || definition === null
+      ? "Search NHD-TV"
+      : `Search ${activeServiceName}`
+  };
+}
+
 async function handleRemoteServiceLaunch(serviceId: string): Promise<boolean> {
   if (ambientDisplayVisible) {
     markAmbientActivity();
@@ -976,6 +1027,7 @@ function registerIpc(): void {
       const state = await localStateStore.updateDevicePreferences(preferences);
       markAmbientActivity();
       mainWindow?.setFullScreen(state.devicePreferences.fullscreen);
+      serviceHost?.setYouTubeTvPreferences(youtubeTvPreferencesFor(state.devicePreferences));
       publishHostStatus();
       return state;
     }
@@ -1254,10 +1306,12 @@ async function createMainWindow(): Promise<void> {
     },
     publishServiceRecovery,
     handlePlaybackObservation,
-    (action) => void systemVolumeController.apply(action)
+    (action) => void systemVolumeController.apply(action),
+    youtubeTvPreferencesFor(devicePreferences)
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
+    onGetContext: remoteControlContext,
     onGetRecentServices: recentRemoteServices,
     onLaunchService: handleRemoteServiceLaunch,
     onPointer: handleRemotePointer,
@@ -1298,7 +1352,7 @@ async function createMainWindow(): Promise<void> {
   });
 
   await mainWindow.loadURL("app://shell/index.html");
-  mainWindow.show();
+  presentMainWindow();
   startAmbientDisplayMonitor();
 
   if (process.argv.includes("--devtools")) {
@@ -1306,7 +1360,19 @@ async function createMainWindow(): Promise<void> {
   }
 }
 
+app.on("second-instance", () => {
+  presentMainWindow();
+});
+
+app.on("activate", () => {
+  presentMainWindow();
+});
+
 app.whenReady().then(async () => {
+  if (!ownsSingleInstanceLock) {
+    return;
+  }
+
   registerShellProtocol();
   configureShellSession();
   const serviceDefinitions = getServiceDefinitions();

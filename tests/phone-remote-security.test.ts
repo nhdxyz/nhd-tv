@@ -52,6 +52,7 @@ describe("phone remote boundary", () => {
   });
 
   it("exposes only the bounded search text field and no credential controls", () => {
+    expect(() => new Function(REMOTE_JS)).not.toThrow();
     expect(REMOTE_HTML.match(/<input\b/g)).toHaveLength(1);
     expect(REMOTE_HTML).toContain('type="search"');
     expect(REMOTE_HTML).toContain('maxlength="120"');
@@ -82,7 +83,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).not.toContain("⌂");
   });
 
-  it("fills the phone viewport and keeps icon-only system actions in the top corners", () => {
+  it("fills the phone viewport, exposes live context, and keeps system actions in the top corners", () => {
     expect(REMOTE_CSS).toContain("height: 100dvh");
     expect(REMOTE_CSS).toContain(".remote-shell {");
     expect(REMOTE_CSS).toContain("height: 100%;");
@@ -93,7 +94,12 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
     expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(10);
     expect(REMOTE_HTML).not.toContain(">Back<");
-    expect(REMOTE_HTML).not.toContain(">NHD Home<");
+    expect(REMOTE_HTML).toContain('id="active-service-label">NHD Home<');
+    expect(REMOTE_HTML).toContain('class="remote-context" aria-live="polite"');
+    expect(REMOTE_HTML).toContain('class="brand-wordmark"');
+    expect(REMOTE_CSS).toContain("background: #090909;");
+    expect(REMOTE_CSS).toContain("border: 2px solid var(--accent);");
+    expect(REMOTE_CSS).not.toContain("--accent-glow");
   });
 
   it("prevents accidental viewport and trackpad zoom on the appliance remote", () => {
@@ -105,7 +111,7 @@ describe("phone remote boundary", () => {
 
   it("confirms accepted commands with optional haptic feedback", () => {
     const commandRequest = REMOTE_JS.indexOf('await jsonRequest("/api/command"');
-    const confirmation = REMOTE_JS.indexOf("confirmCommand(button);", commandRequest);
+    const confirmation = REMOTE_JS.indexOf("confirmCommand(button, !quiet);", commandRequest);
 
     expect(commandRequest).toBeGreaterThan(-1);
     expect(confirmation).toBeGreaterThan(commandRequest);
@@ -156,9 +162,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('id="quick-launch-toggle"');
     expect(REMOTE_HTML).toContain('id="quick-launch-panel"');
     expect(REMOTE_HTML).toContain('id="quick-launch-list"');
-    expect(REMOTE_HTML).not.toContain(">Apps<");
-    expect(REMOTE_HTML).not.toContain(">Pointer<");
-    expect(REMOTE_HTML).not.toContain(">Search<");
+    expect(REMOTE_HTML).toContain(">Apps<");
+    expect(REMOTE_HTML).toContain('id="control-mode-copy">Pointer<');
+    expect(REMOTE_HTML).toContain('id="search-toggle-copy">Search<');
     expect(REMOTE_JS).toContain('jsonRequest("/api/apps"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/launch"');
     expect(REMOTE_JS).toContain("body: JSON.stringify({ serviceId: service.id })");
@@ -168,6 +174,26 @@ describe("phone remote boundary", () => {
     expect(serverSource).toContain('url.pathname === "/api/launch"');
     expect(serverSource).toContain("Object.keys(body).some((key) => key !== \"serviceId\")");
     expect(REMOTE_JS).not.toContain("startUrl");
+  });
+
+  it("keeps the remote synchronized with the active service without exposing page data", () => {
+    expect(REMOTE_JS).toContain("function renderContext(context)");
+    expect(REMOTE_JS).toContain("activeServiceLabel.textContent = serviceName");
+    expect(REMOTE_JS).toContain("document.body.dataset.activeService = serviceId");
+    expect(REMOTE_JS).toContain('searchToggle.setAttribute("aria-label", currentSearchLabel)');
+    expect(serverSource).toContain('onGetContext: () => RemoteControlContext');
+    expect(serverSource).toContain("context: await this.#onGetContext()");
+    expect(serverSource).not.toContain("watchTitle");
+    expect(serverSource).not.toContain("currentUrl");
+  });
+
+  it("repeats held directions at a controlled television-navigation cadence", () => {
+    expect(REMOTE_HTML.match(/data-repeat="true"/g)).toHaveLength(4);
+    expect(REMOTE_JS).toContain("DIRECTION_REPEAT_DELAY_MS = 380");
+    expect(REMOTE_JS).toContain("DIRECTION_REPEAT_INTERVAL_MS = 115");
+    expect(REMOTE_JS).toContain("directionRepeatTimer = setInterval");
+    expect(REMOTE_JS).toContain("sendAction(button.dataset.action, button, true)");
+    expect(REMOTE_JS).toContain("clearInterval(directionRepeatTimer)");
   });
 
   it("keeps arrows as the default and offers a bounded relative precision pad", () => {

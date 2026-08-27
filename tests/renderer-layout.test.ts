@@ -44,6 +44,14 @@ describe("TV catalog layout", () => {
     expect(css).toContain(".quit-dialog::backdrop");
   });
 
+  it("exposes couch-accessible YouTube TV and controller diagnostics settings", () => {
+    expect(html).toContain('id="youtube-tv-toggle"');
+    expect(html).toContain('id="youtube-tv-scale"');
+    expect(html).toContain('id="gamepad-dialog"');
+    expect(html).toContain('id="gamepad-last-action"');
+    expect(css).toContain(".controller-readout");
+  });
+
   it("offers multiple ambient clock styles with a burn-in-conscious full-screen surface", () => {
     expect(html).toContain('id="ambient-display-toggle"');
     expect(html).toContain('id="ambient-clock-style"');

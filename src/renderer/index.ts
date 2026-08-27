@@ -109,7 +109,12 @@ const elements = {
   featuredTitle: requireElement<HTMLHeadingElement>("#featured-title", "featured-title"),
   feedback: requireElement<HTMLParagraphElement>("#feedback", "feedback"),
   gamepadCard: requireElement<HTMLButtonElement>("#gamepad-card", "gamepad-card"),
+  gamepadClose: requireElement<HTMLButtonElement>("#gamepad-close", "gamepad-close"),
   gamepadCopy: requireElement<HTMLElement>("#gamepad-copy", "gamepad-copy"),
+  gamepadDiagnosticStatus: requireElement<HTMLElement>("#gamepad-diagnostic-status", "gamepad-diagnostic-status"),
+  gamepadDialog: requireElement<HTMLDialogElement>("#gamepad-dialog", "gamepad-dialog"),
+  gamepadDone: requireElement<HTMLButtonElement>("#gamepad-done", "gamepad-done"),
+  gamepadLastAction: requireElement<HTMLElement>("#gamepad-last-action", "gamepad-last-action"),
   fullscreenCopy: requireElement<HTMLElement>("#fullscreen-copy", "fullscreen-copy"),
   fullscreenToggle: requireElement<HTMLButtonElement>("#fullscreen-toggle", "fullscreen-toggle"),
   healthPill: requireElement<HTMLSpanElement>("#health-pill", "health-pill"),
@@ -186,7 +191,11 @@ const elements = {
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
   topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
   utilityStoreActions: requireElement<HTMLDivElement>("#utility-store-actions", "utility-store-actions"),
-  widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status")
+  widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status"),
+  youtubeTvCopy: requireElement<HTMLElement>("#youtube-tv-copy", "youtube-tv-copy"),
+  youtubeTvScale: requireElement<HTMLButtonElement>("#youtube-tv-scale", "youtube-tv-scale"),
+  youtubeTvScaleCopy: requireElement<HTMLElement>("#youtube-tv-scale-copy", "youtube-tv-scale-copy"),
+  youtubeTvToggle: requireElement<HTMLButtonElement>("#youtube-tv-toggle", "youtube-tv-toggle")
 };
 
 const navigationSounds = new NavigationSounds();
@@ -211,6 +220,7 @@ let pendingServiceAction: "clear" | "remove-custom" = "clear";
 let remoteFocusedElement: HTMLElement | null = null;
 let serviceOrder: string[] = [];
 let services: readonly ServiceSummary[] = [];
+let connectedGamepads: readonly GamepadLike[] = [];
 
 function showFeedback(message: string): void {
   elements.feedback.textContent = message;
@@ -366,6 +376,15 @@ function applyLocalAppState(state: LocalAppState): void {
   elements.remoteAutoConnectCopy.textContent = state.devicePreferences.autoApproveFirstRemote
     ? "On · first scan connects when no remote is active"
     : "Off · approve every new phone on the TV";
+  elements.youtubeTvToggle.setAttribute(
+    "aria-pressed",
+    String(state.devicePreferences.youtubeTvModeEnabled)
+  );
+  elements.youtubeTvCopy.textContent = state.devicePreferences.youtubeTvModeEnabled
+    ? "On · remote-friendly layout"
+    : "Off · ordinary YouTube";
+  elements.youtubeTvScaleCopy.textContent =
+    `${state.devicePreferences.youtubeTvScale[0]?.toUpperCase() ?? "S"}${state.devicePreferences.youtubeTvScale.slice(1)}`;
 }
 
 async function saveProfilePreferences(): Promise<void> {
@@ -1900,6 +1919,22 @@ elements.safeAreaToggle.addEventListener("click", () => {
     .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
 });
 
+elements.youtubeTvToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.youtubeTvModeEnabled ?? true);
+  void saveDevicePreferences({ youtubeTvModeEnabled: enabled })
+    .then(() => showFeedback(`YouTube TV Mode ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.youtubeTvScale.addEventListener("click", () => {
+  const values = ["compact", "standard", "large"] as const;
+  const current = localAppState?.devicePreferences.youtubeTvScale ?? "standard";
+  const next = values[(values.indexOf(current) + 1) % values.length] ?? "standard";
+  void saveDevicePreferences({ youtubeTvScale: next })
+    .then(() => showFeedback(`YouTube interface size set to ${next}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
 elements.displayCard.addEventListener("click", () => {
   void window.nhd.cycleDisplay()
     .then((state) => {
@@ -1945,6 +1980,10 @@ function activeNavigationScope(): ParentNode {
 
   if (elements.remoteDialog.open) {
     return elements.remoteDialog;
+  }
+
+  if (elements.gamepadDialog.open) {
+    return elements.gamepadDialog;
   }
 
   if (elements.profileDialog.open) {
@@ -2019,6 +2058,10 @@ function returnHome(remote = false): void {
     elements.remoteDialog.close();
   }
 
+  if (elements.gamepadDialog.open) {
+    elements.gamepadDialog.close();
+  }
+
   if (elements.profileDialog.open) {
     elements.profileDialog.close();
   }
@@ -2077,6 +2120,9 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
   } else if (elements.remoteDialog.open) {
     elements.remoteDialog.close();
+    event.preventDefault();
+  } else if (elements.gamepadDialog.open) {
+    elements.gamepadDialog.close();
     event.preventDefault();
   } else if (elements.appManageDialog.open) {
     closeAppManageDialog();
@@ -2152,6 +2198,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
       return;
     }
 
+    if (elements.gamepadDialog.open) {
+      elements.gamepadDialog.close();
+      return;
+    }
+
     if (elements.profileDialog.open) {
       elements.profileDialog.close();
       return;
@@ -2188,6 +2239,7 @@ function handleShellRemoteAction(action: RemoteAction): void {
 }
 
 function renderGamepadStatus(gamepads: readonly GamepadLike[]): void {
+  connectedGamepads = gamepads;
   const connected = gamepads.length;
   elements.gamepadCard.dataset.connected = String(connected > 0);
   elements.gamepadCopy.textContent = connected === 0
@@ -2195,10 +2247,22 @@ function renderGamepadStatus(gamepads: readonly GamepadLike[]): void {
     : connected === 1
       ? gamepads[0]?.id || "1 controller connected"
       : `${connected} controllers connected`;
+  elements.gamepadDiagnosticStatus.textContent = connected === 0
+    ? "No controller detected. Connect one and press a button."
+    : gamepads.map((gamepad) =>
+      `${gamepad.id || `Controller ${gamepad.index + 1}`} · ${gamepad.mapping || "non-standard mapping"}`
+    ).join(" · ");
 }
 
 const gamepadInput = new GamepadInput(
   (action) => {
+    if (elements.gamepadDialog.open) {
+      elements.gamepadLastAction.textContent = action;
+      if (action === "back" || action === "force-home" || action === "home") {
+        elements.gamepadDialog.close();
+      }
+      return;
+    }
     void window.nhd.sendInputAction(action).catch((error: unknown) => {
       showFeedback(error instanceof Error ? error.message : String(error));
     });
@@ -2207,8 +2271,13 @@ const gamepadInput = new GamepadInput(
 );
 
 elements.gamepadCard.addEventListener("click", () => {
-  showFeedback("Controller: D-pad or left stick to move, A to select, B to go back, Guide for Home.");
+  renderGamepadStatus(connectedGamepads);
+  elements.gamepadLastAction.textContent = "Waiting…";
+  elements.gamepadDialog.showModal();
+  elements.gamepadDone.focus();
 });
+elements.gamepadClose.addEventListener("click", () => elements.gamepadDialog.close());
+elements.gamepadDone.addEventListener("click", () => elements.gamepadDialog.close());
 
 async function cancelServiceQuit(): Promise<void> {
   if (elements.quitDialog.open) {

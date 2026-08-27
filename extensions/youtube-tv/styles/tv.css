@@ -1,0 +1,819 @@
+html.nhdtv-tv-mode {
+  --nhdtv-bg: #0b0b0d;
+  --nhdtv-card-gap: clamp(18px, 1.5vw, 34px);
+  --nhdtv-content-edge: clamp(24px, 2.5vw, 56px);
+  --nhdtv-focus: #ffffff;
+  --nhdtv-focus-shadow: 0 0 0 3px rgb(0 0 0 / 92%), 0 8px 34px rgb(0 0 0 / 52%);
+  --nhdtv-header-height: 88px;
+  --nhdtv-rail-compact: 104px;
+  --nhdtv-rail-expanded: 310px;
+  background: var(--nhdtv-bg) !important;
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  --ytd-toolbar-height: var(--nhdtv-header-height) !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-safe-area="compact"] {
+  --nhdtv-content-edge: clamp(18px, 1.6vw, 36px);
+}
+
+html.nhdtv-tv-mode[data-nhdtv-safe-area="wide"] {
+  --nhdtv-content-edge: clamp(42px, 4vw, 104px);
+}
+
+html.nhdtv-tv-mode[data-nhdtv-scale="compact"] {
+  --nhdtv-card-gap: clamp(15px, 1.15vw, 27px);
+}
+
+html.nhdtv-tv-mode[data-nhdtv-scale="large"] {
+  --nhdtv-card-gap: clamp(22px, 1.8vw, 42px);
+  --nhdtv-header-height: 102px;
+  --nhdtv-rail-compact: 118px;
+  --nhdtv-rail-expanded: 350px;
+}
+
+html.nhdtv-tv-mode body,
+html.nhdtv-tv-mode ytd-app,
+html.nhdtv-tv-mode #page-manager {
+  background: var(--nhdtv-bg) !important;
+}
+
+html.nhdtv-tv-mode ytd-app {
+  --ytd-toolbar-height: var(--nhdtv-header-height) !important;
+}
+
+html.nhdtv-tv-mode body {
+  font-size: 18px !important;
+  overscroll-behavior: none;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-scale="compact"] body { font-size: 16px !important; }
+html.nhdtv-tv-mode[data-nhdtv-scale="large"] body { font-size: 21px !important; }
+
+/* Header and deterministic living-room navigation rail. */
+html.nhdtv-tv-mode ytd-masthead {
+  min-height: var(--nhdtv-header-height) !important;
+}
+
+html.nhdtv-tv-mode ytd-masthead #container {
+  left: var(--nhdtv-rail-compact) !important;
+  width: calc(100% - var(--nhdtv-rail-compact)) !important;
+  box-sizing: border-box !important;
+  transform: translateX(var(--nhdtv-rail-compact)) !important;
+  height: var(--nhdtv-header-height) !important;
+  padding-inline: 24px 34px !important;
+  background: linear-gradient(180deg, #0b0b0e 72%, rgb(11 11 14 / 88%)) !important;
+}
+
+html.nhdtv-tv-mode ytd-masthead #logo-icon,
+html.nhdtv-tv-mode ytd-masthead ytd-topbar-logo-renderer {
+  transform: scale(1.12);
+  transform-origin: left center;
+}
+
+html.nhdtv-tv-mode ytd-masthead #guide-button,
+html.nhdtv-tv-mode ytd-mini-guide-renderer,
+html.nhdtv-tv-mode ytd-app #guide {
+  display: none !important;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-rail {
+  position: fixed;
+  z-index: 2200 !important;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--nhdtv-rail-compact) !important;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 12px 24px;
+  overflow: clip !important;
+  color: #f5f5f7;
+  background: #0c0c0f !important;
+  box-shadow: 18px 0 38px transparent;
+  transition: width 150ms ease-out, box-shadow 150ms ease-out !important;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-rail:focus-within {
+  width: var(--nhdtv-rail-expanded) !important;
+  box-shadow: 20px 0 38px rgb(0 0 0 / 48%);
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-brand {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-inline: 14px;
+  box-sizing: border-box;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-brand-mark {
+  width: 42px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 2px solid #f5f5f7;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-brand-label {
+  opacity: 0;
+  font-size: 21px;
+  font-weight: 720;
+  transition: opacity 90ms linear;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-items {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-item {
+  position: relative;
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 68px !important;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 25px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 14px !important;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-label {
+  max-width: 190px !important;
+  opacity: 0;
+  font-size: 18px !important;
+  font-weight: 650 !important;
+  white-space: nowrap;
+  transition: opacity 90ms linear !important;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-rail:focus-within .nhdtv-tv-rail-label,
+html.nhdtv-tv-mode #nhdtv-tv-rail:focus-within .nhdtv-tv-rail-brand-label {
+  opacity: 1;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-icon {
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px;
+  fill: currentColor;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-item[aria-current="page"] {
+  color: #fff;
+  background: #28282d;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-item[aria-current="page"]::after {
+  position: absolute;
+  left: 4px;
+  width: 5px;
+  height: 32px;
+  border-radius: 5px;
+  background: #fff;
+  content: "";
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-hint {
+  width: 100%;
+  min-width: 0;
+  padding: 0 16px;
+  opacity: 0;
+  color: #aaaab1;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: opacity 90ms linear;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-rail:focus-within .nhdtv-tv-rail-hint {
+  opacity: 1;
+}
+
+html.nhdtv-tv-mode ytd-page-manager,
+html.nhdtv-tv-mode #page-manager {
+  margin-left: var(--nhdtv-rail-compact) !important;
+}
+
+/* HTML fullscreen is a player-only surface. Remove the TV shell and every
+   layout reservation before sizing YouTube's official player to the viewport. */
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] #nhdtv-tv-rail,
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] ytd-masthead {
+  display: none !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] ytd-page-manager,
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] #page-manager {
+  margin-left: 0 !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] :fullscreen,
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] #movie_player.ytp-fullscreen,
+html.nhdtv-tv-mode[data-nhdtv-fullscreen="true"] .html5-video-player.ytp-fullscreen {
+  inset: 0 !important;
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+/* Page identity and YouTube's real category chips remain visible below the taller TV masthead. */
+html.nhdtv-tv-mode ytd-rich-grid-renderer > #header {
+  display: block !important;
+  min-height: 0 !important;
+  padding-inline: var(--nhdtv-content-edge) !important;
+  background: var(--nhdtv-bg) !important;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-page-heading {
+  display: grid;
+  gap: 7px;
+  padding: clamp(18px, 2.8vh, 34px) 0 12px;
+}
+
+html.nhdtv-tv-mode ytd-browse > #nhdtv-tv-page-heading,
+html.nhdtv-tv-mode ytd-search #primary > #nhdtv-tv-page-heading {
+  padding-inline: var(--nhdtv-content-edge);
+}
+
+html.nhdtv-tv-mode ytd-search #primary > #nhdtv-tv-page-heading {
+  padding-top: clamp(18px, 2.6vh, 34px);
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-page-eyebrow {
+  color: #aeb0b8;
+  font-size: clamp(17px, 1vw, 22px);
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+html.nhdtv-tv-mode #nhdtv-tv-page-title {
+  margin: 0;
+  color: #f7f7f8;
+  font-size: clamp(38px, 2.7vw, 62px);
+  font-weight: 750;
+  line-height: 1.08;
+}
+
+html.nhdtv-tv-mode ytd-feed-filter-chip-bar-renderer,
+html.nhdtv-tv-mode yt-chip-cloud-renderer {
+  min-height: 60px !important;
+  padding-inline: 0 !important;
+  background: var(--nhdtv-bg) !important;
+}
+
+html.nhdtv-tv-mode ytd-feed-filter-chip-bar-renderer [role="tab"],
+html.nhdtv-tv-mode yt-chip-cloud-renderer [role="tab"],
+html.nhdtv-tv-mode [role="tablist"] [role="tab"] {
+  min-width: 82px !important;
+  min-height: 44px !important;
+  margin-inline: 4px !important;
+  padding-inline: 16px !important;
+  border-radius: 12px !important;
+  font-size: 17px !important;
+  font-weight: 650 !important;
+}
+
+/* Search remains YouTube's real input and keeps normal text behavior. */
+html.nhdtv-tv-mode ytd-masthead #center {
+  flex: 0 1 min(760px, 48vw) !important;
+}
+
+html.nhdtv-tv-mode ytd-searchbox,
+html.nhdtv-tv-mode yt-searchbox {
+  min-height: 56px !important;
+  font-size: 21px !important;
+}
+
+html.nhdtv-tv-mode ytd-searchbox input,
+html.nhdtv-tv-mode yt-searchbox input,
+html.nhdtv-tv-mode input[name="search_query"] {
+  min-height: 52px !important;
+  font-size: 21px !important;
+}
+
+html.nhdtv-tv-mode ytd-masthead button,
+html.nhdtv-tv-mode ytd-masthead [role="button"] {
+  min-width: 52px;
+  min-height: 52px;
+}
+
+/* Browse pages: a TV-legible recommendation grid without hiding most of the
+   personalized first row below oversized cards. */
+html.nhdtv-tv-mode ytd-browse,
+html.nhdtv-tv-mode ytd-search,
+html.nhdtv-tv-mode ytd-rich-grid-renderer {
+  --ytd-rich-grid-items-per-row: 4 !important;
+  --ytd-rich-grid-posts-per-row: 4 !important;
+  --ytd-rich-grid-item-margin: calc(var(--nhdtv-card-gap) / 2) !important;
+}
+
+html.nhdtv-tv-mode ytd-rich-grid-renderer,
+html.nhdtv-tv-mode ytd-rich-grid-renderer > #contents {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+html.nhdtv-tv-mode ytd-two-column-browse-results-renderer,
+html.nhdtv-tv-mode ytd-two-column-browse-results-renderer > #primary {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+html.nhdtv-tv-mode ytd-rich-grid-renderer > #contents,
+html.nhdtv-tv-mode ytd-section-list-renderer > #contents,
+html.nhdtv-tv-mode ytd-two-column-browse-results-renderer > #primary {
+  padding-inline: var(--nhdtv-content-edge) !important;
+  padding-bottom: 8vh !important;
+}
+
+html.nhdtv-tv-mode ytd-rich-item-renderer[data-nhdtv-card-format="landscape"],
+html.nhdtv-tv-mode ytd-grid-video-renderer,
+html.nhdtv-tv-mode ytd-grid-playlist-renderer,
+html.nhdtv-tv-mode yt-lockup-view-model[data-nhdtv-card-format="landscape"] {
+  margin-bottom: clamp(24px, 3vh, 42px) !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-card="true"] ytd-thumbnail,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] yt-thumbnail-view-model,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] #thumbnail,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] img {
+  border-radius: 16px !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-card="true"] #video-title,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] #video-title-link,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] h3,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] [role="heading"] {
+  max-height: 3.1em !important;
+  margin-top: 12px !important;
+  font-size: clamp(20px, 1.25vw, 29px) !important;
+  font-weight: 650 !important;
+  line-height: 1.28 !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-card="true"] #metadata,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] #metadata-line,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] ytd-channel-name,
+html.nhdtv-tv-mode [data-nhdtv-card="true"] .metadata {
+  font-size: clamp(16px, 0.94vw, 22px) !important;
+  line-height: 1.45 !important;
+}
+
+/* Native YouTube rich sections become horizontally scrollable shelves. */
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] {
+  margin-block: clamp(18px, 3vh, 36px) !important;
+  padding-block: 6px 18px !important;
+  scroll-margin-inline: var(--nhdtv-content-edge);
+}
+
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] h2,
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #title,
+html.nhdtv-tv-mode ytd-rich-grid-renderer #title {
+  font-size: clamp(27px, 1.65vw, 38px) !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #contents,
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #items {
+  scroll-padding-inline: var(--nhdtv-content-edge);
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] [data-nhdtv-card="true"] {
+  scroll-snap-align: center;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #contents::-webkit-scrollbar,
+html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #items::-webkit-scrollbar {
+  display: none;
+}
+
+/* Search results retain their real metadata and actions in an easy-to-scan list. */
+html.nhdtv-tv-mode[data-nhdtv-route="results"] ytd-video-renderer {
+  min-height: 280px !important;
+  margin-block: 0 44px !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="results"] ytd-video-renderer ytd-thumbnail,
+html.nhdtv-tv-mode[data-nhdtv-route="results"] ytd-video-renderer yt-thumbnail-view-model {
+  width: clamp(430px, 34vw, 720px) !important;
+  min-width: clamp(430px, 34vw, 720px) !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="results"] ytd-video-renderer #video-title {
+  font-size: clamp(25px, 1.45vw, 34px) !important;
+  line-height: 1.25 !important;
+}
+
+/* Channel and playlist headers remain official but are legible at TV distance. */
+html.nhdtv-tv-mode ytd-c4-tabbed-header-renderer,
+html.nhdtv-tv-mode ytd-page-header-renderer,
+html.nhdtv-tv-mode ytd-playlist-header-renderer {
+  padding-inline: var(--nhdtv-content-edge) !important;
+}
+
+html.nhdtv-tv-mode ytd-c4-tabbed-header-renderer #channel-name,
+html.nhdtv-tv-mode ytd-page-header-renderer h1,
+html.nhdtv-tv-mode ytd-playlist-header-renderer h1 {
+  font-size: clamp(36px, 2.5vw, 58px) !important;
+}
+
+html.nhdtv-tv-mode ytd-c4-tabbed-header-renderer tp-yt-paper-tab,
+html.nhdtv-tv-mode ytd-two-column-browse-results-renderer tp-yt-paper-tab {
+  min-height: 62px !important;
+  padding-inline: 24px !important;
+  font-size: 18px !important;
+}
+
+/* Watch page: keep the official player and every ad/control untouched. */
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-flexy #columns {
+  gap: clamp(20px, 1.7vw, 36px) !important;
+  padding: 12px var(--nhdtv-content-edge) 8vh !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-flexy #primary {
+  min-width: 0 !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-flexy #secondary {
+  width: clamp(360px, 28vw, 560px) !important;
+  min-width: clamp(360px, 28vw, 560px) !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-metadata h1,
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] h1.ytd-watch-metadata {
+  margin-top: 20px !important;
+  font-size: clamp(29px, 1.65vw, 40px) !important;
+  line-height: 1.22 !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] #owner,
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] #top-row,
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] #bottom-row {
+  min-height: 70px !important;
+  gap: 16px !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-compact-video-renderer {
+  min-height: 128px !important;
+  margin-bottom: 14px !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-compact-video-renderer ytd-thumbnail,
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-compact-video-renderer yt-thumbnail-view-model {
+  width: clamp(190px, 12vw, 260px) !important;
+  min-width: clamp(190px, 12vw, 260px) !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-compact-video-renderer #video-title {
+  font-size: clamp(17px, 0.95vw, 22px) !important;
+  line-height: 1.3 !important;
+}
+
+/* Menus/dialogs use YouTube's own UI, just at TV scale. */
+html.nhdtv-tv-mode dialog,
+html.nhdtv-tv-mode [role="dialog"],
+html.nhdtv-tv-mode tp-yt-paper-dialog,
+html.nhdtv-tv-mode ytd-menu-popup-renderer,
+html.nhdtv-tv-mode ytd-multi-page-menu-renderer {
+  font-size: 19px !important;
+}
+
+html.nhdtv-tv-mode [role="dialog"] button,
+html.nhdtv-tv-mode [role="dialog"] [role="button"],
+html.nhdtv-tv-mode [role="menuitem"],
+html.nhdtv-tv-mode ytd-menu-service-item-renderer {
+  min-height: 54px !important;
+}
+
+/* One unmistakable, non-destructive focus frame. */
+html.nhdtv-tv-mode [data-nhdtv-focused="true"] {
+  z-index: 3 !important;
+  border-radius: 16px !important;
+  outline: 5px solid var(--nhdtv-focus) !important;
+  outline-offset: 7px !important;
+  box-shadow: var(--nhdtv-focus-shadow) !important;
+  transform: scale(1.025) translateZ(0) !important;
+  transform-origin: center !important;
+  transition: transform 105ms ease-out, box-shadow 105ms ease-out !important;
+}
+
+html.nhdtv-tv-mode .nhdtv-tv-rail-item[data-nhdtv-focused="true"] {
+  color: #101114 !important;
+  background: #f7f7f8 !important;
+  outline: 0 !important;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 42%) !important;
+  transform: none !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-category="true"][data-nhdtv-focused="true"] {
+  color: #101114 !important;
+  background: #f7f7f8 !important;
+  outline: 0 !important;
+  box-shadow: 0 7px 24px rgb(0 0 0 / 38%) !important;
+  transform: none !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-focus-target="true"]:focus {
+  outline: none !important;
+}
+
+html.nhdtv-tv-mode[data-nhdtv-editing="true"]::before {
+  position: fixed;
+  z-index: 2147483646;
+  top: var(--nhdtv-edit-top);
+  left: var(--nhdtv-edit-left);
+  width: var(--nhdtv-edit-width);
+  height: var(--nhdtv-edit-height);
+  box-sizing: border-box;
+  border: 5px solid var(--nhdtv-focus);
+  border-radius: 16px;
+  box-shadow: var(--nhdtv-focus-shadow);
+  content: "";
+  pointer-events: none;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-card="true"][data-nhdtv-focused="true"] {
+  background: #202126 !important;
+}
+
+html.nhdtv-tv-mode [data-nhdtv-card="true"][data-nhdtv-focused="true"] #metadata,
+html.nhdtv-tv-mode [data-nhdtv-card="true"][data-nhdtv-focused="true"] #meta,
+html.nhdtv-tv-mode [data-nhdtv-card="true"][data-nhdtv-focused="true"] .metadata {
+  padding-inline: 10px !important;
+}
+
+@media (min-width: 1800px) {
+  html.nhdtv-tv-mode ytd-browse,
+  html.nhdtv-tv-mode ytd-search,
+  html.nhdtv-tv-mode ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 5 !important;
+    --ytd-rich-grid-posts-per-row: 5 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 6 !important;
+    --ytd-rich-grid-posts-per-row: 6 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 4 !important;
+    --ytd-rich-grid-posts-per-row: 4 !important;
+  }
+}
+
+@media (min-width: 3000px) {
+  html.nhdtv-tv-mode {
+    --nhdtv-card-gap: clamp(32px, 1.35vw, 52px);
+    --nhdtv-header-height: 116px;
+    --nhdtv-rail-compact: 138px;
+    --nhdtv-rail-expanded: 410px;
+  }
+
+  html.nhdtv-tv-mode body { font-size: 28px !important; }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-brand {
+    height: 76px;
+    gap: 28px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-brand-mark {
+    width: 54px;
+    height: 44px;
+    flex-basis: 54px;
+    font-size: 20px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-brand-label {
+    font-size: 28px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-item {
+    min-height: 92px !important;
+    gap: 30px;
+    padding-inline: 28px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-icon {
+    width: 42px !important;
+    height: 42px !important;
+    flex-basis: 42px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-label {
+    max-width: 250px !important;
+    font-size: 26px !important;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-rail-hint {
+    font-size: 19px;
+  }
+
+  html.nhdtv-tv-mode #nhdtv-tv-page-heading {
+    gap: 11px;
+    padding-top: 54px;
+    padding-bottom: 26px;
+  }
+
+  html.nhdtv-tv-mode .nhdtv-tv-page-eyebrow {
+    font-size: 26px;
+  }
+
+  html.nhdtv-tv-mode #nhdtv-tv-page-title {
+    font-size: 72px;
+  }
+
+  html.nhdtv-tv-mode ytd-feed-filter-chip-bar-renderer,
+  html.nhdtv-tv-mode yt-chip-cloud-renderer {
+    min-height: 96px !important;
+  }
+
+  html.nhdtv-tv-mode ytd-feed-filter-chip-bar-renderer [role="tab"],
+  html.nhdtv-tv-mode yt-chip-cloud-renderer [role="tab"],
+  html.nhdtv-tv-mode [role="tablist"] [role="tab"] {
+    min-width: 112px !important;
+    min-height: 70px !important;
+    padding-inline: 28px !important;
+    border-radius: 18px !important;
+    font-size: 27px !important;
+  }
+
+  html.nhdtv-tv-mode ytd-searchbox,
+  html.nhdtv-tv-mode yt-searchbox,
+  html.nhdtv-tv-mode ytd-searchbox input,
+  html.nhdtv-tv-mode yt-searchbox input,
+  html.nhdtv-tv-mode input[name="search_query"] {
+    min-height: 72px !important;
+    font-size: 30px !important;
+  }
+
+  html.nhdtv-tv-mode ytd-masthead button,
+  html.nhdtv-tv-mode ytd-masthead [role="button"] {
+    min-width: 70px;
+    min-height: 70px;
+  }
+
+  html.nhdtv-tv-mode ytd-browse,
+  html.nhdtv-tv-mode ytd-search,
+  html.nhdtv-tv-mode ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 6 !important;
+    --ytd-rich-grid-posts-per-row: 6 !important;
+  }
+
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] #video-title,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] #video-title-link,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] h3,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] [role="heading"] {
+    font-size: 44px !important;
+  }
+
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] #metadata,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] #metadata-line,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] ytd-channel-name,
+  html.nhdtv-tv-mode [data-nhdtv-card="true"] .metadata {
+    font-size: 30px !important;
+  }
+
+  html.nhdtv-tv-mode [data-nhdtv-shelf="true"] h2,
+  html.nhdtv-tv-mode [data-nhdtv-shelf="true"] #title,
+  html.nhdtv-tv-mode ytd-rich-grid-renderer #title {
+    font-size: 50px !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-route="results"] ytd-video-renderer #video-title {
+    font-size: 46px !important;
+  }
+
+  html.nhdtv-tv-mode ytd-c4-tabbed-header-renderer #channel-name,
+  html.nhdtv-tv-mode ytd-page-header-renderer h1,
+  html.nhdtv-tv-mode ytd-playlist-header-renderer h1 {
+    font-size: 68px !important;
+  }
+
+  html.nhdtv-tv-mode ytd-c4-tabbed-header-renderer tp-yt-paper-tab,
+  html.nhdtv-tv-mode ytd-two-column-browse-results-renderer tp-yt-paper-tab {
+    min-height: 82px !important;
+    font-size: 26px !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-metadata h1,
+  html.nhdtv-tv-mode[data-nhdtv-route="watch"] h1.ytd-watch-metadata {
+    font-size: 50px !important;
+  }
+
+  html.nhdtv-tv-mode dialog,
+  html.nhdtv-tv-mode [role="dialog"],
+  html.nhdtv-tv-mode tp-yt-paper-dialog,
+  html.nhdtv-tv-mode ytd-menu-popup-renderer,
+  html.nhdtv-tv-mode ytd-multi-page-menu-renderer {
+    font-size: 28px !important;
+  }
+
+  html.nhdtv-tv-mode [data-nhdtv-focused="true"] {
+    outline-width: 8px !important;
+    outline-offset: 10px !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 7 !important;
+    --ytd-rich-grid-posts-per-row: 7 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 5 !important;
+    --ytd-rich-grid-posts-per-row: 5 !important;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1799px) {
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 4 !important;
+    --ytd-rich-grid-posts-per-row: 4 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 2 !important;
+    --ytd-rich-grid-posts-per-row: 2 !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  html.nhdtv-tv-mode ytd-browse,
+  html.nhdtv-tv-mode ytd-search,
+  html.nhdtv-tv-mode ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 3 !important;
+    --ytd-rich-grid-posts-per-row: 3 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="compact"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 4 !important;
+    --ytd-rich-grid-posts-per-row: 4 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-browse,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-search,
+  html.nhdtv-tv-mode[data-nhdtv-scale="large"] ytd-rich-grid-renderer {
+    --ytd-rich-grid-items-per-row: 2 !important;
+    --ytd-rich-grid-posts-per-row: 2 !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-flexy #columns {
+    display: block !important;
+  }
+
+  html.nhdtv-tv-mode[data-nhdtv-route="watch"] ytd-watch-flexy #secondary {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.nhdtv-tv-mode,
+  html.nhdtv-tv-mode *,
+  html.nhdtv-tv-mode *::before,
+  html.nhdtv-tv-mode *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

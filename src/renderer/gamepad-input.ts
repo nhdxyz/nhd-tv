@@ -139,6 +139,7 @@ export class GamepadInput {
   readonly #onAction: (action: RemoteAction) => void;
   readonly #onStatusChanged: (gamepads: readonly GamepadLike[]) => void;
   readonly #mapper = new GamepadActionMapper();
+  #frame: number | null = null;
   #lastStatus = "";
   #running = false;
 
@@ -156,15 +157,26 @@ export class GamepadInput {
     }
 
     this.#running = true;
-    requestAnimationFrame((time) => this.#poll(time));
+    window.addEventListener("gamepadconnected", this.#onConnectionChanged);
+    window.addEventListener("gamepaddisconnected", this.#onConnectionChanged);
+    const gamepads = this.#readGamepads();
+    this.#reportStatus(gamepads);
+    if (gamepads.length > 0) this.#schedulePoll();
   }
 
-  #poll(time: number): void {
-    if (!this.#running) {
-      return;
+  readonly #onConnectionChanged = (): void => {
+    if (!this.#running) return;
+    const gamepads = this.#readGamepads();
+    this.#reportStatus(gamepads);
+    if (gamepads.length > 0) this.#schedulePoll();
+    else if (this.#frame !== null) {
+      cancelAnimationFrame(this.#frame);
+      this.#frame = null;
     }
+  };
 
-    const gamepads = Array.from(navigator.getGamepads())
+  #readGamepads(): GamepadLike[] {
+    return Array.from(navigator.getGamepads())
       .filter((gamepad): gamepad is Gamepad => gamepad !== null && gamepad.connected)
       .map((gamepad): GamepadLike => ({
         axes: [...gamepad.axes],
@@ -177,17 +189,33 @@ export class GamepadInput {
         index: gamepad.index,
         mapping: gamepad.mapping
       }));
-    const status = gamepads.map((gamepad) => `${gamepad.index}:${gamepad.id}`).join("|");
+  }
 
-    if (status !== this.#lastStatus) {
-      this.#lastStatus = status;
-      this.#onStatusChanged(gamepads);
+  #reportStatus(gamepads: readonly GamepadLike[]): void {
+    const status = gamepads.map((gamepad) => `${gamepad.index}:${gamepad.id}`).join("|");
+    if (status === this.#lastStatus) return;
+    this.#lastStatus = status;
+    this.#onStatusChanged(gamepads);
+  }
+
+  #schedulePoll(): void {
+    if (!this.#running || this.#frame !== null) return;
+    this.#frame = requestAnimationFrame((time) => this.#poll(time));
+  }
+
+  #poll(time: number): void {
+    this.#frame = null;
+    if (!this.#running) {
+      return;
     }
+
+    const gamepads = this.#readGamepads();
+    this.#reportStatus(gamepads);
 
     for (const action of this.#mapper.update(gamepads, time)) {
       this.#onAction(action);
     }
 
-    requestAnimationFrame((nextTime) => this.#poll(nextTime));
+    if (gamepads.length > 0) this.#schedulePoll();
   }
 }

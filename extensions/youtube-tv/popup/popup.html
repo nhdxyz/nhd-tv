@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YouTube TV Mode</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="mark" aria-hidden="true">TV</span>
+        <div>
+          <strong>YouTube TV Mode</strong>
+          <small>10-foot presentation</small>
+        </div>
+      </header>
+
+      <label class="toggle-row" for="tv-mode-enabled">
+        <span>
+          <strong>TV Mode</strong>
+          <small id="mode-status" role="status" aria-live="polite">Loading preference…</small>
+        </span>
+        <span class="switch">
+          <input id="tv-mode-enabled" type="checkbox" />
+          <span aria-hidden="true"></span>
+        </span>
+      </label>
+
+      <div class="preference-grid" aria-label="TV presentation preferences">
+        <label>
+          <span>Interface size</span>
+          <select id="tv-mode-scale" disabled>
+            <option value="compact">Compact</option>
+            <option value="standard">Standard</option>
+            <option value="large">Large</option>
+          </select>
+        </label>
+        <label>
+          <span>Screen margins</span>
+          <select id="tv-mode-safe-area" disabled>
+            <option value="compact">Compact</option>
+            <option value="standard">Standard</option>
+            <option value="wide">Wide</option>
+          </select>
+        </label>
+      </div>
+
+      <section class="diagnostics" aria-labelledby="diagnostics-title">
+        <div>
+          <strong id="diagnostics-title">Page health</strong>
+          <button id="refresh-diagnostics" type="button">Refresh</button>
+        </div>
+        <p id="diagnostics-status" role="status" aria-live="polite">Open YouTube to inspect its current selectors.</p>
+      </section>
+
+      <p>Changes apply immediately on every open YouTube tab. TV Mode is on by default.</p>
+      <p class="controls"><kbd>↑↓←→</kbd> move <span>·</span> <kbd>Enter</kbd> select <span>·</span> <kbd>Esc</kbd> back</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

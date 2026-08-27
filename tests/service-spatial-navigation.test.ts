@@ -3,7 +3,10 @@ import {
   scoreSpatialCandidate,
   type SpatialRectangle
 } from "../src/main/spatial-navigation";
-import { serviceSpatialNavigationScript } from "../src/main/service-host";
+import {
+  serviceSpatialNavigationScript,
+  youtubeTvModeConfigurationScript
+} from "../src/main/service-host";
 
 function rect(left: number, top: number, width = 220, height = 124): SpatialRectangle {
   return {
@@ -17,6 +20,37 @@ function rect(left: number, top: number, width = 220, height = 124): SpatialRect
 }
 
 describe("service spatial navigation", () => {
+  it("hands YouTube TV Mode actions to the extension before using the host fallback", () => {
+    const script = serviceSpatialNavigationScript("right");
+
+    expect(script).toContain("dataset.nhdtvExtensionActive === 'true'");
+    expect(script).toContain("new CustomEvent('nhdtv-remote-action'");
+    expect(script).toContain("detail: { action }");
+    expect(script).toContain("remoteEvent.defaultPrevented");
+  });
+
+  it("leaves Shorts and other playback routes on the provider's native input path", async () => {
+    const source = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../src/main/service-host.ts", import.meta.url), "utf8")
+    );
+
+    expect(source).toContain("(?:play|player|shorts|video|watch)");
+  });
+
+  it("sends persisted TV presentation preferences to hosted YouTube", () => {
+    const script = youtubeTvModeConfigurationScript({
+      enabled: false,
+      safeArea: "wide",
+      scale: "large"
+    });
+
+    expect(script).toContain("nhdtv-tv-mode-config");
+    expect(script).toContain('"enabled":false');
+    expect(script).toContain('"safeArea":"wide"');
+    expect(script).toContain('"scale":"large"');
+    expect(script).toContain("event.defaultPrevented");
+  });
+
   it("confines Netflix detail navigation to the visible modal and prioritizes Play", () => {
     const script = serviceSpatialNavigationScript("down");
 

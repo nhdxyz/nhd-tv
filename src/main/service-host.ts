@@ -1,10 +1,12 @@
 import {
+  app,
   BrowserWindow,
   net,
   session,
   type Session,
   WebContentsView
 } from "electron";
+import path from "node:path";
 import {
   isAllowedServiceUrl,
   isAllowedArtworkUrl,
@@ -35,7 +37,8 @@ import type {
   ServiceFailureKind,
   ServiceRecoveryMode,
   ServiceRecoveryRequest,
-  ServiceQuitRequest
+  ServiceQuitRequest,
+  YouTubeTvModePreferences
 } from "./contracts";
 import {
   classifyServiceFailure,
@@ -108,12 +111,19 @@ interface NetflixSmokeSnapshot {
 }
 
 const configuredSessions = new WeakSet<Session>();
+const youtubeTvExtensionLoads = new WeakMap<Session, Promise<void>>();
 const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
+const YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS = [0, 120, 600] as const;
+const DEFAULT_YOUTUBE_TV_PREFERENCES: YouTubeTvModePreferences = {
+  enabled: true,
+  safeArea: "standard",
+  scale: "standard"
+};
 const SERVICE_FOCUS_STYLE = `
   html[data-nhd-tv-has-focus="true"]::after {
     position: fixed !important;
@@ -133,6 +143,43 @@ const SERVICE_FOCUS_STYLE = `
     transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out !important;
   }
 `;
+
+async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> {
+  const pending = youtubeTvExtensionLoads.get(serviceSession);
+  if (pending !== undefined) return pending;
+
+  const load = (async () => {
+    const extensionPath = path.join(app.getAppPath(), "extensions", "youtube-tv");
+    const installed = serviceSession.extensions.getAllExtensions().some((extension) =>
+      extension.name === "NHD YouTube TV Mode"
+    );
+    if (!installed) {
+      await serviceSession.extensions.loadExtension(extensionPath, { allowFileAccess: false });
+    }
+  })();
+  youtubeTvExtensionLoads.set(serviceSession, load);
+
+  try {
+    await load;
+  } catch {
+    youtubeTvExtensionLoads.delete(serviceSession);
+    // The conservative host navigator remains available if extension loading is unsupported.
+  }
+}
+
+export function youtubeTvModeConfigurationScript(
+  preferences: YouTubeTvModePreferences
+): string {
+  return `(() => {
+    const event = new CustomEvent('nhdtv-tv-mode-config', {
+      bubbles: false,
+      cancelable: true,
+      detail: ${JSON.stringify(preferences)}
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  })()`;
+}
 
 const serviceBackStateScript = `(() => {
   const visible = (element) => {
@@ -170,7 +217,7 @@ function shouldUseDomSpatialNavigation(
 
   try {
     const path = new URL(currentUrl).pathname;
-    return !/(?:^|\/)(?:play|player|video|watch)(?:\/|$)/i.test(path);
+    return !/(?:^|\/)(?:play|player|shorts|video|watch)(?:\/|$)/i.test(path);
   } catch {
     return false;
   }
@@ -200,6 +247,17 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
     ) {
       clearFocus();
       return false;
+    }
+
+    if (document.documentElement.dataset.nhdtvExtensionActive === 'true') {
+      clearFocus();
+      const remoteEvent = new CustomEvent('nhdtv-remote-action', {
+        bubbles: false,
+        cancelable: true,
+        detail: { action }
+      });
+      document.dispatchEvent(remoteEvent);
+      if (remoteEvent.defaultPrevented) return true;
     }
 
     const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
@@ -545,6 +603,7 @@ export class ServiceHost {
   #pointerSnapKey: string | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
+  #youtubeTvPreferences: YouTubeTvModePreferences;
 
   constructor(
     window: BrowserWindow,
@@ -552,7 +611,8 @@ export class ServiceHost {
     onQuitRequested: ServiceQuitListener,
     onRecoveryRequested: ServiceRecoveryListener,
     onPlayback: PlaybackListener = () => undefined,
-    onSystemVolume: SystemVolumeListener = () => undefined
+    onSystemVolume: SystemVolumeListener = () => undefined,
+    youtubeTvPreferences: YouTubeTvModePreferences = DEFAULT_YOUTUBE_TV_PREFERENCES
   ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
@@ -560,6 +620,7 @@ export class ServiceHost {
     this.#onRecoveryRequested = onRecoveryRequested;
     this.#onPlayback = onPlayback;
     this.#onSystemVolume = onSystemVolume;
+    this.#youtubeTvPreferences = youtubeTvPreferences;
     this.#window.on("resize", () => this.#resize());
   }
 
@@ -594,6 +655,11 @@ export class ServiceHost {
 
   get lastBlockedNavigation(): NavigationDiagnostic | null {
     return this.#lastBlockedNavigation;
+  }
+
+  setYouTubeTvPreferences(preferences: YouTubeTvModePreferences): void {
+    this.#youtubeTvPreferences = preferences;
+    this.#scheduleYouTubeTvConfiguration();
   }
 
   presentAmbientDisplay(): boolean {
@@ -649,6 +715,9 @@ export class ServiceHost {
 
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
     configureServiceSession(serviceSession, definition);
+    if (definition.id === "youtube") {
+      await ensureYouTubeTvExtension(serviceSession);
+    }
 
     const view = new WebContentsView({
       webPreferences: {
@@ -798,6 +867,7 @@ export class ServiceHost {
       }
 
       if (this.#view === view) {
+        this.#scheduleYouTubeTvConfiguration(view);
         if (definition.playback !== null) {
           void view.webContents.executeJavaScript(
             buildPlaybackActivationTrackerScript(definition.playback.pathPrefixes),
@@ -1317,6 +1387,32 @@ export class ServiceHost {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  #scheduleYouTubeTvConfiguration(view = this.#view): void {
+    if (
+      view === null ||
+      view.webContents.isDestroyed() ||
+      this.#activeDefinition?.id !== "youtube"
+    ) {
+      return;
+    }
+
+    for (const delayMs of YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS) {
+      setTimeout(() => {
+        if (
+          this.#view !== view ||
+          view.webContents.isDestroyed() ||
+          this.#activeDefinition?.id !== "youtube"
+        ) {
+          return;
+        }
+        void view.webContents.executeJavaScript(
+          youtubeTvModeConfigurationScript(this.#youtubeTvPreferences),
+          true
+        ).catch(() => undefined);
+      }, delayMs);
     }
   }
 

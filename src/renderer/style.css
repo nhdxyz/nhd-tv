@@ -2771,6 +2771,29 @@ h2 {
   margin: 0.55rem 0 0;
 }
 
+.controller-readout {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1.2rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 6%);
+}
+
+.controller-readout span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.controller-readout strong {
+  color: #fff;
+  font-size: 1.4rem;
+}
+
 .remote-pairing-view {
   margin-top: 1.25rem;
   text-align: center;

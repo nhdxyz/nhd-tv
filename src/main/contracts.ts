@@ -103,6 +103,12 @@ export interface RemoteTextInput {
   text: string;
 }
 
+export interface RemoteControlContext {
+  activeServiceId: string | null;
+  activeServiceName: string;
+  searchLabel: string;
+}
+
 export type RemoteState = "awaiting-approval" | "inactive" | "pairing" | "ready";
 
 export interface RemoteStatus {
@@ -183,6 +189,14 @@ export interface DevicePreferences {
   reducedMotion: boolean;
   safeArea: "compact" | "standard" | "wide";
   selectedDisplayId: string | null;
+  youtubeTvModeEnabled: boolean;
+  youtubeTvScale: "compact" | "standard" | "large";
+}
+
+export interface YouTubeTvModePreferences {
+  enabled: boolean;
+  safeArea: DevicePreferences["safeArea"];
+  scale: DevicePreferences["youtubeTvScale"];
 }
 
 export interface LocalAppState {

@@ -25,13 +25,14 @@ Never paste account identifiers, credentials, verification codes, cookies, servi
 
 ## Preliminary macOS run
 
-Verified 2026-08-25 on Apple silicon (`darwin arm64`). These results exercise the harness but do not satisfy the Windows acceptance criteria.
+Verified 2026-08-25 and 2026-08-27 on Apple silicon (`darwin arm64`). These results exercise the harness but do not satisfy the Windows acceptance criteria.
 
 | Service | Entry page | Login flow reached | Playback | Fullscreen | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Netflix | Pass | Pass; restart persistence confirmed | Pass after EVS production signing | Retest pending | Castlabs' production VMP Lab returned `PLATFORM_SOFTWARE_VERIFIED`. A sanitized in-app smoke test opened Netflix's official Test Patterns title, decoded video, accumulated real played time, and qualified the passive Continue Watching observer without E100. |
 | YouTube | Pass | Previously observed; current smoke inconclusive | Pass | Pass | Google sign-in opens in a controlled, sandboxed NHD-TV window using YouTube's isolated session. The unsigned macOS passkey prompt remains unavailable, but Google's password fallback previously completed and an earlier smoke check observed YouTube's saved account control without reading account details. Two 2026-08-26 reruns showed neither a visible account nor Sign in control before timeout, so durable authentication needs a manual unlocked-window retest. On 2026-08-26, a public long-form video rendered and advanced in the embedded view; YouTube's own player button entered immersive fullscreen and its Exit full screen control returned cleanly to the watch page. Fullscreen permission is restricted to the declared `www.youtube.com` playback origin. |
 | Disney+ | Pass | Pass | Pending user login | Pending | The isolated service reached the MyDisney login page without a renderer error. |
+| Spotify | Pass | Pass; login and signup controls rendered | Pending user login | Not applicable | On 2026-08-27, the official Web Player and its account entry controls rendered in NHD-TV's isolated Spotify session. The adapter grants protected-content permission only to `open.spotify.com`, accepts Spotify-owned HTTPS login subdomains without trusting lookalike hosts or custom ports, hides the redundant native-app handoff, supports direct encoded search routes and declared phone text entry, and maps transport buttons to Spotify's documented keyboard shortcuts. Audio playback and restart persistence still require a user-controlled login test. |
 
 ## Experimental App Library entries
 
@@ -48,6 +49,7 @@ Record the exact Windows edition, version, OS build, CPU, GPU, display resolutio
 | Netflix | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
 | YouTube | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
 | Disney+ | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| Spotify | Pending | Pending | Pending | Not applicable | Audio only | Pending | Pending | Confirm account tier, protected playback, native media shortcuts, and Spotify Connect behavior. |
 
 For each service:
 
@@ -66,5 +68,6 @@ For each service:
 - macOS platform passkeys are unavailable in the unsigned feasibility build. Electron requires app-specific WebAuthn configuration plus a matching code-signing keychain entitlement, and its Touch ID credentials are device-bound rather than inherited from an existing browser. The shell shows Google's tested password fallback; Windows Hello remains part of the Windows 11 acceptance run. Production macOS support is tracked in Issue #9.
 - NHD-TV's built-in video-decode value reports Chromium capability, not proof that a particular frame was hardware-decoded. Confirm active use with Windows Task Manager's Video Decode engine.
 - The fullscreen bridge needs a clean Netflix retest; playback is now unblocked.
-- Popups are allowed only when their URL matches the service adapter's exact origin allowlist. They open as sandboxed, app-owned modal windows in the same isolated service session; nested or unexpected-origin popups remain denied.
+- Spotify's entry and account controls render, but authenticated playback, session persistence, account-tier behavior, Spotify Connect handoff, and Windows media-key behavior remain unqualified. Spotify is intentionally excluded from video-oriented Continue Watching.
+- Popups are allowed only when their URL matches the service adapter's exact origin allowlist or a narrowly declared provider-owned HTTPS host family. They open as sandboxed, app-owned modal windows in the same isolated service session; lookalike suffixes, custom ports on host-family matches, nested popups, and unexpected origins remain denied. DRM and fullscreen permissions stay exact-origin only.
 - Service-specific origin additions must be justified by an observed top-level login or playback navigation. Broad wildcard allowlists are not acceptable.

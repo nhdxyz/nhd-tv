@@ -28,7 +28,7 @@ The NHD-TV shell uses row-aware spatial D-pad navigation. Service adapters may o
 
 The architecture must support both focused operation and a future native/global controller mode for cases where another application owns desktop focus.
 
-The current controller foundation maps a standard Gamepad API layout: D-pad or left stick moves focus, A selects, B goes back, and Guide returns Home. View plus Menu is the Home fallback where Guide is unavailable. X toggles play/pause, Y sends mute, the bumpers seek, and the triggers send volume down/up. Hardware media keys and Command-or-Control plus Shift fallbacks use the same normalized action route. Services receive native media-key or keyboard events rather than player DOM manipulation; Netflix play/pause is normalized to Space. Volume bypasses the service and adjusts the host output in bounded steps. Physical Windows and HDMI-output validation plus nonstandard controller mappings remain release work.
+The current controller foundation maps a standard Gamepad API layout: D-pad or left stick moves focus, A selects, B goes back, and Guide returns Home. View plus Menu is the Home fallback where Guide is unavailable. X toggles play/pause, Y sends mute, the bumpers seek, and the triggers send volume down/up. Hardware media keys and Command-or-Control plus Shift fallbacks use the same normalized action route. Services receive native media-key or keyboard events rather than player DOM manipulation; Netflix and Spotify play/pause are normalized to Space, while Spotify uses its documented Up/Down previous/next shortcuts for the transport pair so Left/Right do not alter the library or queue. Volume bypasses the service and adjusts the host output in bounded steps. Physical Windows and HDMI-output validation plus nonstandard controller mappings remain release work.
 
 ## Home
 
@@ -58,7 +58,7 @@ Executable third-party plugins and remotely downloaded adapter code are excluded
 
 The current Apps foundation saves the enabled, ordered, and favorited Home lineup per local profile. Favorite, order, removal, and data controls live in the app-management dialog rather than under every card. Removing an item from Apps never clears its isolated service partition. Clearing a service session is a separately labeled, confirmed action that keeps the NHD-TV lineup and viewing history.
 
-The current experimental catalog includes Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch. These use official HTTPS entry points, exact-origin navigation boundaries, and separate persistent partitions. They remain disabled by default and do not advertise search, playback observation, or compatibility until per-platform qualification is complete.
+The core catalog includes Netflix, YouTube, Disney+, and Spotify. Spotify uses its official Web Player, a dedicated persistent session, exact player and account origin boundaries, direct allowlisted search paths, declared phone text-entry targets, DOM spatial navigation, and native media keys. Existing profiles may add it from the App Store without changing their saved lineup; new profiles receive the current core catalog. The experimental catalog includes Prime Video, Hulu, HBO Max, Peacock, Paramount+, Apple TV, Plex, and Twitch. These use official HTTPS entry points, exact-origin navigation boundaries, and separate persistent partitions. They remain disabled by default and do not advertise search, playback observation, or compatibility until per-platform qualification is complete.
 
 ## Profiles and sessions
 

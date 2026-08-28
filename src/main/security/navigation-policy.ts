@@ -2,6 +2,7 @@ import type { ServiceKind } from "../contracts";
 
 export interface ServiceDefinition {
   allowedOrigins: readonly string[];
+  allowedSubdomainHosts?: readonly string[];
   artworkHosts: readonly string[];
   authenticationNote?: string;
   fullscreenOrigins: readonly string[];
@@ -22,6 +23,7 @@ export interface ServiceDefinition {
   search: {
     baseUrl: string;
     queryParameter: string | null;
+    queryPathSegment?: boolean;
   } | null;
   spatialNavigation: "dom" | "native";
   startUrl: string;
@@ -53,15 +55,31 @@ export function originForDiagnostics(value: string): string {
 
 export function isAllowedServiceUrl(
   candidate: string,
-  allowedOrigins: readonly string[]
+  allowedOrigins: readonly string[],
+  allowedSubdomainHosts: readonly string[] = []
 ): boolean {
-  const candidateOrigin = normalizeOrigin(candidate);
-
-  if (candidateOrigin === null) {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
     return false;
   }
 
-  return allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === candidateOrigin);
+  if (url.protocol !== "https:") {
+    return false;
+  }
+
+  const candidateOrigin = url.origin;
+  const exactOriginAllowed = allowedOrigins.some(
+    (allowedOrigin) => normalizeOrigin(allowedOrigin) === candidateOrigin
+  );
+  if (exactOriginAllowed) {
+    return true;
+  }
+
+  return url.port === "" && allowedSubdomainHosts.some(
+    (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
+  );
 }
 
 export function isAllowedServicePermission(
@@ -105,7 +123,11 @@ export function isPlaybackUrl(
 ): boolean {
   if (
     definition.playback === null ||
-    !isAllowedServiceUrl(candidate, definition.allowedOrigins)
+    !isAllowedServiceUrl(
+      candidate,
+      definition.allowedOrigins,
+      definition.allowedSubdomainHosts
+    )
   ) {
     return false;
   }
@@ -167,7 +189,9 @@ export function buildServiceSearchUrl(
 
   const url = new URL(definition.search.baseUrl);
 
-  if (definition.search.queryParameter !== null) {
+  if (definition.search.queryPathSegment === true) {
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/${encodeURIComponent(normalizedQuery)}`;
+  } else if (definition.search.queryParameter !== null) {
     url.searchParams.set(definition.search.queryParameter, normalizedQuery);
   }
 
@@ -201,12 +225,13 @@ export function isServiceRootUrl(
 export function isExpectedAllowedNavigationAbort(
   error: unknown,
   currentUrl: string,
-  allowedOrigins: readonly string[]
+  allowedOrigins: readonly string[],
+  allowedSubdomainHosts: readonly string[] = []
 ): boolean {
   return (
     error instanceof Error &&
     error.message.includes("ERR_ABORTED (-3)") &&
-    isAllowedServiceUrl(currentUrl, allowedOrigins)
+    isAllowedServiceUrl(currentUrl, allowedOrigins, allowedSubdomainHosts)
   );
 }
 
@@ -225,6 +250,18 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
 
   if (definition.allowedOrigins.some((origin) => normalizeOrigin(origin) !== origin)) {
     throw new Error(`Service navigation origins must be canonical HTTPS origins: ${definition.id}`);
+  }
+
+  if (
+    definition.allowedSubdomainHosts?.some(
+      (host) =>
+        !host.includes(".") ||
+        !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(host) ||
+        host.includes("..") ||
+        new URL(`https://${host}`).hostname !== host
+    ) === true
+  ) {
+    throw new Error(`Service subdomain hosts must be canonical provider hosts: ${definition.id}`);
   }
 
   if (definition.mediaKeySystemOrigins.length === 0) {
@@ -251,7 +288,11 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
     throw new Error(`Service fullscreen origins must be allowed HTTPS origins: ${definition.id}`);
   }
 
-  if (!isAllowedServiceUrl(definition.startUrl, definition.allowedOrigins)) {
+  if (!isAllowedServiceUrl(
+    definition.startUrl,
+    definition.allowedOrigins,
+    definition.allowedSubdomainHosts
+  )) {
     throw new Error(`Service start URL is not in its allowed origins: ${definition.id}`);
   }
 
@@ -291,10 +332,18 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
   if (
     definition.search !== null &&
     (
-      !isAllowedServiceUrl(definition.search.baseUrl, definition.allowedOrigins) ||
+      !isAllowedServiceUrl(
+        definition.search.baseUrl,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      ) ||
       (
         definition.search.queryParameter !== null &&
         !/^[A-Za-z0-9_-]+$/.test(definition.search.queryParameter)
+      ) ||
+      (
+        definition.search.queryPathSegment === true &&
+        definition.search.queryParameter !== null
       )
     )
   ) {
@@ -303,7 +352,11 @@ export function assertValidServiceDefinition(definition: ServiceDefinition): voi
 
   if (
     definition.rootUrls.length === 0 ||
-    definition.rootUrls.some((rootUrl) => !isAllowedServiceUrl(rootUrl, definition.allowedOrigins))
+    definition.rootUrls.some((rootUrl) => !isAllowedServiceUrl(
+      rootUrl,
+      definition.allowedOrigins,
+      definition.allowedSubdomainHosts
+    ))
   ) {
     throw new Error(`Service root URLs must use allowed HTTPS origins: ${definition.id}`);
   }

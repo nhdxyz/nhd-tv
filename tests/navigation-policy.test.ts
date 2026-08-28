@@ -56,6 +56,23 @@ describe("service navigation policy", () => {
     expect(isAllowedServiceUrl("https://cdn.example.com/watch/1", allowed)).toBe(false);
   });
 
+  it("allows only explicitly declared HTTPS provider subdomains", () => {
+    const exact = ["https://www.example.com", "https://www.example.com:8443"];
+    const providerHosts = ["example.com"];
+
+    expect(isAllowedServiceUrl(
+      "https://accounts.example.com/login",
+      exact,
+      providerHosts
+    )).toBe(true);
+    expect(isAllowedServiceUrl("https://example.com/", exact, providerHosts)).toBe(true);
+    expect(isAllowedServiceUrl("https://www.example.com:8443/", exact, providerHosts)).toBe(true);
+    expect(isAllowedServiceUrl("https://accounts.example.com:8443/", exact, providerHosts)).toBe(false);
+    expect(isAllowedServiceUrl("http://accounts.example.com/", exact, providerHosts)).toBe(false);
+    expect(isAllowedServiceUrl("https://example.com.evil.test/", exact, providerHosts)).toBe(false);
+    expect(isAllowedServiceUrl("https://evilexample.com/", exact, providerHosts)).toBe(false);
+  });
+
   it("allows only explicitly declared service permissions and origins", () => {
     expect(isAllowedServicePermission("fullscreen", "https://example.com/watch", validDefinition)).toBe(true);
     expect(isAllowedServicePermission("fullscreen", "https://login.example.com", validDefinition)).toBe(false);
@@ -94,6 +111,15 @@ describe("service navigation policy", () => {
       ...validDefinition,
       search: { baseUrl: "https://example.com/search", queryParameter: null }
     }, "show name")).toBe("https://example.com/search");
+
+    expect(buildServiceSearchUrl({
+      ...validDefinition,
+      search: {
+        baseUrl: "https://example.com/search",
+        queryParameter: null,
+        queryPathSegment: true
+      }
+    }, "lofi & jazz")).toBe("https://example.com/search/lofi%20%26%20jazz");
   });
 
   it("matches service roots without treating nested pages as roots", () => {
@@ -137,6 +163,17 @@ describe("service navigation policy", () => {
     ).toThrow(/persistent and isolated/);
   });
 
+  it("rejects ambiguous search query placement", () => {
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      search: {
+        baseUrl: "https://example.com/search",
+        queryParameter: "q",
+        queryPathSegment: true
+      }
+    })).toThrow(/search rules/);
+  });
+
   it("limits media-key-system permission to declared navigation origins", () => {
     expect(() =>
       assertValidServiceDefinition({
@@ -144,6 +181,17 @@ describe("service navigation policy", () => {
         mediaKeySystemOrigins: ["https://login.example.com"],
       })
     ).toThrow(/media-key-system origins/);
+  });
+
+  it("rejects malformed provider subdomain hosts", () => {
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      allowedSubdomainHosts: ["*.example.com"]
+    })).toThrow(/subdomain hosts/);
+    expect(() => assertValidServiceDefinition({
+      ...validDefinition,
+      allowedSubdomainHosts: ["example.com.evil..test"]
+    })).toThrow(/subdomain hosts/);
   });
 
   it("limits fullscreen permission to declared navigation origins", () => {

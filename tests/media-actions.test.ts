@@ -36,6 +36,9 @@ describe("shared media actions", () => {
   it("dispatches only native Electron accelerator or provider keyboard keys", () => {
     expect(nativeMediaKeyCode("play-pause")).toBe("MediaPlayPause");
     expect(nativeMediaKeyCode("play-pause", "netflix")).toBe("Space");
+    expect(nativeMediaKeyCode("play-pause", "spotify")).toBe("Space");
+    expect(nativeMediaKeyCode("rewind", "spotify")).toBe("Up");
+    expect(nativeMediaKeyCode("fast-forward", "spotify")).toBe("Down");
     expect(nativeMediaKeyCode("rewind")).toBe("Left");
     expect(nativeMediaKeyCode("fast-forward")).toBe("Right");
     expect(nativeMediaKeyCode("volume-down")).toBe("VolumeDown");

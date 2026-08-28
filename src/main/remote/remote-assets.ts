@@ -246,6 +246,11 @@ body[data-active-service="disney-plus"] {
   --accent-ink: #071023;
 }
 
+body[data-active-service="spotify"] {
+  --accent: #1ed760;
+  --accent-ink: #07140b;
+}
+
 html,
 body {
   touch-action: manipulation;

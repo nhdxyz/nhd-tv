@@ -4,6 +4,7 @@ import {
   siNetflix,
   siParamountplus,
   siPlex,
+  siSpotify,
   siTwitch,
   siYoutube
 } from "simple-icons";
@@ -59,6 +60,11 @@ const brands: Readonly<Record<string, BrandDefinition>> = {
   "shaka-demo": {
     presentation: "monogram",
     value: "S"
+  },
+  spotify: {
+    path: siSpotify.path,
+    presentation: "icon",
+    value: "Spotify"
   },
   youtube: {
     path: siYoutube.path,

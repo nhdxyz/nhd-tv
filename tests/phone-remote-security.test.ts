@@ -99,6 +99,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="brand-wordmark"');
     expect(REMOTE_CSS).toContain("background: #090909;");
     expect(REMOTE_CSS).toContain("border: 2px solid var(--accent);");
+    expect(REMOTE_CSS).toContain('body[data-active-service="spotify"]');
     expect(REMOTE_CSS).not.toContain("--accent-glow");
   });
 

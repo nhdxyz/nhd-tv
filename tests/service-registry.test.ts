@@ -14,6 +14,7 @@ describe("service registry", () => {
     expect(getServiceDefinition("netflix")?.name).toBe("Netflix");
     expect(getServiceDefinition("youtube")?.name).toBe("YouTube");
     expect(getServiceDefinition("disney-plus")?.name).toBe("Disney+");
+    expect(getServiceDefinition("spotify")?.name).toBe("Spotify");
     expect(getServiceDefinition("prime-video")?.name).toBe("Prime Video");
     expect(getServiceDefinition("hulu")?.name).toBe("Hulu");
     expect(getServiceDefinition("hbo-max")?.name).toBe("HBO Max");
@@ -56,7 +57,10 @@ describe("service registry", () => {
   it("restricts DRM permission more narrowly than authentication navigation", () => {
     const youtube = getServiceDefinition("youtube");
 
+    expect(getServiceDefinition("netflix")?.allowedSubdomainHosts).toEqual(["netflix.com"]);
+    expect(getServiceDefinition("disney-plus")?.allowedSubdomainHosts).toEqual(["disneyplus.com"]);
     expect(youtube?.allowedOrigins).toContain("https://accounts.google.com");
+    expect(youtube?.allowedSubdomainHosts).toEqual(["youtube.com"]);
     expect(youtube?.allowedOrigins).toContain("https://accounts.youtube.com");
     expect(youtube?.mediaKeySystemOrigins).toEqual(["https://www.youtube.com"]);
     expect(youtube?.fullscreenOrigins).toEqual(["https://www.youtube.com"]);
@@ -90,6 +94,32 @@ describe("service registry", () => {
     expect(youtube?.authenticationNote).toContain("TV activation");
     expect(youtube).not.toHaveProperty("startUrl");
     expect(youtube).not.toHaveProperty("allowedOrigins");
+  });
+
+  it("isolates Spotify playback, authentication, search, and phone text entry", () => {
+    const spotify = getServiceDefinition("spotify");
+
+    expect(spotify).toMatchObject({
+      allowedOrigins: ["https://open.spotify.com", "https://accounts.spotify.com"],
+      allowedSubdomainHosts: ["spotify.com"],
+      fullscreenOrigins: [],
+      kind: "commercial",
+      mediaKeySystemOrigins: ["https://open.spotify.com"],
+      partition: "persist:service-spotify",
+      playback: null,
+      rootUrls: ["https://open.spotify.com/"],
+      search: {
+        baseUrl: "https://open.spotify.com/search",
+        queryParameter: null,
+        queryPathSegment: true
+      },
+      startUrl: "https://open.spotify.com/"
+    });
+    expect(spotify?.remoteTextEntrySelectors).toContain(
+      'input[data-testid="search-input"]'
+    );
+    expect(getServiceSummaries().find((service) => service.id === "spotify")?.searchMode)
+      .toBe("query");
   });
 
   it("builds custom services with an exact same-origin boundary", () => {

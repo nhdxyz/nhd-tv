@@ -1227,7 +1227,7 @@ function renderSearchResults(rawQuery: string): void {
   elements.searchResults.replaceChildren(...buttons);
   elements.searchProviderSection.hidden = false;
   elements.searchResultCount.textContent = buttons.length === 0
-    ? "Add Netflix, YouTube, or Disney+ from Apps"
+    ? "Add Netflix, YouTube, Disney+, or Spotify from Apps"
     : "The selected app owns its catalog and availability";
 }
 

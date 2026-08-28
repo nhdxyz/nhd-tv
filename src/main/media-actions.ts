@@ -68,6 +68,18 @@ export function mediaActionForKeyInput(input: MediaKeyInput): MediaAction | null
 }
 
 export function nativeMediaKeyCode(action: MediaAction, serviceId: string | null = null): string {
+  if (serviceId === "spotify") {
+    const spotifyKeys: Partial<Record<MediaAction, string>> = {
+      "fast-forward": "Down",
+      "play-pause": "Space",
+      rewind: "Up"
+    };
+    const spotifyKey = spotifyKeys[action];
+    if (spotifyKey !== undefined) {
+      return spotifyKey;
+    }
+  }
+
   if (action === "play-pause" && serviceId === "netflix") {
     return "Space";
   }

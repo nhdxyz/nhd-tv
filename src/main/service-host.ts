@@ -143,6 +143,19 @@ const SERVICE_FOCUS_STYLE = `
     transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out !important;
   }
 `;
+const SPOTIFY_TV_STYLE = `
+  [data-testid="open-app"],
+  [data-testid="open-app-button"],
+  [data-testid="install-app"],
+  [data-testid="download-button"],
+  a[aria-label="Open App"],
+  button[aria-label="Open App"],
+  a[href="/download"],
+  a[href^="https://open.spotify.com/download"],
+  a[href^="spotify:"] {
+    display: none !important;
+  }
+`;
 
 async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> {
   const pending = youtubeTvExtensionLoads.get(serviceSession);
@@ -703,7 +716,11 @@ export class ServiceHost {
   }
 
   async open(definition: ServiceDefinition, initialUrl = definition.startUrl): Promise<void> {
-    if (!isAllowedServiceUrl(initialUrl, definition.allowedOrigins)) {
+    if (!isAllowedServiceUrl(
+      initialUrl,
+      definition.allowedOrigins,
+      definition.allowedSubdomainHosts
+    )) {
       throw new Error(`Initial service URL is outside the ${definition.name} boundary.`);
     }
 
@@ -733,7 +750,11 @@ export class ServiceHost {
 
     view.setBackgroundColor("#05070d");
     view.webContents.setWindowOpenHandler(({ url }) => {
-      if (isAllowedServiceUrl(url, definition.allowedOrigins)) {
+      if (isAllowedServiceUrl(
+        url,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )) {
         return {
           action: "allow",
           overrideBrowserWindowOptions: {
@@ -775,13 +796,21 @@ export class ServiceHost {
         return { action: "deny" };
       });
       popup.webContents.on("will-navigate", (event, url) => {
-        if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+        if (!isAllowedServiceUrl(
+          url,
+          definition.allowedOrigins,
+          definition.allowedSubdomainHosts
+        )) {
           event.preventDefault();
           this.#recordBlockedNavigation("navigation", url, definition);
         }
       });
       popup.webContents.on("will-redirect", (event, url) => {
-        if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+        if (!isAllowedServiceUrl(
+          url,
+          definition.allowedOrigins,
+          definition.allowedSubdomainHosts
+        )) {
           event.preventDefault();
           this.#recordBlockedNavigation("redirect", url, definition);
         }
@@ -865,6 +894,9 @@ export class ServiceHost {
       if (this.#view === view && definition.spatialNavigation === "dom") {
         void view.webContents.insertCSS(SERVICE_FOCUS_STYLE).catch(() => undefined);
       }
+      if (this.#view === view && definition.id === "spotify") {
+        void view.webContents.insertCSS(SPOTIFY_TV_STYLE).catch(() => undefined);
+      }
 
       if (this.#view === view) {
         this.#scheduleYouTubeTvConfiguration(view);
@@ -939,7 +971,11 @@ export class ServiceHost {
     });
 
     view.webContents.on("will-navigate", (event, url) => {
-      if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+      if (!isAllowedServiceUrl(
+        url,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )) {
         event.preventDefault();
         this.#recordBlockedNavigation("navigation", url, definition);
       } else {
@@ -948,7 +984,11 @@ export class ServiceHost {
     });
 
     view.webContents.on("will-redirect", (event, url) => {
-      if (!isAllowedServiceUrl(url, definition.allowedOrigins)) {
+      if (!isAllowedServiceUrl(
+        url,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )) {
         event.preventDefault();
         this.#recordBlockedNavigation("redirect", url, definition);
       }
@@ -999,7 +1039,8 @@ export class ServiceHost {
         isExpectedAllowedNavigationAbort(
           error,
           currentUrl,
-          definition.allowedOrigins
+          definition.allowedOrigins,
+          definition.allowedSubdomainHosts
         )
       ) {
         if (this.#view === view && !view.webContents.isDestroyed()) {
@@ -1119,7 +1160,11 @@ export class ServiceHost {
       view === null ||
       definition === null ||
       view.webContents.isDestroyed() ||
-      !isAllowedServiceUrl(url, definition.allowedOrigins)
+      !isAllowedServiceUrl(
+        url,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )
     ) {
       throw new Error("The active service cannot open that search destination.");
     }
@@ -1141,7 +1186,8 @@ export class ServiceHost {
         !isExpectedAllowedNavigationAbort(
           error,
           view.webContents.getURL(),
-          definition.allowedOrigins
+          definition.allowedOrigins,
+          definition.allowedSubdomainHosts
         )
       ) {
         throw error;
@@ -1242,7 +1288,8 @@ export class ServiceHost {
       return isExpectedAllowedNavigationAbort(
         error,
         view.webContents.getURL(),
-        definition.allowedOrigins
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
       );
     }
   }
@@ -1439,7 +1486,8 @@ export class ServiceHost {
         !isExpectedAllowedNavigationAbort(
           error,
           view.webContents.getURL(),
-          definition.allowedOrigins
+          definition.allowedOrigins,
+          definition.allowedSubdomainHosts
         )
       ) {
         return {
@@ -1758,7 +1806,11 @@ export class ServiceHost {
       : view.webContents.getURL();
     this.#recoveryTarget = {
       definition,
-      url: isAllowedServiceUrl(currentUrl, definition.allowedOrigins)
+      url: isAllowedServiceUrl(
+        currentUrl,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )
         ? currentUrl
         : definition.startUrl
     };

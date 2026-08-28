@@ -29,6 +29,15 @@ describe("remote search routing", () => {
     });
   });
 
+  it("encodes Spotify queries into its allowlisted search path", () => {
+    expect(resolveRemoteSearchDestination("spotify", "lofi & jazz")).toEqual({
+      kind: "active-service",
+      query: "lofi & jazz",
+      serviceId: "spotify",
+      url: "https://open.spotify.com/search/lofi%20%26%20jazz"
+    });
+  });
+
   it("falls back to the shell for no service or a service without search", () => {
     expect(resolveRemoteSearchDestination(null, "severance")).toEqual({
       kind: "shell",

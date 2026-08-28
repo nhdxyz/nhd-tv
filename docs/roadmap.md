@@ -5,7 +5,7 @@
 Prove the high-risk assumptions before building the product shell.
 
 - Bootstrap the DRM-enabled desktop host.
-- Test Netflix, YouTube, and Disney+ login and playback.
+- Test Netflix, YouTube, Disney+, and Spotify login and playback.
 - Verify persistent and isolated service sessions.
 - Prove navigation/root detection and quit behavior.
 - Observe meaningful playback position without controlling the player.
@@ -31,6 +31,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Local profile creation, switching, lineup preferences, and per-profile viewing history foundation (#22)
 - [x] Curated service catalog foundation
 - [x] Experimental catalog and branded-card expansion (#30; provider qualification remains)
+- [x] Spotify Web Player catalog, isolated session, search, branding, and remote-control adapter
 - [x] Add and remove services without clearing sessions
 - [x] Reorder and favorite services (#26)
 - [x] Same-origin declarative custom-service foundation (#26)
@@ -67,7 +68,7 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Active-rail edge scrolling and provider search-field keyboard reliability (#39)
 - [x] Single-layer service focus, contextual quit preview, and multi-row Store catalog (#40)
 - [x] Zero-remote top-right QR invite and default-on first-scan auto-connect (#41)
-- [x] Direct allowlisted Netflix/YouTube phone typing, precision navigation sound, and modal-scoped targeting (#39, #40)
+- [x] Direct allowlisted Netflix/YouTube/Spotify phone typing, precision navigation sound, and modal-scoped targeting (#39, #40)
 - [x] Minimalist remote surface, profile-scoped three-app Quick Launch, and native-control-first Netflix detail focus (#43)
 - [ ] Remembered-phone credentials and device management (#25)
 - [ ] Reconnection across app restarts and persistent device management
@@ -78,9 +79,9 @@ The milestone passes only when results and limitations are documented. Unsupport
 - [x] Result-first TV search overlay with secondary provider actions (#31)
 - [x] Recent Continue Watching discovery before typing
 - [x] Dynamic active-profile Continue Watching matches
-- [x] Declarative Netflix and YouTube query routes
+- [x] Declarative Netflix, YouTube, and Spotify query routes
 - [x] Disney+ browse-search fallback
-- [x] Contextual Netflix and YouTube search from the phone remote
+- [x] Contextual Netflix, YouTube, and Spotify search from the phone remote
 - [x] Debounced TVmaze TV-show results with poster cards and explicit attribution (#31)
 - [x] Per-result search actions for enabled services (#31)
 - [ ] Supported YouTube television activation or external OAuth path (#11)

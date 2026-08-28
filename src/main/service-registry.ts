@@ -24,6 +24,7 @@ const services: readonly ServiceDefinition[] = [
   },
   {
     allowedOrigins: ["https://www.netflix.com"],
+    allowedSubdomainHosts: ["netflix.com"],
     artworkHosts: ["nflximg.net", "nflxso.net"],
     fullscreenOrigins: ["https://www.netflix.com"],
     id: "netflix",
@@ -74,6 +75,7 @@ const services: readonly ServiceDefinition[] = [
       "https://accounts.google.com",
       "https://accounts.youtube.com"
     ],
+    allowedSubdomainHosts: ["youtube.com"],
     artworkHosts: ["i.ytimg.com"],
     authenticationNote:
       "Embedded Google sign-in is feasibility-only and may stall after passkey or OTP. Supported TV activation is under evaluation; signed-out playback remains available.",
@@ -118,6 +120,7 @@ const services: readonly ServiceDefinition[] = [
   },
   {
     allowedOrigins: ["https://www.disneyplus.com"],
+    allowedSubdomainHosts: ["disneyplus.com"],
     artworkHosts: ["disney-plus.net"],
     fullscreenOrigins: ["https://www.disneyplus.com"],
     id: "disney-plus",
@@ -143,6 +146,42 @@ const services: readonly ServiceDefinition[] = [
     },
     spatialNavigation: "dom",
     startUrl: "https://www.disneyplus.com/home"
+  },
+  {
+    allowedOrigins: [
+      "https://open.spotify.com",
+      "https://accounts.spotify.com"
+    ],
+    allowedSubdomainHosts: ["spotify.com"],
+    artworkHosts: [],
+    authenticationNote:
+      "Uses Spotify's own isolated Web Player session. Sign in on the Spotify page; playback availability follows your Spotify account and region.",
+    fullscreenOrigins: [],
+    id: "spotify",
+    kind: "commercial",
+    mediaKeySystemOrigins: ["https://open.spotify.com"],
+    name: "Spotify",
+    partition: "persist:service-spotify",
+    playback: null,
+    remoteTextEntrySelectors: [
+      'input[data-testid="search-input"]',
+      'input[role="searchbox"]',
+      'input[type="search"]',
+      'input[placeholder*="What do you want to play" i]'
+    ],
+    remoteTextEntryTriggerSelectors: [
+      'a[href="/search"]',
+      'a[href^="/search/"]',
+      'button[aria-label*="Search" i]'
+    ],
+    rootUrls: ["https://open.spotify.com/"],
+    search: {
+      baseUrl: "https://open.spotify.com/search",
+      queryParameter: null,
+      queryPathSegment: true
+    },
+    spatialNavigation: "dom",
+    startUrl: "https://open.spotify.com/"
   },
   {
     allowedOrigins: ["https://www.primevideo.com"],
@@ -318,7 +357,11 @@ export function getServiceSummaries(): readonly ServiceSummary[] {
     id,
     kind,
     name,
-    searchMode: search === null ? "none" : search.queryParameter === null ? "browse" : "query"
+    searchMode: search === null
+      ? "none"
+      : search.queryParameter === null && search.queryPathSegment !== true
+        ? "browse"
+        : "query"
   }));
 }
 

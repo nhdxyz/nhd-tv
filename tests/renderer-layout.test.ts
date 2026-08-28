@@ -38,6 +38,35 @@ describe("TV catalog layout", () => {
     expect(css).toContain(".catalog-grid .catalog-card-shell");
   });
 
+  it("provides a complete Spotify visual treatment", () => {
+    const branding = readFileSync(
+      new URL("../src/renderer/service-branding.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(branding).toContain("siSpotify");
+    expect(branding).toContain("spotify: {");
+    expect(css).toContain('.featured[data-service-id="spotify"]');
+    expect(css).toContain('.catalog-card[data-service-id="spotify"]');
+    expect(css).toContain('.service-logo[data-brand="spotify"]');
+    expect(css).toContain('.search-result-card[data-service-id="spotify"]');
+  });
+
+  it("removes Spotify's native-app handoff from the embedded player", () => {
+    const host = readFileSync(
+      new URL("../src/main/service-host.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(host).toContain("const SPOTIFY_TV_STYLE");
+    expect(host).toContain('[data-testid="open-app-button"]');
+    expect(host).toContain('[data-testid="download-button"]');
+    expect(host).toContain('a[href^="https://open.spotify.com/download"]');
+    expect(host).toContain('a[href^="spotify:"]');
+    expect(host).toContain('definition.id === "spotify"');
+    expect(host).toContain("insertCSS(SPOTIFY_TV_STYLE)");
+  });
+
   it("keeps the frozen service preview available behind the quit dialog", () => {
     expect(html).toContain('id="quit-service-preview"');
     expect(css).toContain(".quit-service-preview");

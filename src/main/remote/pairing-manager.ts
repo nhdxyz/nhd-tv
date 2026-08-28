@@ -242,33 +242,41 @@ export class PairingManager {
   }
 
   authorize(token: unknown): boolean {
+    return this.authorizeController(token) !== null;
+  }
+
+  authorizeController(token: unknown): string | null {
     if (typeof token !== "string") {
-      return false;
+      return null;
     }
 
-    for (const session of this.#controllerSessions.values()) {
+    for (const [tokenId, session] of this.#controllerSessions) {
       if (tokensMatch(token, session.tokenHash)) {
         session.lastSeenAt = this.#now();
-        return true;
+        return tokenId;
       }
     }
 
-    return false;
+    return null;
   }
 
   revoke(token: unknown): boolean {
+    return this.revokeController(token) !== null;
+  }
+
+  revokeController(token: unknown): string | null {
     if (typeof token !== "string") {
-      return false;
+      return null;
     }
 
     for (const [tokenId, session] of this.#controllerSessions) {
       if (tokensMatch(token, session.tokenHash)) {
         this.#controllerSessions.delete(tokenId);
-        return true;
+        return tokenId;
       }
     }
 
-    return false;
+    return null;
   }
 
   revokeAll(): void {

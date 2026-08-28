@@ -26,6 +26,11 @@ import {
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 import type { TailscaleSecureRemoteResult } from "./tailscale-secure-remote";
 import {
+  VoiceActivityLease,
+  VOICE_COMMAND_ID_PATTERN,
+  type VoiceActivityEvent
+} from "./voice-activity-lease";
+import {
   MAX_VOICE_AUDIO_BYTES,
   MAX_VOICE_AUDIO_DURATION_MS,
   MIN_VOICE_AUDIO_DURATION_MS,
@@ -75,11 +80,14 @@ export interface PhoneRemoteServerOptions {
     PhoneRemoteVoiceResult |
     Promise<PhoneRemoteVoiceResult>;
   onVoiceActivity?: (activity: PhoneRemoteVoiceActivity) => void | Promise<void>;
-  onVoice?: (clip: VoiceAudioClip) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
+  onVoice?: (
+    clip: VoiceAudioClip,
+    commandId: string
+  ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
 
-export type PhoneRemoteVoiceActivity = "cancelled" | "listening" | "understanding";
+export type PhoneRemoteVoiceActivity = VoiceActivityEvent;
 
 export interface PhoneRemoteVoiceResult {
   confirmationId?: string;
@@ -94,6 +102,7 @@ export interface PhoneRemoteVoiceStatus {
 }
 
 export interface VoiceUploadMetadata {
+  commandId: string;
   durationMs: number;
   mimeType: string;
 }
@@ -103,14 +112,16 @@ export function parsePhoneRemoteVoiceActivity(
 ): PhoneRemoteVoiceActivity | null {
   if (
     value === null ||
-    Object.keys(value).some((key) => key !== "phase") ||
+    Object.keys(value).some((key) => key !== "commandId" && key !== "phase") ||
+    typeof value.commandId !== "string" ||
+    !VOICE_COMMAND_ID_PATTERN.test(value.commandId) ||
     (value.phase !== "cancelled" &&
       value.phase !== "listening" &&
       value.phase !== "understanding")
   ) {
     return null;
   }
-  return value.phase;
+  return { commandId: value.commandId, phase: value.phase };
 }
 
 export function shouldAutoApprovePairing(
@@ -221,8 +232,13 @@ export function parseVoiceUploadMetadata(
   const contentLength = typeof rawContentLength === "string" && /^\d+$/.test(rawContentLength)
     ? Number(rawContentLength)
     : null;
+  const rawCommandId = headers["x-nhd-tv-voice-command-id"];
+  const commandId = typeof rawCommandId === "string" && VOICE_COMMAND_ID_PATTERN.test(rawCommandId)
+    ? rawCommandId
+    : null;
 
   if (
+    commandId === null ||
     !VOICE_AUDIO_TYPES.has(mimeType) ||
     !Number.isInteger(durationMs) ||
     durationMs < MIN_VOICE_AUDIO_DURATION_MS ||
@@ -231,7 +247,7 @@ export function parseVoiceUploadMetadata(
   ) {
     return null;
   }
-  return { durationMs, mimeType };
+  return { commandId, durationMs, mimeType };
 }
 
 function isSameOriginPost(request: IncomingMessage, expectedOrigin: string | null): boolean {
@@ -287,6 +303,7 @@ async function readVoiceBody(request: IncomingMessage): Promise<Uint8Array | nul
 
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
+  readonly #voiceActivityLease = new VoiceActivityLease();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
   readonly #onGetContext: PhoneRemoteServerOptions["onGetContext"];
   readonly #onGetVoiceStatus: PhoneRemoteServerOptions["onGetVoiceStatus"];
@@ -465,6 +482,7 @@ export class PhoneRemoteServer {
 
   async stop(): Promise<void> {
     this.#manager.revokeAll();
+    this.#voiceActivityLease.reset();
     this.#expiresAt = null;
     this.#networkAddress = null;
     this.#qrDataUrl = null;
@@ -820,7 +838,8 @@ export class PhoneRemoteServer {
       const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
         ? authorization.slice("Bearer ".length)
         : null;
-      if (!this.#authorize(token)) {
+      const controllerId = this.#authorizeController(token);
+      if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -834,12 +853,21 @@ export class PhoneRemoteServer {
         writeJson(response, 503, { error: "Voice activity is unavailable" });
         return;
       }
-      if (activity !== "cancelled") {
+      if (activity.phase !== "cancelled") {
         const voiceStatus = await this.#voiceStatus(request);
         if (!voiceStatus.available) {
           writeJson(response, 503, { error: voiceStatus.detail });
           return;
         }
+      }
+      const decision = this.#voiceActivityLease.acceptActivity(controllerId, activity);
+      if (decision === "busy") {
+        writeJson(response, 409, { error: "Another voice command is already active" });
+        return;
+      }
+      if (decision === "ignored") {
+        writeJson(response, 200, { ignored: true, ok: true });
+        return;
       }
       await this.#onVoiceActivity(activity);
       writeJson(response, 200, { ok: true });
@@ -857,7 +885,8 @@ export class PhoneRemoteServer {
       const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
         ? authorization.slice("Bearer ".length)
         : null;
-      if (!this.#authorize(token)) {
+      const controllerId = this.#authorizeController(token);
+      if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
@@ -871,6 +900,10 @@ export class PhoneRemoteServer {
         writeJson(response, 429, { error: "A voice command is already being processed" });
         return;
       }
+      if (!this.#voiceActivityLease.beginUpload(controllerId, metadata.commandId)) {
+        writeJson(response, 409, { error: "This voice recording is no longer active" });
+        return;
+      }
 
       this.#lastVoiceAt = now;
       this.#voiceInFlight = true;
@@ -880,10 +913,15 @@ export class PhoneRemoteServer {
           writeJson(response, 413, { error: "The voice recording is empty or too large" });
           return;
         }
-        const result = await this.#onVoice({ bytes, ...metadata });
+        const result = await this.#onVoice({
+          bytes,
+          durationMs: metadata.durationMs,
+          mimeType: metadata.mimeType
+        }, metadata.commandId);
         writeJson(response, result.outcome === "failed" ? 422 : 200, result);
       } finally {
         this.#voiceInFlight = false;
+        this.#voiceActivityLease.finishUpload(controllerId, metadata.commandId);
       }
       return;
     }
@@ -936,10 +974,12 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      if (!this.#manager.revoke(token)) {
+      const controllerId = this.#manager.revokeController(token);
+      if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session is already disconnected" });
         return;
       }
+      this.#voiceActivityLease.releaseController(controllerId);
 
       this.#publishStatus();
       writeJson(response, 200, { ok: true });
@@ -977,10 +1017,13 @@ export class PhoneRemoteServer {
   }
 
   #authorize(token: unknown): boolean {
+    return this.#authorizeController(token) !== null;
+  }
+
+  #authorizeController(token: unknown): string | null {
     const before = this.#manager.connectedControllers;
-    if (!this.#manager.authorize(token)) {
-      return false;
-    }
+    const controllerId = this.#manager.authorizeController(token);
+    if (controllerId === null) return null;
 
     if (before === 0 && this.#manager.connectedControllers > 0) {
       if (!this.#manager.hasPendingRequest) {
@@ -990,6 +1033,6 @@ export class PhoneRemoteServer {
       }
       this.#publishStatus();
     }
-    return true;
+    return controllerId;
   }
 }

@@ -69,9 +69,11 @@ describe("phone remote boundary", () => {
       "content-type": "audio/webm;codecs=opus",
       host: "living-room.example.ts.net:8443",
       origin: secureOrigin,
-      "x-nhd-tv-audio-duration-ms": "2500"
+      "x-nhd-tv-audio-duration-ms": "2500",
+      "x-nhd-tv-voice-command-id": "voice-command-test-1234"
     };
     expect(parseVoiceUploadMetadata(validHeaders, secureOrigin)).toEqual({
+      commandId: "voice-command-test-1234",
       durationMs: 2500,
       mimeType: "audio/webm"
     });
@@ -83,6 +85,10 @@ describe("phone remote boundary", () => {
       .toBeNull();
     expect(parseVoiceUploadMetadata({ ...validHeaders, "x-nhd-tv-audio-duration-ms": "20001" }, secureOrigin))
       .toBeNull();
+    expect(parseVoiceUploadMetadata({
+      ...validHeaders,
+      "x-nhd-tv-voice-command-id": "short"
+    }, secureOrigin)).toBeNull();
   });
 
   it("auto-approves only the first remote when the device preference allows it", () => {
@@ -123,7 +129,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain('fetch("/api/voice/activity"');
-    expect(REMOTE_JS).toContain('sendVoiceActivity("listening")');
+    expect(REMOTE_JS).toContain("createVoiceCommandId");
+    expect(REMOTE_JS).toContain("JSON.stringify({ commandId, phase })");
+    expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Command-Id": commandId');
+    expect(REMOTE_JS).toContain('sendVoiceActivity("listening", false, commandId)');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
     expect(REMOTE_JS).toContain('error.status !== 422');

@@ -110,17 +110,23 @@ describe("TV voice presentation", () => {
   });
 
   it("accepts only closed voice activity events from the paired phone", () => {
-    expect(parsePhoneRemoteVoiceActivity({ phase: "listening" })).toBe("listening");
-    expect(parsePhoneRemoteVoiceActivity({ phase: "understanding" })).toBe("understanding");
-    expect(parsePhoneRemoteVoiceActivity({ phase: "cancelled" })).toBe("cancelled");
-    expect(parsePhoneRemoteVoiceActivity({ phase: "partial", transcript: "untrusted" }))
+    const commandId = "voice-command-test-1234";
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "listening" }))
+      .toEqual({ commandId, phase: "listening" });
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "understanding" }))
+      .toEqual({ commandId, phase: "understanding" });
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "cancelled" }))
+      .toEqual({ commandId, phase: "cancelled" });
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "partial", transcript: "untrusted" }))
       .toBeNull();
-    expect(parsePhoneRemoteVoiceActivity({ phase: "listening", extra: true })).toBeNull();
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "listening", extra: true })).toBeNull();
+    expect(parsePhoneRemoteVoiceActivity({ commandId: "short", phase: "listening" })).toBeNull();
 
     const endpoint = remoteServer.slice(remoteServer.indexOf('url.pathname === "/api/voice/activity"'));
     expect(endpoint.slice(0, 2_500)).toContain("isSameOriginPost(request, this.#remoteOrigin)");
     expect(endpoint.slice(0, 2_500)).toContain("secureRemoteHeadersAllowMicrophone");
-    expect(endpoint.slice(0, 2_500)).toContain("this.#authorize(token)");
+    expect(endpoint.slice(0, 2_500)).toContain("this.#authorizeController(token)");
+    expect(endpoint.slice(0, 2_500)).toContain("this.#voiceActivityLease.acceptActivity");
     expect(endpoint.slice(0, 2_500)).toContain("voiceStatus.available");
   });
 });

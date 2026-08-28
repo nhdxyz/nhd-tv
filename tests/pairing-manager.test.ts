@@ -31,8 +31,11 @@ describe("phone remote pairing", () => {
     expect(decision.state).toBe("approved");
 
     if (decision.state === "approved") {
+      const controllerId = manager.authorizeController(decision.token);
+      expect(controllerId).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(manager.authorizeController(decision.token)).toBe(controllerId);
       expect(manager.authorize(decision.token)).toBe(true);
-      expect(manager.revoke(decision.token)).toBe(true);
+      expect(manager.revokeController(decision.token)).toBe(controllerId);
       expect(manager.authorize(decision.token)).toBe(false);
     }
   });

@@ -543,13 +543,13 @@ function showVoicePresentation(
 }
 
 function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
-  if (activity === "cancelled") {
+  if (activity.phase === "cancelled") {
     showVoicePresentation("hidden");
     return;
   }
 
   markAmbientActivity();
-  if (activity === "listening") {
+  if (activity.phase === "listening") {
     showVoicePresentation(
       "listening",
       { detail: "Listening…" },
@@ -1322,7 +1322,10 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
   };
 }
 
-async function handleRemoteVoice(clip: VoiceAudioClip): Promise<PhoneRemoteVoiceResult> {
+async function handleRemoteVoice(
+  clip: VoiceAudioClip,
+  commandId: string
+): Promise<PhoneRemoteVoiceResult> {
   if (!remoteVoiceStatus().available || voiceCommandSession === null) {
     const result: PhoneRemoteVoiceResult = {
       detail: remoteVoiceStatus().detail,
@@ -1331,7 +1334,7 @@ async function handleRemoteVoice(clip: VoiceAudioClip): Promise<PhoneRemoteVoice
     presentPhoneVoiceResult(result);
     return result;
   }
-  presentPhoneVoiceActivity("understanding");
+  presentPhoneVoiceActivity({ commandId, phase: "understanding" });
   try {
     const result = await voiceCommandSession.process(clip);
     presentPhoneVoiceResult(result);

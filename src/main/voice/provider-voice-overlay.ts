@@ -45,7 +45,7 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       .signal i:nth-child(3) { animation-delay: -520ms; }
       .copy { display: grid; min-width: 0; gap: 5px; }
       small { color: #d7ff55; font-size: 12px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
-      strong { overflow: hidden; font-size: clamp(21px, 3.2vw, 30px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+      strong { display: -webkit-box; overflow: hidden; font-size: clamp(21px, 3.2vw, 30px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
       aside[data-phase="success"] .signal { background: #72e6a1; }
       aside[data-phase="confirmation"] .signal { background: #fbbf24; }
       aside[data-phase="error"] .signal { background: #ff6577; color: #fff; }
@@ -90,7 +90,7 @@ export function providerVoiceOverlayBounds(
   const outerInset = Math.max(16, Math.min(48, Math.round(safeWidth * 0.035)));
   const availableWidth = Math.max(0, safeWidth - outerInset * 2);
   const width = Math.min(920, availableWidth);
-  const height = Math.min(148, Math.max(0, safeHeight - 32));
+  const height = Math.min(196, Math.max(0, safeHeight - 32));
   const bottomInset = Math.max(16, Math.min(44, Math.round(safeHeight * 0.045)));
   return {
     height,
@@ -162,8 +162,24 @@ export class ProviderVoiceOverlay {
     }
     this.#state = state;
     this.#ensureView();
+    this.#raiseView();
     this.resize();
     void this.#render();
+  }
+
+  #raiseView(): void {
+    const view = this.#view;
+    if (view === null || view.webContents.isDestroyed()) return;
+    try {
+      this.#window.contentView.removeChildView(view);
+    } catch {
+      // A newly recreated parent may not contain the overlay yet.
+    }
+    try {
+      this.#window.contentView.addChildView(view);
+    } catch {
+      // The parent may be closing while a terminal voice state is published.
+    }
   }
 
   #ensureView(): void {

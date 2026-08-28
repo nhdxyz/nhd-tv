@@ -131,6 +131,7 @@ const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
 const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
+const VOICE_CONFIRMATION_DISPLAY_MS = 30_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
 const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 130_000;
@@ -602,10 +603,13 @@ function presentPhoneVoiceResult(
   const phase: VoicePresentationPhase = result.outcome === "failed"
     ? "error"
     : result.outcome === "confirmation-required" ? "confirmation" : "success";
+  const displayMilliseconds = phase === "confirmation"
+    ? VOICE_CONFIRMATION_DISPLAY_MS
+    : VOICE_RESULT_DISPLAY_MS;
   const showResult = () => showVoicePresentation(
     phase,
     { detail: voiceResultDetail(result) },
-    VOICE_RESULT_DISPLAY_MS,
+    displayMilliseconds,
     commandId
   );
   const remainingTranscriptMs = remainingVoiceTranscriptDisplayMilliseconds(

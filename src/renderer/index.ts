@@ -271,6 +271,7 @@ let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
 let voicePresentationFailsafeTimer: number | null = null;
+const VOICE_PRESENTATION_FAILSAFE_MS = 150_000;
 let featuredContinueItemId: string | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
@@ -318,7 +319,7 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
       elements.voicePresentationLabel.textContent = "AI Voice";
       elements.voicePresentationCopy.textContent = "";
       voicePresentationFailsafeTimer = null;
-    }, 75_000);
+    }, VOICE_PRESENTATION_FAILSAFE_MS);
   }
 }
 

@@ -5,10 +5,10 @@ import { providerVoiceOverlayBounds } from "../src/main/voice/provider-voice-ove
 describe("provider voice overlay", () => {
   it("centers a bounded bottom overlay on television-sized content", () => {
     expect(providerVoiceOverlayBounds(1920, 1080)).toEqual({
-      height: 148,
+      height: 196,
       width: 920,
       x: 500,
-      y: 888
+      y: 840
     });
   });
 
@@ -37,10 +37,15 @@ describe("provider voice overlay", () => {
     expect(indexSource).toContain("profileNameHint: activeVoiceProfileName()");
     expect(indexSource).toContain('plan.intent.action !== "open"');
     expect(indexSource).toContain("VOICE_TRANSCRIPT_MIN_DISPLAY_MS");
+    expect(indexSource).toContain("VOICE_CONFIRMATION_DISPLAY_MS");
     expect(indexSource).toContain('result.outcome === "confirmation-required" ? "confirmation"');
     expect(indexSource).toContain("voiceProviderCommandHandled(plan.intent, automated)");
     expect(overlaySource).toContain("new WebContentsView");
+    expect(overlaySource).toContain("this.#raiseView()");
+    expect(overlaySource).toContain("this.#window.contentView.removeChildView(view)");
+    expect(overlaySource).toContain("this.#window.contentView.addChildView(view)");
     expect(overlaySource).toContain("detail.textContent = state.copy");
+    expect(overlaySource).toContain("-webkit-line-clamp: 3");
     expect(overlaySource).not.toContain("innerHTML");
   });
 });

@@ -95,7 +95,7 @@ describe("TV voice presentation", () => {
     expect(render.slice(0, 2_200)).toContain(".textContent = copy.label");
     expect(render.slice(0, 2_200)).toContain(".textContent = copy.copy");
     expect(render.slice(0, 2_200)).not.toContain("innerHTML");
-    expect(render.slice(0, 2_200)).toContain("75_000");
+    expect(renderer).toContain("VOICE_PRESENTATION_FAILSAFE_MS = 150_000");
   });
 
   it("provides a non-blocking accessible TV surface", () => {
@@ -104,6 +104,7 @@ describe("TV voice presentation", () => {
     expect(html).toContain('aria-atomic="true"');
     expect(css).toContain(".voice-presentation");
     expect(css).toContain("pointer-events: none");
+    expect(css).toContain("-webkit-line-clamp: 3");
     expect(css).toContain('.voice-presentation[data-phase="listening"]');
     expect(css).toContain('.voice-presentation[data-phase="confirmation"]');
     expect(css).toContain('.voice-presentation[data-phase="error"]');

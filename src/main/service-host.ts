@@ -1675,9 +1675,8 @@ export class ServiceHost {
       return false;
     }
 
-    const cancelOperation = () => this.#closeVoiceOperationView(view, operation);
-    signal?.addEventListener("abort", cancelOperation, { once: true });
-    try {
+    // Cancellation stops this bounded automation loop, but the provider view
+    // is user state and must remain open at its last stable page.
       const suppliedDestination = options.intendedUrl ?? null;
       const safeSuppliedDestination = suppliedDestination !== null && isAllowedServiceUrl(
         suppliedDestination,
@@ -1843,9 +1842,6 @@ export class ServiceHost {
         return true;
       }
       return false;
-    } finally {
-      signal?.removeEventListener("abort", cancelOperation);
-    }
   }
 
   cancelQuit(): void {
@@ -1996,9 +1992,7 @@ export class ServiceHost {
       return false;
     }
 
-    const cancelOperation = () => this.#closeVoiceOperationView(view, operation);
-    signal?.addEventListener("abort", cancelOperation, { once: true });
-    try {
+    // A timed-out remote action must not close the active provider.
       if (action === "back") {
         return this.requestBack(signal, view, operation);
       }
@@ -2042,9 +2036,6 @@ export class ServiceHost {
       if (this.#view !== view || view.webContents.isDestroyed()) return false;
       this.#sendKey(action, view);
       return true;
-    } finally {
-      signal?.removeEventListener("abort", cancelOperation);
-    }
   }
 
   async executeVoiceSemanticControl(

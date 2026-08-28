@@ -105,6 +105,8 @@ describe("TV voice presentation", () => {
     expect(css).toContain(".voice-presentation");
     expect(css).toContain("pointer-events: none");
     expect(css).toContain("-webkit-line-clamp: 3");
+    expect(css).toContain("grid-template-columns: 3.7rem minmax(0, 1fr)");
+    expect(css).toContain("font-size: clamp(1.18rem, 2vw, 1.5rem)");
     expect(css).toContain('.voice-presentation[data-phase="listening"]');
     expect(css).toContain('.voice-presentation[data-phase="confirmation"]');
     expect(css).toContain('.voice-presentation[data-phase="error"]');

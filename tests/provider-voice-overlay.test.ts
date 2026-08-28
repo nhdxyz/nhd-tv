@@ -5,10 +5,10 @@ import { providerVoiceOverlayBounds } from "../src/main/voice/provider-voice-ove
 describe("provider voice overlay", () => {
   it("centers a bounded bottom overlay on television-sized content", () => {
     expect(providerVoiceOverlayBounds(1920, 1080)).toEqual({
-      height: 196,
-      width: 920,
-      x: 500,
-      y: 840
+      height: 224,
+      width: 1_040,
+      x: 440,
+      y: 812
     });
   });
 
@@ -46,6 +46,8 @@ describe("provider voice overlay", () => {
     expect(overlaySource).toContain("this.#window.contentView.addChildView(view)");
     expect(overlaySource).toContain("detail.textContent = state.copy");
     expect(overlaySource).toContain("-webkit-line-clamp: 3");
+    expect(overlaySource).toContain("grid-template-columns: 64px minmax(0, 1fr)");
+    expect(overlaySource).toContain("font-size: clamp(24px, 3.4vw, 34px)");
     expect(overlaySource).not.toContain("innerHTML");
   });
 });

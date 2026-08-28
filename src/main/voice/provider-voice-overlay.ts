@@ -10,18 +10,18 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
-      body { display: grid; padding: 8px; place-items: center; }
+      body { display: grid; padding: 10px; place-items: center; }
       aside {
         display: grid;
         width: 100%;
-        min-height: 108px;
-        padding: 20px 24px;
-        grid-template-columns: 52px minmax(0, 1fr);
+        min-height: 128px;
+        padding: 24px 30px;
+        grid-template-columns: 64px minmax(0, 1fr);
         align-items: center;
-        gap: 18px;
+        gap: 22px;
         overflow: hidden;
         border: 1px solid rgb(255 255 255 / 14%);
-        border-radius: 24px;
+        border-radius: 28px;
         background: rgb(10 12 15 / 94%);
         box-shadow: 0 22px 70px rgb(0 0 0 / 54%), inset 0 1px rgb(255 255 255 / 8%);
         color: #f7f7f3;
@@ -30,22 +30,22 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       .signal {
         position: relative;
         display: grid;
-        width: 52px;
-        height: 52px;
-        grid-template-columns: repeat(3, 5px);
+        width: 64px;
+        height: 64px;
+        grid-template-columns: repeat(3, 6px);
         place-content: center;
-        gap: 4px;
+        gap: 5px;
         border-radius: 50%;
         background: #d7ff55;
         color: #10120d;
         box-shadow: 0 0 30px rgb(215 255 85 / 22%);
       }
-      .signal i { width: 5px; height: 17px; border-radius: 999px; background: currentColor; animation: pulse 820ms ease-in-out infinite alternate; }
-      .signal i:nth-child(2) { height: 28px; animation-delay: -260ms; }
+      .signal i { width: 6px; height: 20px; border-radius: 999px; background: currentColor; animation: pulse 820ms ease-in-out infinite alternate; }
+      .signal i:nth-child(2) { height: 34px; animation-delay: -260ms; }
       .signal i:nth-child(3) { animation-delay: -520ms; }
       .copy { display: grid; min-width: 0; gap: 5px; }
-      small { color: #d7ff55; font-size: 12px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
-      strong { display: -webkit-box; overflow: hidden; font-size: clamp(21px, 3.2vw, 30px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+      small { color: #d7ff55; font-size: 13px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+      strong { display: -webkit-box; overflow: hidden; font-size: clamp(24px, 3.4vw, 34px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
       aside[data-phase="success"] .signal { background: #72e6a1; }
       aside[data-phase="confirmation"] .signal { background: #fbbf24; }
       aside[data-phase="error"] .signal { background: #ff6577; color: #fff; }
@@ -60,7 +60,7 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       aside[data-phase="error"] .signal i:first-child { transform: translate(5px) rotate(45deg); }
       aside[data-phase="error"] .signal i:nth-child(2) { transform: translate(-4px) rotate(-45deg); }
       aside[data-phase="error"] .signal i:last-child { display: none; }
-      @keyframes pulse { to { height: 30px; } }
+      @keyframes pulse { to { height: 36px; } }
       @media (prefers-reduced-motion: reduce) { .signal i { animation: none; } }
     </style>
   </head>
@@ -89,8 +89,8 @@ export function providerVoiceOverlayBounds(
   const safeHeight = Math.max(0, Math.floor(contentHeight));
   const outerInset = Math.max(16, Math.min(48, Math.round(safeWidth * 0.035)));
   const availableWidth = Math.max(0, safeWidth - outerInset * 2);
-  const width = Math.min(920, availableWidth);
-  const height = Math.min(196, Math.max(0, safeHeight - 32));
+  const width = Math.min(1_040, availableWidth);
+  const height = Math.min(224, Math.max(0, safeHeight - 32));
   const bottomInset = Math.max(16, Math.min(44, Math.round(safeHeight * 0.045)));
   return {
     height,

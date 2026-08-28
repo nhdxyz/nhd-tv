@@ -77,6 +77,9 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("Use mediaAction=search");
       expect(body.instructions).toContain("Use controlAction=close-app");
       expect(body.instructions).toContain("Use next-track or previous-track only");
+      expect(body.instructions).toContain(
+        "For search, leave providerHint null unless the user explicitly names the provider"
+      );
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 

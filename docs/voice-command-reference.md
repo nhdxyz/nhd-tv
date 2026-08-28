@@ -15,7 +15,7 @@ App launch and media control have different boundaries:
 | “Open Netflix” | Opens Netflix when it is enabled. If it is already open, reports that without reopening it. |
 | “Switch to YouTube” / “Go to Spotify” | Opens the exact enabled app. Common built-in aliases such as “Max,” “Prime Video,” and “Apple TV Plus” are recognized for app launch only. |
 | “Open Movie Club” | Opens a custom app only when its normalized name matches exactly and uniquely. A disabled, missing, or ambiguous app name performs no navigation. |
-| “Search for Breaking Bad” | Opens search results without playing anything. It searches the active supported media app when possible; otherwise it uses the first eligible voice-media app in the profile lineup. |
+| “Search for Breaking Bad” | Opens search results without playing anything. It searches the active supported media app when possible; otherwise it uses a provider implied by the media type, then the first eligible voice-media app in the profile lineup. |
 | “Search Netflix for Breaking Bad” | Opens Netflix search results without autoplay or playback confirmation. |
 | “Search YouTube for Outdoor Boys” | Opens YouTube search results without choosing or playing a result. |
 | “Where can I watch Apollo 13?” | Uses Google Where to watch and reports the available providers. It does not open a provider or start playback. |

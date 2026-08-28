@@ -177,7 +177,10 @@ function mediaPlan(
   context: VoiceCommandContext
 ): VoiceCommandPlan {
   const enabled = supportedEnabledServices(context.enabledServiceIds, context.serviceOrder);
-  const provider = impliedProvider(intent);
+  const activeSearchService = intent.action === "search" && intent.providerHint === null
+    ? enabled.find((serviceId) => serviceId === context.activeServiceId)
+    : undefined;
+  const provider = activeSearchService ?? impliedProvider(intent);
   const eligible = provider === null && intent.action !== "search"
     ? enabled.filter((serviceId) => serviceId !== "spotify")
     : enabled;
@@ -186,22 +189,16 @@ function mediaPlan(
     : eligible.includes(provider)
       ? [provider]
       : [];
-  const activeSearchService = intent.action === "search" && provider === null
-    ? enabled.find((serviceId) => serviceId === context.activeServiceId)
-    : undefined;
-  const searchCandidates = activeSearchService === undefined
-    ? candidateServiceIds
-    : [activeSearchService];
   const isPlayback = intent.action === "play";
 
   return {
-    candidateServiceIds: searchCandidates,
+    candidateServiceIds,
     confirmationRequired: isPlayback &&
       candidateServiceIds.length > 0 &&
       context.playbackMode === "confirm",
     intent,
     kind: "resolve-media",
-    launchAllowed: intent.action !== "lookup" && searchCandidates.length > 0
+    launchAllowed: intent.action !== "lookup" && candidateServiceIds.length > 0
   };
 }
 

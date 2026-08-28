@@ -62,6 +62,40 @@ function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function settleOnAbort<T>(
+  task: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort: () => void
+): Promise<T> {
+  if (signal === undefined) return task;
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      callback();
+    };
+    const abort = () => {
+      try {
+        onAbort();
+      } catch {
+        // Cancellation must still reject even if best-effort cleanup fails.
+      } finally {
+        finish(() => reject(
+          signal.reason ?? new DOMException("The operation was aborted.", "AbortError")
+        ));
+      }
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    void task.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error))
+    );
+  });
+}
+
 function normalizedCountry(value: string): string {
   const country = value.trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(country)) {
@@ -224,6 +258,7 @@ async function loadUrl(
 }
 
 export class GoogleWatchResolver {
+  #activeResolution: symbol | null = null;
   readonly #cache: GoogleWatchCache;
   readonly #partition: string;
   #probeSession: Session | null = null;
@@ -267,17 +302,29 @@ export class GoogleWatchResolver {
     const fresh = this.#cache.getFresh(lookup.queryText, countryCode);
     if (fresh !== null && (!completeOffers || fresh.offersComplete)) return fresh;
 
+    const resolution = Symbol("google-watch-resolution");
     const task = this.#sequence.catch(() => undefined).then(async () => {
       signal?.throwIfAborted();
-      const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
-      if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
-        return secondFresh;
+      this.#activeResolution = resolution;
+      try {
+        const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
+        if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
+          return secondFresh;
+        }
+        await this.warm(signal);
+        return await this.#resolveUncached(
+          { ...lookup, countryCode },
+          completeOffers,
+          signal
+        );
+      } finally {
+        if (this.#activeResolution === resolution) this.#activeResolution = null;
       }
-      await this.warm(signal);
-      return this.#resolveUncached({ ...lookup, countryCode }, completeOffers, signal);
     });
     this.#sequence = task.then(() => undefined, () => undefined);
-    return task;
+    return settleOnAbort(task, signal, () => {
+      if (this.#activeResolution === resolution) this.cancelActive();
+    });
   }
 
   destroy(): void {
@@ -291,6 +338,7 @@ export class GoogleWatchResolver {
 
   cancelActive(): void {
     this.destroy();
+    this.#activeResolution = null;
     this.#sequence = Promise.resolve();
   }
 

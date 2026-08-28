@@ -47,9 +47,9 @@ describe("Google watch resolver boundary", () => {
 
     expect(source).toContain("VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000");
     expect(execution).toContain('plan.intent.action === "play"');
-    expect(execution).toContain("AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)");
-    expect(execution).toContain("signal?.aborted !== true");
-    expect(execution).toContain("resolver.cancelActive()");
+    expect(execution).toContain("runVoiceStageWithDeadline(");
+    expect(execution).toContain("timeoutMs: Math.max(1, playbackDiscoveryDeadlineAt - Date.now())");
+    expect(execution).toContain("signal,");
   });
 
   it("builds a regional, non-personalized Google query", () => {

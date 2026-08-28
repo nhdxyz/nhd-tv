@@ -125,6 +125,7 @@ import {
   createVoicePresentationState,
   remainingVoiceTranscriptDisplayMilliseconds
 } from "./voice/voice-presentation";
+import { runVoiceStageWithDeadline } from "./voice/voice-stage-deadline";
 import { ProviderVoiceOverlay } from "./voice/provider-voice-overlay";
 
 const SHELL_HOST = "shell";
@@ -1290,26 +1291,22 @@ async function executeGoogleWatchPlan(
   if (resolver === null || !usesGoogleWatchDiscovery(plan)) return null;
 
   const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
-  const discoverySignal = plan.intent.action === "play"
-    ? signal === undefined
-      ? AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)
-      : AbortSignal.any([
-        signal,
-        AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)
-      ])
-    : signal;
+  const playbackDiscoveryDeadlineAt = Date.now() + VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS;
   const resolveOffers = async (completeOffers: boolean) => {
-    try {
-      return await resolver.resolve(lookup, {
-        completeOffers,
-        signal: discoverySignal
-      });
-    } catch (error) {
-      if (discoverySignal?.aborted === true && signal?.aborted !== true) {
-        resolver.cancelActive();
-      }
-      throw error;
+    if (plan.intent.action !== "play") {
+      return resolver.resolve(lookup, { completeOffers, signal });
     }
+    return runVoiceStageWithDeadline(
+      (stageSignal) => resolver.resolve(lookup, {
+        completeOffers,
+        signal: stageSignal
+      }),
+      {
+        signal,
+        timeoutMessage: "Watch-provider discovery took too long.",
+        timeoutMs: Math.max(1, playbackDiscoveryDeadlineAt - Date.now())
+      }
+    );
   };
   signal?.throwIfAborted();
   presentPhoneVoiceProgress("Checking your services…");

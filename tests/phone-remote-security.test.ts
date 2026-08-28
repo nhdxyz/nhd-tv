@@ -126,6 +126,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('sendVoiceActivity("listening")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
+    expect(REMOTE_JS).toContain('error.status !== 422');
     expect(REMOTE_JS).toContain(".catch(() => {})");
     expect(REMOTE_JS).toContain("finishVoiceRecording");
     expect(REMOTE_JS).toContain("stopVoiceStream");

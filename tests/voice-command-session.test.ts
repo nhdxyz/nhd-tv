@@ -47,19 +47,43 @@ describe("voice command session", () => {
         return context("automatic");
       },
       onTranscript: (transcript) => sequence.push(`transcript:${transcript}`),
-      understand: async () => ({
-        intent: mediaIntent(),
-        transcript: "play breaking bad"
-      })
+      understand: async (_clip, _signal, onTranscript) => {
+        sequence.push("transcribed");
+        onTranscript?.("play breaking bad");
+        sequence.push("interpreted");
+        return {
+          intent: mediaIntent(),
+          transcript: "play breaking bad"
+        };
+      }
     });
 
     await session.process(clip);
 
     expect(sequence).toEqual([
+      "transcribed",
       "transcript:play breaking bad",
+      "interpreted",
       "context",
       "execute"
     ]);
+  });
+
+  it("keeps an early transcript when intent interpretation later fails", async () => {
+    const onTranscript = vi.fn();
+    const session = new VoiceCommandSession({
+      execute: vi.fn(),
+      getContext: () => context(),
+      onTranscript,
+      understand: async (_clip, _signal, reportTranscript) => {
+        reportTranscript?.("play something");
+        throw new Error("interpretation failed");
+      }
+    });
+
+    await expect(session.process(clip)).rejects.toThrow("interpretation failed");
+    expect(onTranscript).toHaveBeenCalledOnce();
+    expect(onTranscript).toHaveBeenCalledWith("play something");
   });
 
   it("executes control commands without confirmation", async () => {

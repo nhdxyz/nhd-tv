@@ -31,9 +31,12 @@ describe("provider voice overlay", () => {
     );
 
     expect(indexSource).toContain("providerVoiceOverlay?.show(currentVoicePresentation)");
+    expect(indexSource).toContain('mainWindow.on("resize", () => providerVoiceOverlay?.resize())');
     expect(indexSource).toContain("serviceHost.activeServiceId !== null");
     expect(indexSource).toContain("intendedUrl: playbackUrl");
     expect(indexSource).toContain("profileNameHint: activeVoiceProfileName()");
+    expect(indexSource).toContain('plan.intent.action !== "open"');
+    expect(indexSource).toContain("VOICE_TRANSCRIPT_MIN_DISPLAY_MS");
     expect(overlaySource).toContain("new WebContentsView");
     expect(overlaySource).toContain("detail.textContent = state.copy");
     expect(overlaySource).not.toContain("innerHTML");

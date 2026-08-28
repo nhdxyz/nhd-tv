@@ -114,7 +114,8 @@ import {
 } from "./voice/google-watch-selection";
 import { applyYouTubeLatestSort } from "./voice/voice-provider-automation";
 import {
-  createVoicePresentationState
+  createVoicePresentationState,
+  remainingVoiceTranscriptDisplayMilliseconds
 } from "./voice/voice-presentation";
 import { ProviderVoiceOverlay } from "./voice/provider-voice-overlay";
 
@@ -127,6 +128,7 @@ const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
 const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
+const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 70_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
@@ -165,6 +167,7 @@ let currentVoicePresentation = createVoicePresentationState("hidden");
 let providerVoiceOverlay: ProviderVoiceOverlay | null = null;
 let voicePresentationTimer: NodeJS.Timeout | null = null;
 let voicePresentationVersion = 0;
+let voiceTranscriptPresentedAt = 0;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
 let ambientDisplayPreview = false;
@@ -522,6 +525,7 @@ function showVoicePresentation(
 ): number {
   clearVoicePresentationTimer();
   const version = ++voicePresentationVersion;
+  voiceTranscriptPresentedAt = phase === "transcript" ? Date.now() : 0;
   publishVoicePresentation(createVoicePresentationState(phase, values));
 
   if (clearAfterMs !== undefined) {
@@ -573,11 +577,29 @@ function presentPhoneVoiceTranscript(transcript: string): void {
 
 function presentPhoneVoiceResult(result: PhoneRemoteVoiceResult): void {
   const phase: VoicePresentationPhase = result.outcome === "failed" ? "error" : "success";
-  showVoicePresentation(
+  const showResult = () => showVoicePresentation(
     phase,
     { detail: voiceResultDetail(result) },
     VOICE_RESULT_DISPLAY_MS
   );
+  const remainingTranscriptMs = remainingVoiceTranscriptDisplayMilliseconds(
+    currentVoicePresentation.phase,
+    voiceTranscriptPresentedAt,
+    Date.now(),
+    VOICE_TRANSCRIPT_MIN_DISPLAY_MS
+  );
+  if (remainingTranscriptMs <= 0) {
+    showResult();
+    return;
+  }
+
+  clearVoicePresentationTimer();
+  const version = voicePresentationVersion;
+  voicePresentationTimer = setTimeout(() => {
+    if (version !== voicePresentationVersion) return;
+    voicePresentationTimer = null;
+    showResult();
+  }, remainingTranscriptMs);
 }
 
 function publishContinueWatching(): void {
@@ -1144,7 +1166,8 @@ function activeVoiceProfileName(): string | null {
 function usesGoogleWatchDiscovery(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
 ): boolean {
-  return ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
+  return plan.intent.action !== "open" &&
+    ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
 }
 
 async function executeGoogleWatchPlan(
@@ -1868,6 +1891,7 @@ async function createMainWindow(): Promise<void> {
   });
 
   providerVoiceOverlay = new ProviderVoiceOverlay(mainWindow);
+  mainWindow.on("resize", () => providerVoiceOverlay?.resize());
 
   serviceHost = new ServiceHost(
     mainWindow,
@@ -2010,7 +2034,8 @@ app.whenReady().then(async () => {
     execute: executeVoiceCommandPlan,
     getContext: voiceCommandContext,
     onTranscript: presentPhoneVoiceTranscript,
-    understand: (clip, signal) => openAiVoiceClient.understand(clip, signal)
+    understand: (clip, signal, onTranscript) =>
+      openAiVoiceClient.understand(clip, signal, onTranscript)
   });
   setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(

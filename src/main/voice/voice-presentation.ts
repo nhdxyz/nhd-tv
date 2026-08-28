@@ -48,3 +48,22 @@ export function createVoicePresentationState(
 
   return { detail, phase, transcript };
 }
+
+export function remainingVoiceTranscriptDisplayMilliseconds(
+  phase: VoicePresentationPhase,
+  presentedAt: number,
+  now: number,
+  minimumMilliseconds: number
+): number {
+  if (
+    phase !== "transcript" ||
+    !Number.isFinite(presentedAt) ||
+    !Number.isFinite(now) ||
+    !Number.isFinite(minimumMilliseconds) ||
+    minimumMilliseconds <= 0
+  ) {
+    return 0;
+  }
+  const elapsed = Math.max(0, now - presentedAt);
+  return Math.max(0, minimumMilliseconds - elapsed);
+}

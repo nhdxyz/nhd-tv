@@ -4,6 +4,7 @@ import { IPC_CHANNELS, type VoicePresentationState } from "../src/main/contracts
 import {
   createVoicePresentationState,
   MAX_VOICE_PRESENTATION_TRANSCRIPT_LENGTH,
+  remainingVoiceTranscriptDisplayMilliseconds,
   sanitizeVoicePresentationText
 } from "../src/main/voice/voice-presentation";
 import { parsePhoneRemoteVoiceActivity } from "../src/main/remote/phone-remote-server";
@@ -47,6 +48,15 @@ describe("TV voice presentation", () => {
       detail: "stale",
       transcript: "stale"
     })).toEqual({ detail: null, phase: "hidden", transcript: null });
+  });
+
+  it("keeps a final transcript readable without delaying command execution", () => {
+    expect(remainingVoiceTranscriptDisplayMilliseconds("transcript", 1_000, 1_100, 1_400))
+      .toBe(1_300);
+    expect(remainingVoiceTranscriptDisplayMilliseconds("transcript", 1_000, 2_500, 1_400))
+      .toBe(0);
+    expect(remainingVoiceTranscriptDisplayMilliseconds("success", 1_000, 1_100, 1_400))
+      .toBe(0);
   });
 
   it("renders honest phase copy without implying live partial transcription", () => {

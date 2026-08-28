@@ -30,7 +30,11 @@ export interface VoiceCommandSessionOptions {
   now?: () => number;
   onTranscript?: (transcript: string) => void;
   randomToken?: () => string;
-  understand: (clip: VoiceAudioClip, signal?: AbortSignal) =>
+  understand: (
+    clip: VoiceAudioClip,
+    signal?: AbortSignal,
+    onTranscript?: (transcript: string) => void
+  ) =>
     { intent: VoiceIntent; transcript: string } |
     Promise<{ intent: VoiceIntent; transcript: string }>;
 }
@@ -86,8 +90,14 @@ export class VoiceCommandSession {
     signal?: AbortSignal
   ): Promise<VoiceCommandSessionResult> {
     this.#removeExpired();
-    const { intent, transcript } = await this.#understand(clip, signal);
-    this.#onTranscript(transcript);
+    let transcriptReported = false;
+    const reportTranscript = (transcript: string) => {
+      if (transcriptReported) return;
+      transcriptReported = true;
+      this.#onTranscript(transcript);
+    };
+    const { intent, transcript } = await this.#understand(clip, signal, reportTranscript);
+    reportTranscript(transcript);
     const plan = planVoiceCommand(intent, await this.#getContext());
 
     if (plan.kind === "resolve-media" && plan.confirmationRequired) {

@@ -1091,7 +1091,10 @@ export const REMOTE_JS = `(() => {
         if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
       }
     } catch (error) {
-      sendVoiceActivity("cancelled");
+      // A 422 is the main process's sanitized voice-command failure response;
+      // it has already published the TV error and must not be hidden by a
+      // subsequent cancellation activity event.
+      if (!error || error.status !== 422) sendVoiceActivity("cancelled");
       setState(error instanceof Error ? error.message : "Voice command failed", "error");
     } finally {
       voiceProcessing = false;

@@ -55,7 +55,11 @@ import {
   OpenAiCredentialStore
 } from "./openai-credential-store";
 import { isMediaAction } from "./media-actions";
-import { PhoneRemoteServer } from "./remote/phone-remote-server";
+import {
+  PhoneRemoteServer,
+  type PhoneRemoteVoiceResult,
+  type PhoneRemoteVoiceStatus
+} from "./remote/phone-remote-server";
 import { TailscaleSecureRemote } from "./remote/tailscale-secure-remote";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import { buildRemoteTextEntryScript } from "./remote-text-entry";
@@ -80,6 +84,17 @@ import {
   sanitizePlaybackUrl,
   type ServiceDefinition
 } from "./security/navigation-policy";
+import {
+  OpenAiVoiceClient,
+  OpenAiVoiceError,
+  type VoiceAudioClip
+} from "./voice/openai-voice-client";
+import type {
+  VoiceCommandContext,
+  VoiceCommandPlan
+} from "./voice/voice-command-router";
+import { VoiceCommandSession } from "./voice/voice-command-session";
+import { resolveVoiceMediaDestination } from "./voice/voice-media-destination";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
@@ -118,6 +133,7 @@ let localStateStore: LocalStateStore | null = null;
 let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
+let voiceCommandSession: VoiceCommandSession | null = null;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
 let ambientDisplayPreview = false;
@@ -944,6 +960,128 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
     : { handled: true };
 }
 
+function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
+  const state = localStateStore?.snapshot();
+  if (state === undefined || !state.devicePreferences.voiceControlEnabled) {
+    return {
+      available: false,
+      detail: "Enable AI voice control in NHD-TV Settings."
+    };
+  }
+
+  const credentialStatus = openAiCredentialStore?.status();
+  if (credentialStatus?.state !== "configured") {
+    return {
+      available: false,
+      detail: credentialStatus?.detail ?? "Add an OpenAI API key in NHD-TV Settings."
+    };
+  }
+  if (voiceCommandSession === null) {
+    return { available: false, detail: "Voice control is still starting." };
+  }
+  return { available: true, detail: "Hold the microphone button and speak." };
+}
+
+function voiceCommandContext(): VoiceCommandContext {
+  const state = localStateStore?.snapshot();
+  return {
+    activeServiceId: serviceHost?.activeServiceId ?? null,
+    enabledServiceIds: state?.preferences.enabledServiceIds ?? [],
+    muted: null,
+    playbackMode: state?.preferences.voicePlaybackMode ?? "confirm",
+    playing: serviceHost?.activeServiceId === null || serviceHost === null
+      ? false
+      : serviceHost.isPlaybackActive
+  };
+}
+
+async function executeVoiceCommandPlan(
+  plan: VoiceCommandPlan
+): Promise<RemoteActionOutcome & { detail: string }> {
+  if (plan.kind === "no-op") {
+    return { detail: plan.detail, handled: true };
+  }
+  if (plan.kind === "remote-action") {
+    const result = await handleRemoteAction(plan.action);
+    return {
+      detail: result.detail ?? "Voice control sent to the TV.",
+      handled: result.handled
+    };
+  }
+  if (plan.kind === "close-service") {
+    if (serviceHost === null || serviceHost.activeServiceId === null) {
+      return { detail: "Nothing is currently open.", handled: true };
+    }
+    await serviceHost.closeWithCheckpoint();
+    if (mainWindow !== null && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
+    }
+    return { detail: "Closed the current app.", handled: true };
+  }
+
+  const destination = resolveVoiceMediaDestination(plan.intent, plan.candidateServiceIds);
+  if (destination === null) {
+    return {
+      detail: "That title is not on a service enabled in this profile.",
+      handled: false
+    };
+  }
+  if (!plan.launchAllowed) {
+    const serviceName = getServiceDefinition(destination.serviceId)?.name ?? destination.serviceId;
+    return {
+      detail: `${plan.intent.title} can be looked up on ${serviceName}.`,
+      handled: true
+    };
+  }
+
+  const definition = getServiceDefinition(destination.serviceId);
+  const searchUrl = definition === null
+    ? null
+    : buildServiceSearchUrl(definition, destination.query);
+  if (definition === null || searchUrl === null) {
+    return { detail: "That service cannot search for this request.", handled: false };
+  }
+  await openTrackedService(definition, searchUrl);
+  const exactEpisode = plan.intent.mediaType === "episode"
+    ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
+    : "";
+  return {
+    detail: `Opened ${definition.name} for ${plan.intent.title}${exactEpisode}.`,
+    handled: true
+  };
+}
+
+function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
+  return {
+    detail: error instanceof OpenAiVoiceError
+      ? error.message
+      : "Voice control could not process that request.",
+    outcome: "failed"
+  };
+}
+
+async function handleRemoteVoice(clip: VoiceAudioClip): Promise<PhoneRemoteVoiceResult> {
+  if (!remoteVoiceStatus().available || voiceCommandSession === null) {
+    return { detail: remoteVoiceStatus().detail, outcome: "failed" };
+  }
+  try {
+    return await voiceCommandSession.process(clip);
+  } catch (error) {
+    return voiceFailure(error);
+  }
+}
+
+async function confirmRemoteVoice(confirmationId: string): Promise<PhoneRemoteVoiceResult> {
+  if (voiceCommandSession === null) {
+    return { detail: "Voice control is still starting.", outcome: "failed" };
+  }
+  try {
+    return await voiceCommandSession.confirm(confirmationId);
+  } catch (error) {
+    return voiceFailure(error);
+  }
+}
+
 async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
   if (input.phase !== "hide") {
     if (ambientDisplayVisible) {
@@ -1495,6 +1633,7 @@ async function createMainWindow(): Promise<void> {
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,
     onGetContext: remoteControlContext,
+    onGetVoiceStatus: remoteVoiceStatus,
     onGetRecentServices: recentRemoteServices,
     onLaunchService: handleRemoteServiceLaunch,
     onPointer: handleRemotePointer,
@@ -1511,6 +1650,8 @@ async function createMainWindow(): Promise<void> {
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus,
     onText: handleRemoteText,
+    onConfirmVoice: confirmRemoteVoice,
+    onVoice: handleRemoteVoice,
     shouldAutoApproveFirstRemote: () =>
       localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
   });
@@ -1585,6 +1726,19 @@ app.whenReady().then(async () => {
     electronCredentialCipher()
   );
   await openAiCredentialStore.initialize();
+  const openAiVoiceClient = new OpenAiVoiceClient({
+    getApiKey: () => {
+      if (openAiCredentialStore === null) {
+        throw new Error("The OpenAI credential store is unavailable.");
+      }
+      return openAiCredentialStore.getApiKey();
+    }
+  });
+  voiceCommandSession = new VoiceCommandSession({
+    execute: executeVoiceCommandPlan,
+    getContext: voiceCommandContext,
+    understand: (clip, signal) => openAiVoiceClient.understand(clip, signal)
+  });
   setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(
     localStateStore.snapshot().activeProfileId,

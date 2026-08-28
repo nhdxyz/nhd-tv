@@ -506,7 +506,7 @@ describe("voice provider automation", () => {
     expect(nate.clicked).toBe(true);
   });
 
-  it("leaves a multi-profile Netflix gate visible when the hint does not match", () => {
+  it("selects the first Netflix profile when no active profile hint matches", () => {
     const nateName = new FakeElement({ text: "Nate" });
     const guestName = new FakeElement({ text: "Guest" });
     const nate = new FakeElement({
@@ -534,10 +534,11 @@ describe("voice provider automation", () => {
       }), "Missing profile"),
       documentValue,
       "/browse"
-    )).toBe("profile-required");
-    expect(nate.clicked).toBe(false);
+    )).toBe("profile-selected");
+    expect(nate.clicked).toBe(true);
     expect(guest.clicked).toBe(false);
 
+    nate.clicked = false;
     expect(executeProviderScript(
       buildNetflixVoiceAutomationScript(intent({
         mediaType: "show",
@@ -546,8 +547,8 @@ describe("voice provider automation", () => {
       })),
       documentValue,
       "/browse"
-    )).toBe("profile-required");
-    expect(nate.clicked).toBe(false);
+    )).toBe("profile-selected");
+    expect(nate.clicked).toBe(true);
     expect(guest.clicked).toBe(false);
   });
 
@@ -761,7 +762,7 @@ describe("voice provider automation", () => {
     expect(resume.clicked).toBe(true);
   });
 
-  it("opens Netflix title details for episodes, shows, untyped titles, and open requests", () => {
+  it("opens Netflix playback or title details for movies, shows, episodes, and open requests", () => {
     const execute = (voiceIntent: VoiceMediaIntent) => {
       const watch = new FakeElement({ attributes: { href: "/watch/current" } });
       const title = new FakeElement({ attributes: { href: "/title/breaking-bad" } });
@@ -808,6 +809,16 @@ describe("voice provider automation", () => {
     expect(showResult.result).toBe("navigated");
     expect(showResult.title.clicked).toBe(true);
     expect(showResult.watch.clicked).toBe(false);
+
+    const movieResult = execute(intent({
+      creator: null,
+      mediaType: "movie",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    }));
+    expect(movieResult.result).toBe("navigated");
+    expect(movieResult.watch.clicked).toBe(true);
+    expect(movieResult.title.clicked).toBe(false);
 
     const untypedTitleResult = execute(intent({
       creator: null,

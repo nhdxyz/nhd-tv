@@ -740,11 +740,7 @@ export function buildNetflixVoiceAutomationScript(
       const exactMatches = hintIdentity
         ? namedProfiles.filter(({ nameIdentity }) => nameIdentity === hintIdentity)
         : [];
-      const selected = exactMatches.length === 1
-        ? exactMatches[0]?.element ?? null
-        : profileCandidates.length === 1 && namedProfiles.length === 1
-          ? namedProfiles[0]?.element ?? null
-          : null;
+      const selected = exactMatches[0]?.element ?? profileCandidates[0] ?? null;
       if (selected instanceof HTMLElement) {
         selected.click();
         return "profile-selected";

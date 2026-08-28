@@ -45,7 +45,7 @@ describe("OpenAI voice client", () => {
       expect(init?.body).toBeInstanceOf(FormData);
       const form = init?.body as FormData;
       expect(form.get("language")).toBe("en");
-      expect(form.get("model")).toBe("gpt-4o-mini-transcribe");
+      expect(form.get("model")).toBe("gpt-transcribe");
       const file = form.get("file") as File;
       expect(file.name).toBe("voice-command.webm");
       expect(file.type).toBe("audio/webm");
@@ -64,7 +64,9 @@ describe("OpenAI voice client", () => {
       const body = JSON.parse(String(init?.body));
       expect(body).toMatchObject({
         input: "Play Apollo 13",
+        max_output_tokens: 300,
         model: "gpt-5.6-luna",
+        reasoning: { effort: "none" },
         store: false,
         text: { format: { strict: true, type: "json_schema" } }
       });
@@ -225,6 +227,27 @@ describe("OpenAI voice client", () => {
     });
     await expect(client(fetchMock).interpret("pause after this scene", controller.signal)).rejects.toEqual(
       expect.objectContaining<Partial<OpenAiVoiceError>>({ code: "cancelled" })
+    );
+  });
+
+  it("caps the post-transcript intent wait below the old thirty-second stall", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => new Promise<Response>(
+      (_resolve, reject) => init?.signal?.addEventListener(
+        "abort",
+        () => reject(new Error("aborted")),
+        { once: true }
+      )
+    ));
+    const voiceClient = new OpenAiVoiceClient({
+      fetch: fetchMock,
+      getApiKey: () => API_KEY,
+      intentRequestTimeoutMs: 5
+    });
+    await expect(voiceClient.interpret("Pause after this scene")).rejects.toEqual(
+      expect.objectContaining<Partial<OpenAiVoiceError>>({
+        code: "timeout",
+        message: "Understanding took too long. Try again."
+      })
     );
   });
 });

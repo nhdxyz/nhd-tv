@@ -74,8 +74,10 @@ export interface VoiceAudioClip {
 export interface OpenAiVoiceClientOptions {
   fetch?: typeof fetch;
   getApiKey: () => string;
+  intentRequestTimeoutMs?: number;
   intentModel?: string;
   requestTimeoutMs?: number;
+  transcriptionRequestTimeoutMs?: number;
   transcriptionModel?: string;
 }
 
@@ -146,15 +148,19 @@ export class OpenAiVoiceClient {
   readonly #fetch: typeof fetch;
   readonly #getApiKey: () => string;
   readonly #intentModel: string;
-  readonly #requestTimeoutMs: number;
+  readonly #intentRequestTimeoutMs: number;
+  readonly #transcriptionRequestTimeoutMs: number;
   readonly #transcriptionModel: string;
 
   constructor(options: OpenAiVoiceClientOptions) {
     this.#fetch = options.fetch ?? fetch;
     this.#getApiKey = options.getApiKey;
     this.#intentModel = options.intentModel ?? "gpt-5.6-luna";
-    this.#requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
-    this.#transcriptionModel = options.transcriptionModel ?? "gpt-4o-mini-transcribe";
+    this.#intentRequestTimeoutMs = options.intentRequestTimeoutMs ??
+      options.requestTimeoutMs ?? 12_000;
+    this.#transcriptionRequestTimeoutMs = options.transcriptionRequestTimeoutMs ??
+      options.requestTimeoutMs ?? 20_000;
+    this.#transcriptionModel = options.transcriptionModel ?? "gpt-transcribe";
   }
 
   async transcribe(clip: VoiceAudioClip, signal?: AbortSignal): Promise<string> {
@@ -169,7 +175,7 @@ export class OpenAiVoiceClient {
     const response = await this.#request(TRANSCRIPTION_ENDPOINT, {
       body: form,
       method: "POST"
-    }, signal);
+    }, signal, this.#transcriptionRequestTimeoutMs, "Transcription took too long. Try again.");
     const result = objectValue(await this.#json(response));
     const transcript = typeof result?.text === "string"
       ? result.text.replace(/\s+/g, " ").trim()
@@ -192,8 +198,9 @@ export class OpenAiVoiceClient {
       body: JSON.stringify({
         input: transcript,
         instructions: VOICE_INTENT_INSTRUCTIONS,
-        max_output_tokens: 400,
+        max_output_tokens: 300,
         model: this.#intentModel,
+        reasoning: { effort: "none" },
         store: false,
         text: {
           format: {
@@ -206,7 +213,7 @@ export class OpenAiVoiceClient {
       }),
       headers: { "Content-Type": "application/json" },
       method: "POST"
-    }, signal);
+    }, signal, this.#intentRequestTimeoutMs, "Understanding took too long. Try again.");
     const outputText = responseOutputText(await this.#json(response));
     if (outputText === null) {
       throw new OpenAiVoiceError("invalid-response", "OpenAI returned no voice intent.");
@@ -240,9 +247,11 @@ export class OpenAiVoiceClient {
   async #request(
     url: string,
     init: RequestInit,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+    timeoutMessage: string
   ): Promise<Response> {
-    const timeoutSignal = AbortSignal.timeout(this.#requestTimeoutMs);
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const requestSignal = signal === undefined
       ? timeoutSignal
       : AbortSignal.any([signal, timeoutSignal]);
@@ -257,7 +266,7 @@ export class OpenAiVoiceClient {
         throw new OpenAiVoiceError("cancelled", "The voice request was cancelled.");
       }
       if (timeoutSignal.aborted) {
-        throw new OpenAiVoiceError("timeout", "The voice request timed out.");
+        throw new OpenAiVoiceError("timeout", timeoutMessage);
       }
       throw new OpenAiVoiceError("network", "OpenAI could not be reached.");
     }

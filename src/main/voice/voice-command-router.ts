@@ -6,7 +6,7 @@ import type {
   VoiceProviderHint
 } from "./voice-intent";
 
-const VOICE_SERVICE_IDS = ["netflix", "spotify", "youtube"] as const;
+const VOICE_SERVICE_IDS = ["disney-plus", "netflix", "spotify", "youtube"] as const;
 
 export type VoiceServiceId = (typeof VOICE_SERVICE_IDS)[number];
 

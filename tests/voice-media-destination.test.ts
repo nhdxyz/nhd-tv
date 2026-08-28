@@ -69,4 +69,15 @@ describe("voice media destination", () => {
       title: "Inception"
     }), ["netflix"])).toEqual({ query: "Inception", serviceId: "netflix" });
   });
+
+  it("keeps an explicit Disney Plus exact-title request on Disney Plus", () => {
+    expect(resolveVoiceMediaDestination(intent({
+      mediaType: "movie",
+      providerHint: "disney-plus",
+      title: "Moana"
+    }), ["disney-plus", "netflix"])).toEqual({
+      query: "Moana",
+      serviceId: "disney-plus"
+    });
+  });
 });

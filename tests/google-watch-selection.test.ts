@@ -98,4 +98,21 @@ describe("Google watch selection", () => {
       serviceId: "netflix"
     });
   });
+
+  it("maps a subscribed Disney Plus offer into the app-owned service", () => {
+    const disneyResult: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "subscription",
+        priceText: null,
+        providerContentId: "movie-id",
+        providerHost: "www.disneyplus.com",
+        providerName: "Disney+",
+        rawLabel: "Disney+ Subscription",
+        watchUrl: "https://www.disneyplus.com/video/movie-id"
+      }]
+    };
+    expect(selectEnabledWatchOffer(disneyResult, ["disney-plus", "netflix"]))
+      .toMatchObject({ serviceId: "disney-plus" });
+  });
 });

@@ -33,7 +33,7 @@ Recommendation and similar-title intents never use play, creator, season, episod
 Preserve a spoken release year, edition, language, country, or remake qualifier in the title so the provider can distinguish versions.
 Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
 Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
-Use providerHint only when the user names Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube.
+Use providerHint only when the user names Disney Plus, Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube. Use disney-plus for Disney Plus.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
 Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is unknown.

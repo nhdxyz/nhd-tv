@@ -81,6 +81,14 @@ describe("voice intent boundary", () => {
     }))).toMatchObject({ mediaType: "channel", providerHint: "youtube" });
   });
 
+  it("preserves an explicit Disney Plus destination for exact media", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      mediaType: "movie",
+      providerHint: "disney-plus",
+      title: "Moana"
+    }))).toMatchObject({ mediaType: "movie", providerHint: "disney-plus" });
+  });
+
   it("parses bounded recommendation and similar-title discovery requests", () => {
     expect(parseVoiceIntent(mediaIntent({
       mediaAction: "open",

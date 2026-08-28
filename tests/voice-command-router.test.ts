@@ -100,6 +100,18 @@ describe("voice command planning", () => {
     });
   });
 
+  it("honors an explicit Disney Plus request when it is enabled", () => {
+    expect(planVoiceCommand(mediaIntent({
+      mediaType: "movie",
+      providerHint: "disney-plus",
+      title: "Moana"
+    }), {
+      ...context,
+      enabledServiceIds: ["disney-plus", "netflix"],
+      serviceOrder: ["netflix", "disney-plus"]
+    })).toMatchObject({ candidateServiceIds: ["disney-plus"], launchAllowed: true });
+  });
+
   it("uses the user's lineup order when several services could handle a title", () => {
     expect(planVoiceCommand(mediaIntent(), context)).toMatchObject({
       candidateServiceIds: ["youtube", "netflix"]

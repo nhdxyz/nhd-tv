@@ -11,6 +11,12 @@ export function isLaunchableWatchOffer(offer: GoogleWatchOffer): boolean {
 }
 
 export function watchOfferServiceId(offer: GoogleWatchOffer): VoiceServiceId | null {
+  if (
+    offer.providerHost === "disneyplus.com" ||
+    offer.providerHost === "www.disneyplus.com"
+  ) {
+    return "disney-plus";
+  }
   if (offer.providerHost === "netflix.com" || offer.providerHost === "www.netflix.com") {
     return "netflix";
   }

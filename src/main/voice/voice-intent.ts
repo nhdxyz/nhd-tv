@@ -28,7 +28,7 @@ const VOICE_MEDIA_TYPES = [
   "title",
   "video"
 ] as const;
-const VOICE_PROVIDER_HINTS = ["netflix", "spotify", "youtube"] as const;
+const VOICE_PROVIDER_HINTS = ["disney-plus", "netflix", "spotify", "youtube"] as const;
 const VOICE_RECENCY_VALUES = ["latest"] as const;
 const VOICE_INTENT_KEYS = [
   "kind",

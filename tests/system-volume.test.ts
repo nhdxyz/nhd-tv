@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SystemVolumeController,
-  type SystemVolumeBackend
+  type SystemVolumeBackend,
+  VoiceCaptureMuteGuard
 } from "../src/main/system-volume";
 
 class FakeVolumeBackend implements SystemVolumeBackend {
   muted = false;
+  readonly muteChanges: boolean[] = [];
   volume = 50;
 
   async getMuted(): Promise<boolean> {
@@ -18,6 +20,7 @@ class FakeVolumeBackend implements SystemVolumeBackend {
   }
 
   async setMuted(muted: boolean): Promise<void> {
+    this.muteChanges.push(muted);
     this.muted = muted;
   }
 
@@ -27,6 +30,8 @@ class FakeVolumeBackend implements SystemVolumeBackend {
 }
 
 describe("system volume controller", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("handles volume before acquiring a provider operation token", () => {
     const source = readFileSync(
       new URL("../src/main/index.ts", import.meta.url),
@@ -44,6 +49,20 @@ describe("system volume controller", () => {
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     expect(volumeBranch).toBeGreaterThan(-1);
     expect(operationAcquisition).toBeGreaterThan(volumeBranch);
+  });
+
+  it("wires accepted phone activity through the ephemeral capture mute guard", () => {
+    const source = readFileSync(
+      new URL("../src/main/index.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("new VoiceCaptureMuteGuard(");
+    expect(source).toContain("DEFAULT_VOICE_ACTIVITY_LEASE_MS");
+    expect(source).toContain("voiceCaptureMuteGuard.begin(captureKey)");
+    expect(source).toContain("voiceCaptureMuteGuard.end(captureKey)");
+    expect(source).toContain("onVoiceActivity: handlePhoneVoiceActivity");
+    expect(source).toContain("voiceCaptureMuteGuard.clear()");
   });
 
   it("changes system volume in bounded five-percent steps and unmutes", async () => {
@@ -116,5 +135,77 @@ describe("system volume controller", () => {
     backend.setMuted = async () => { throw new Error("unsupported"); };
     await expect(controller.getMuted()).resolves.toBeNull();
     await expect(controller.setMuted(true)).resolves.toMatchObject({ handled: false });
+  });
+
+  it("mutes only for the active voice capture and restores audible playback", async () => {
+    const backend = new FakeVolumeBackend();
+    const guard = new VoiceCaptureMuteGuard(new SystemVolumeController(backend));
+
+    await guard.begin("phone-a:voice-command-a-1234");
+    expect(backend.muted).toBe(true);
+    expect(backend.muteChanges).toEqual([true]);
+
+    await guard.end("phone-a:voice-command-a-1234");
+    expect(backend.muted).toBe(false);
+    expect(backend.muteChanges).toEqual([true, false]);
+  });
+
+  it("never unmutes audio that was muted before voice capture", async () => {
+    const backend = new FakeVolumeBackend();
+    backend.muted = true;
+    const guard = new VoiceCaptureMuteGuard(new SystemVolumeController(backend));
+
+    await guard.begin("phone-a:voice-command-a-1234");
+    await guard.end("phone-a:voice-command-a-1234");
+
+    expect(backend.muted).toBe(true);
+    expect(backend.muteChanges).not.toContain(false);
+  });
+
+  it("ignores stale releases and transfers an uninterrupted mute to a newer lease", async () => {
+    const backend = new FakeVolumeBackend();
+    const guard = new VoiceCaptureMuteGuard(new SystemVolumeController(backend));
+
+    await guard.begin("phone-a:voice-command-a-1234");
+    await guard.begin("phone-b:voice-command-b-5678");
+    await guard.end("phone-a:voice-command-a-1234");
+    expect(backend.muted).toBe(true);
+    expect(backend.muteChanges).toEqual([true]);
+
+    await guard.end("phone-b:voice-command-b-5678");
+    expect(backend.muted).toBe(false);
+    expect(backend.muteChanges).toEqual([true, false]);
+  });
+
+  it("restores audio when an abandoned listening lease times out", async () => {
+    vi.useFakeTimers();
+    const backend = new FakeVolumeBackend();
+    const guard = new VoiceCaptureMuteGuard(new SystemVolumeController(backend), 500);
+
+    await guard.begin("phone-a:voice-command-a-1234");
+    expect(backend.muted).toBe(true);
+    await vi.advanceTimersByTimeAsync(501);
+
+    expect(backend.muted).toBe(false);
+    expect(backend.muteChanges).toEqual([true, false]);
+  });
+
+  it("does not mute after a release overtakes the initial mute-state read", async () => {
+    let resolveMuted!: (muted: boolean) => void;
+    const muted = new Promise<boolean>((resolve) => {
+      resolveMuted = resolve;
+    });
+    const controller = {
+      getMuted: () => muted,
+      setMuted: vi.fn(async () => ({ detail: "changed", handled: true }))
+    };
+    const guard = new VoiceCaptureMuteGuard(controller);
+
+    const beginning = guard.begin("phone-a:voice-command-a-1234");
+    const ending = guard.end("phone-a:voice-command-a-1234");
+    resolveMuted(false);
+    await Promise.all([beginning, ending]);
+
+    expect(controller.setMuted).not.toHaveBeenCalled();
   });
 });

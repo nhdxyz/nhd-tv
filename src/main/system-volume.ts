@@ -18,6 +18,17 @@ export interface SystemVolumeResult {
   handled: boolean;
 }
 
+export interface VoiceCaptureMuteController {
+  getMuted(): Promise<boolean | null>;
+  setMuted(muted: boolean): Promise<SystemVolumeResult>;
+}
+
+interface VoiceCaptureMuteSession {
+  key: string;
+  mutedByGuard: boolean;
+  restoreMuted: boolean;
+}
+
 const VOLUME_STEP = 5;
 
 function boundedVolume(value: number): number {
@@ -75,6 +86,116 @@ export class SystemVolumeController {
         handled: false
       };
     }
+  }
+}
+
+/**
+ * Temporarily mutes system audio for one accepted push-to-talk lease. The
+ * desired lease identity changes synchronously while volume reads and writes
+ * are serialized, preventing a late release from one phone from unmuting a
+ * newer recording. The original mute state only lives in memory.
+ */
+export class VoiceCaptureMuteGuard {
+  readonly #controller: VoiceCaptureMuteController;
+  readonly #timeoutMs: number;
+  #active: VoiceCaptureMuteSession | null = null;
+  #desiredKey: string | null = null;
+  #operation = Promise.resolve();
+  #timeout: NodeJS.Timeout | null = null;
+
+  constructor(controller: VoiceCaptureMuteController, timeoutMs = 25_000) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      throw new TypeError("A positive voice capture mute timeout is required");
+    }
+    this.#controller = controller;
+    this.#timeoutMs = timeoutMs;
+  }
+
+  begin(key: string): Promise<void> {
+    if (key.length === 0) return this.#operation;
+    if (this.#desiredKey === key) return this.#operation;
+
+    this.#desiredKey = key;
+    this.#scheduleTimeout(key);
+    return this.#enqueueReconcile();
+  }
+
+  end(key: string): Promise<void> {
+    // Only the current desired lease can release the guard. This makes stale
+    // cancel, disconnect, upload, and timeout events harmless.
+    if (this.#desiredKey !== key) return this.#operation;
+
+    this.#desiredKey = null;
+    this.#clearTimeout();
+    return this.#enqueueReconcile();
+  }
+
+  clear(): Promise<void> {
+    this.#desiredKey = null;
+    this.#clearTimeout();
+    return this.#enqueueReconcile();
+  }
+
+  #enqueueReconcile(): Promise<void> {
+    this.#operation = this.#operation
+      .catch(() => undefined)
+      .then(() => this.#reconcile());
+    return this.#operation;
+  }
+
+  async #reconcile(): Promise<void> {
+    if (this.#active !== null) {
+      if (this.#desiredKey === this.#active.key) return;
+      if (this.#desiredKey !== null) {
+        // Transfer an uninterrupted mute to the newer accepted lease while
+        // preserving the state sampled before the first recording.
+        this.#active.key = this.#desiredKey;
+        return;
+      }
+
+      const completed = this.#active;
+      this.#active = null;
+      if (completed.mutedByGuard || completed.restoreMuted) {
+        await this.#controller.setMuted(completed.restoreMuted);
+      }
+      return;
+    }
+
+    if (this.#desiredKey === null) return;
+    const muted = await this.#controller.getMuted();
+    if (this.#desiredKey === null || muted === null) return;
+
+    const session: VoiceCaptureMuteSession = {
+      key: this.#desiredKey,
+      mutedByGuard: false,
+      restoreMuted: muted
+    };
+    this.#active = session;
+    if (!muted) {
+      const result = await this.#controller.setMuted(true);
+      session.mutedByGuard = result.handled;
+    }
+
+    if (this.#desiredKey !== session.key) {
+      await this.#reconcile();
+    }
+  }
+
+  #scheduleTimeout(key: string): void {
+    this.#clearTimeout();
+    this.#timeout = setTimeout(() => {
+      this.#timeout = null;
+      if (this.#desiredKey !== key) return;
+      this.#desiredKey = null;
+      void this.#enqueueReconcile();
+    }, this.#timeoutMs);
+    this.#timeout.unref?.();
+  }
+
+  #clearTimeout(): void {
+    if (this.#timeout === null) return;
+    clearTimeout(this.#timeout);
+    this.#timeout = null;
   }
 }
 

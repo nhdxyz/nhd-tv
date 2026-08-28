@@ -225,6 +225,45 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).not.toMatch(/sessionStorage\.(?:setItem|getItem)\([^)]*(?:audio|voice|transcript)/i);
   });
 
+  it("binds capture side effects to the accepted controller and command lease", () => {
+    const activityRoute = serverSource.slice(
+      serverSource.indexOf('url.pathname === "/api/voice/activity"'),
+      serverSource.indexOf('url.pathname === "/api/voice"')
+    );
+    const accepted = activityRoute.indexOf(
+      "#voiceActivityLease.acceptActivity(controllerId, activity)"
+    );
+    const notified = activityRoute.indexOf(
+      "await this.#onVoiceActivity(activity, controllerId)"
+    );
+    expect(accepted).toBeGreaterThan(-1);
+    expect(notified).toBeGreaterThan(accepted);
+
+    const uploadRoute = serverSource.slice(
+      serverSource.indexOf('url.pathname === "/api/voice"'),
+      serverSource.indexOf('url.pathname === "/api/voice/confirm"')
+    );
+    const uploadLease = uploadRoute.indexOf(
+      "#voiceActivityLease.beginUpload(controllerId, metadata.commandId)"
+    );
+    const understanding = uploadRoute.indexOf('phase: "understanding"', uploadLease);
+    const bodyRead = uploadRoute.indexOf("bytes = await readVoiceBody(request)", uploadLease);
+    expect(uploadLease).toBeGreaterThan(-1);
+    expect(understanding).toBeGreaterThan(uploadLease);
+    expect(bodyRead).toBeGreaterThan(understanding);
+    expect(uploadRoute.slice(understanding, bodyRead)).toContain("controllerId");
+
+    const disconnect = serverSource.slice(
+      serverSource.indexOf("async #completeControllerDisconnect"),
+      serverSource.indexOf("#deferControllerDisconnect", serverSource.indexOf(
+        "async #completeControllerDisconnect"
+      ))
+    );
+    expect(disconnect).toContain("releaseControllerCommand(controllerId)");
+    expect(disconnect).toContain('phase: "cancelled"');
+    expect(disconnect).toContain("}, controllerId)");
+  });
+
   it("uses a minimalist circular directional surface without selectable arrow copy", () => {
     expect(REMOTE_HTML).toContain('class="up" data-action="up"');
     expect(REMOTE_HTML).toContain('class="left" data-action="left"');

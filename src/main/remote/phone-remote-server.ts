@@ -94,7 +94,10 @@ export interface PhoneRemoteServerOptions {
   ) =>
     PhoneRemoteVoiceResult |
     Promise<PhoneRemoteVoiceResult>;
-  onVoiceActivity?: (activity: PhoneRemoteVoiceActivity) => void | Promise<void>;
+  onVoiceActivity?: (
+    activity: PhoneRemoteVoiceActivity,
+    controllerId: string
+  ) => void | Promise<void>;
   onVoice?: (
     clip: VoiceAudioClip,
     commandId: string,
@@ -1013,7 +1016,7 @@ export class PhoneRemoteServer {
         writeJson(response, 200, { ignored: true, ok: true });
         return;
       }
-      await this.#onVoiceActivity(activity);
+      await this.#onVoiceActivity(activity, controllerId);
       writeJson(response, 200, { ok: true });
       return;
     }
@@ -1049,6 +1052,14 @@ export class PhoneRemoteServer {
         return;
       }
 
+      // Upload can overtake the phone's fire-and-forget "understanding"
+      // activity request. End capture-only side effects at this authenticated,
+      // command-bound boundary so AI processing never remains muted.
+      await this.#onVoiceActivity?.({
+        commandId: metadata.commandId,
+        phase: "understanding"
+      }, controllerId);
+
       this.#lastVoiceAt = now;
       this.#voiceInFlight = true;
       this.#activeVoiceConfirmationId = null;
@@ -1062,7 +1073,7 @@ export class PhoneRemoteServer {
           await this.#onVoiceActivity?.({
             commandId: metadata.commandId,
             phase: "cancelled"
-          });
+          }, controllerId);
           if (error instanceof VoiceUploadBodyTimeoutError) {
             if (!response.destroyed && !response.writableEnded) {
               writeJson(response, 408, { error: "The voice upload timed out" });
@@ -1075,7 +1086,7 @@ export class PhoneRemoteServer {
           await this.#onVoiceActivity?.({
             commandId: metadata.commandId,
             phase: "cancelled"
-          });
+          }, controllerId);
           writeJson(response, 413, { error: "The voice recording is empty or too large" });
           return;
         }
@@ -1353,7 +1364,7 @@ export class PhoneRemoteServer {
       await this.#onVoiceActivity?.({
         commandId: releasedCommandId,
         phase: "cancelled"
-      });
+      }, controllerId);
     }
     this.#publishStatus();
     void this.ensurePairing().catch(() => undefined);

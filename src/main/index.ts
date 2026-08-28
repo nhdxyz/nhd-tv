@@ -63,6 +63,7 @@ import {
   type PhoneRemoteVoiceResult,
   type PhoneRemoteVoiceStatus
 } from "./remote/phone-remote-server";
+import { DEFAULT_VOICE_ACTIVITY_LEASE_MS } from "./remote/voice-activity-lease";
 import { TailscaleSecureRemote } from "./remote/tailscale-secure-remote";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import { buildRemoteTextEntryScript } from "./remote-text-entry";
@@ -78,7 +79,8 @@ import type { ServiceOperationToken } from "./service-operation-owner";
 import type { SpotifyPlaybackSnapshot } from "./spotify-playback";
 import {
   isSystemVolumeAction,
-  SystemVolumeController
+  SystemVolumeController,
+  VoiceCaptureMuteGuard
 } from "./system-volume";
 import { isTrustedShellUrl } from "./security/sender-policy";
 import { resolveRemoteSearchDestination } from "./search-routing";
@@ -199,6 +201,10 @@ let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
 const systemVolumeController = new SystemVolumeController();
+const voiceCaptureMuteGuard = new VoiceCaptureMuteGuard(
+  systemVolumeController,
+  DEFAULT_VOICE_ACTIVITY_LEASE_MS
+);
 interface ArtworkCacheState {
   readonly requests: Set<string>;
   readonly sourceUrls: Map<string, string>;
@@ -578,6 +584,18 @@ function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
     VOICE_UNDERSTANDING_TIMEOUT_MS,
     activity.commandId
   );
+}
+
+async function handlePhoneVoiceActivity(
+  activity: PhoneRemoteVoiceActivity,
+  controllerId: string
+): Promise<void> {
+  const captureKey = `${controllerId}\u0000${activity.commandId}`;
+  const muteOperation = activity.phase === "listening"
+    ? voiceCaptureMuteGuard.begin(captureKey)
+    : voiceCaptureMuteGuard.end(captureKey);
+  presentPhoneVoiceActivity(activity);
+  await muteOperation;
 }
 
 function voiceResultDetail(result: PhoneRemoteVoiceResult): string {
@@ -2103,7 +2121,7 @@ async function createMainWindow(): Promise<void> {
     onText: handleRemoteText,
     onCancelVoice: cancelRemoteVoiceConfirmation,
     onConfirmVoice: confirmRemoteVoice,
-    onVoiceActivity: presentPhoneVoiceActivity,
+    onVoiceActivity: handlePhoneVoiceActivity,
     onVoice: handleRemoteVoice,
     onVoiceTimeout: presentRemoteVoiceTimeout,
     shouldAutoApproveFirstRemote: () =>
@@ -2151,7 +2169,10 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
     watchResolverToDestroy?.destroy();
     watchCacheToClose?.close();
-    void (remoteToStop?.stop() ?? Promise.resolve())
+    void Promise.all([
+      remoteToStop?.stop() ?? Promise.resolve(),
+      voiceCaptureMuteGuard.clear()
+    ])
       .finally(() => tailscaleToRelease?.release());
   });
 

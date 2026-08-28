@@ -28,6 +28,7 @@ const PHASE_RANK: Record<VoiceActivityPhase, number> = {
   cancelled: 2
 };
 
+export const DEFAULT_VOICE_ACTIVITY_LEASE_MS = 25_000;
 export const VOICE_COMMAND_ID_PATTERN = /^[A-Za-z0-9_-]{16,80}$/;
 
 function commandKey(controllerId: string, commandId: string): string {
@@ -48,7 +49,7 @@ export class VoiceActivityLease {
   #active: ActiveVoiceLease | null = null;
 
   constructor(options: VoiceActivityLeaseOptions = {}) {
-    this.#leaseMs = options.leaseMs ?? 25_000;
+    this.#leaseMs = options.leaseMs ?? DEFAULT_VOICE_ACTIVITY_LEASE_MS;
     this.#maximumTombstones = options.maximumTombstones ?? 64;
     this.#now = options.now ?? Date.now;
     this.#tombstoneMs = options.tombstoneMs ?? 120_000;

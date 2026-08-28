@@ -129,6 +129,27 @@ export interface VoiceMediaIntent {
   title: string;
 }
 
+const CONTEXTUAL_PLAYBACK_CONSENT = Symbol("contextual-playback-consent");
+
+/** Marks an in-memory provider/media choice as explicit playback consent. */
+export function markContextualPlaybackConsent(
+  intent: VoiceMediaIntent
+): VoiceMediaIntent {
+  Object.defineProperty(intent, CONTEXTUAL_PLAYBACK_CONSENT, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false
+  });
+  return intent;
+}
+
+export function hasContextualPlaybackConsent(intent: VoiceMediaIntent): boolean {
+  return (intent as VoiceMediaIntent & { [CONTEXTUAL_PLAYBACK_CONSENT]?: unknown })[
+    CONTEXTUAL_PLAYBACK_CONSENT
+  ] === true;
+}
+
 /** A follow-up action whose media target must be resolved from shared TV context. */
 export interface VoiceMediaReferenceIntent {
   action: VoiceMediaAction;

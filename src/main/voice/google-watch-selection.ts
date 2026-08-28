@@ -86,9 +86,13 @@ export function watchOfferServiceId(offer: GoogleWatchOffer): string | null {
 
 export function watchOffersShouldBeComplete(
   intent: VoiceMediaIntent,
-  _enabledServiceIds: readonly VoiceServiceId[]
+  enabledServiceIds: readonly VoiceServiceId[]
 ): boolean {
-  return intent.action === "lookup";
+  if (intent.action === "lookup") return true;
+  if (intent.action !== "play" || intent.providerHint !== null) return false;
+  return new Set(enabledServiceIds.filter((serviceId) =>
+    LAUNCHABLE_WATCH_SERVICES.has(serviceId)
+  )).size > 1;
 }
 
 export function selectEnabledWatchOffer(

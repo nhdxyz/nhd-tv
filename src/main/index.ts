@@ -1425,6 +1425,25 @@ function usesGoogleWatchDiscovery(
     ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
 }
 
+function bindVoiceWatchClarification(
+  clarification: NonNullable<ReturnType<typeof buildVoiceWatchClarification>>
+): readonly VoicePresentationChoice[] | undefined {
+  const store = voiceContextStore;
+  if (store === null) return undefined;
+  const revisions = store.revisions();
+  const candidates = store.setCandidates(clarification.candidates, revisions);
+  if (
+    candidates === null ||
+    !store.setPendingClarification({
+      candidateSetRevision: candidates.revision,
+      kind: "provider-selection"
+    }, revisions)
+  ) {
+    return undefined;
+  }
+  return clarification.choices;
+}
+
 async function executeGoogleWatchPlan(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
   signal?: AbortSignal,
@@ -1469,26 +1488,32 @@ async function executeGoogleWatchPlan(
       plan.intent,
       plan.candidateServiceIds
     );
-    let choices: readonly VoicePresentationChoice[] | undefined;
-    if (clarification !== null && voiceContextStore !== null) {
-      const revisions = voiceContextStore.revisions();
-      const candidates = voiceContextStore.setCandidates(
-        clarification.candidates,
-        revisions
-      );
-      if (
-        candidates !== null &&
-        voiceContextStore.setPendingClarification({
-          candidateSetRevision: candidates.revision,
-          kind: "provider-selection"
-        }, revisions)
-      ) {
-        choices = clarification.choices;
-      }
-    }
+    const choices = clarification === null
+      ? undefined
+      : bindVoiceWatchClarification(clarification);
     return {
       ...(choices === undefined ? {} : { choices }),
       detail: watchAvailabilityDetail(result, enabledServiceIds),
+      handled: true
+    };
+  }
+
+  const providerClarification = plan.intent.providerHint === null
+    ? buildVoiceWatchClarification(result, plan.intent, plan.candidateServiceIds)
+    : null;
+  if (providerClarification !== null) {
+    const choices = bindVoiceWatchClarification(providerClarification);
+    const title = result.resolvedTitle ?? plan.intent.title;
+    if (choices === undefined) {
+      return {
+        detail: `I found more than one enabled service for ${title}, but couldn't safely preserve the choices. Try again.`,
+        handled: false
+      };
+    }
+    const providerNames = choices.map((choice) => choice.primaryLabel).join(" or ");
+    return {
+      choices,
+      detail: `Choose where to play ${title}: ${providerNames}.`,
       handled: true
     };
   }

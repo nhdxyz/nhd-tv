@@ -211,8 +211,10 @@ describe("Google watch selection", () => {
 
   it("starts playback with partial offers while lookups request the complete list", () => {
     expect(watchOffersShouldBeComplete(intent(), ["netflix", "disney-plus"]))
-      .toBe(false);
+      .toBe(true);
     expect(watchOffersShouldBeComplete(intent(), ["netflix", "spotify"]))
+      .toBe(false);
+    expect(watchOffersShouldBeComplete(intent(), ["netflix", "netflix"]))
       .toBe(false);
     expect(watchOffersShouldBeComplete(intent({ providerHint: "netflix" }), [
       "netflix",

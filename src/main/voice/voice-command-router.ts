@@ -8,6 +8,7 @@ import type {
   VoiceProviderHint,
   VoiceSemanticControlIntent
 } from "./voice-intent";
+import { hasContextualPlaybackConsent } from "./voice-intent";
 import type { VoiceSemanticControlRequest } from "./voice-semantic-control";
 import {
   matchVoiceAppService,
@@ -201,6 +202,7 @@ function mediaPlan(
   return {
     candidateServiceIds,
     confirmationRequired: isPlayback &&
+      !hasContextualPlaybackConsent(intent) &&
       candidateServiceIds.length > 0 &&
       context.playbackMode === "confirm",
     intent,

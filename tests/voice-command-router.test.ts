@@ -3,6 +3,7 @@ import {
   planVoiceCommand,
   type VoiceCommandContext
 } from "../src/main/voice/voice-command-router";
+import { markContextualPlaybackConsent } from "../src/main/voice/voice-intent";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
 
 const context: VoiceCommandContext = {
@@ -243,6 +244,16 @@ describe("voice command planning", () => {
     })).toMatchObject({ confirmationRequired: false });
     expect(planVoiceCommand(mediaIntent({ providerHint: "spotify" }), context))
       .toMatchObject({ confirmationRequired: false, launchAllowed: false });
+  });
+
+  it("does not ask twice after an explicit contextual provider choice", () => {
+    expect(planVoiceCommand(markContextualPlaybackConsent(mediaIntent({
+      providerHint: "netflix"
+    })), context)).toMatchObject({
+      candidateServiceIds: ["netflix"],
+      confirmationRequired: false,
+      launchAllowed: true
+    });
   });
 
   it("uses enabled lineup services as the subscription boundary", () => {

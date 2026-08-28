@@ -16,6 +16,7 @@ import type {
   VoiceProviderHint,
   VoiceUnknownIntent
 } from "./voice-intent";
+import { markContextualPlaybackConsent } from "./voice-intent";
 
 const PROVIDER_NAMES: Readonly<Record<VoiceProviderHint, string>> = Object.freeze({
   "disney-plus": "Disney+",
@@ -34,6 +35,7 @@ export type ResolvedVoiceMediaReferenceIntent =
   | VoiceUnknownIntent;
 
 interface ResolvedReferenceSource {
+  playbackConsent: boolean;
   media: StoredVoiceMediaReference;
   provider: VoiceProviderReference | null;
 }
@@ -117,12 +119,18 @@ function referenceSource(
     const media = snapshot.conversation.lastMediaTarget;
     return media === null
       ? null
-      : { media, provider: snapshot.conversation.lastProvider };
+      : {
+        media,
+        playbackConsent: false,
+        provider: snapshot.conversation.lastProvider
+      };
   }
 
   if (intent.reference === "current-media") {
     const media = snapshot.liveMedia;
-    return media === null ? null : { media, provider: media.service };
+    return media === null
+      ? null
+      : { media, playbackConsent: false, provider: media.service };
   }
 
   if (intent.ordinal === null) return null;
@@ -139,7 +147,7 @@ function referenceSource(
     candidateSet.candidates[intent.ordinal - 1];
   return candidate === undefined
     ? null
-    : { media: candidate, provider: candidate.provider };
+    : { media: candidate, playbackConsent: true, provider: candidate.provider };
 }
 
 function intentMediaType(
@@ -290,13 +298,16 @@ export function resolveVoiceMediaReferenceIntent(
     return UNKNOWN_INTENT;
   }
 
-  return {
+  const resolved: VoiceMediaIntent = {
     action: intent.action,
     ...target,
     kind: "media",
     providerHint: provider,
     recency: null
   };
+  return source.playbackConsent && intent.action === "play"
+    ? markContextualPlaybackConsent(resolved)
+    : resolved;
 }
 
 /** Leaves explicit titles and all other non-reference intents completely untouched. */

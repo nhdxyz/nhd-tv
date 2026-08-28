@@ -35,8 +35,9 @@ describe("voice use-case execution wiring", () => {
 
   it("stores and presents numbered choices only for safe enabled watch providers", () => {
     expect(source).toContain("buildVoiceWatchClarification(");
-    expect(source).toContain("voiceContextStore.setCandidates(");
+    expect(source).toContain("store.setCandidates(");
     expect(source).toContain('kind: "provider-selection"');
+    expect(source).toContain("Choose where to play ${title}: ${providerNames}.");
     expect(source).toContain('hasChoices ? "clarification" : "success"');
     expect(source).toContain("{ choices: result.choices, detail: voiceResultDetail(result) }");
   });

@@ -5,6 +5,7 @@ import {
   resolveVoiceContextIntent,
   resolveVoiceMediaReferenceIntent
 } from "../src/main/voice/voice-context-resolver";
+import { hasContextualPlaybackConsent } from "../src/main/voice/voice-intent";
 import type {
   VoiceMediaIntent,
   VoiceMediaReferenceIntent
@@ -185,10 +186,11 @@ describe("shared voice context resolver", () => {
       kind: "provider-selection"
     }, scope)).toBe(true);
 
-    expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+    const resolved = resolveVoiceMediaReferenceIntent(referenceIntent({
       ordinal: 2,
       reference: "candidate"
-    }), store.snapshot())).toEqual({
+    }), store.snapshot());
+    expect(resolved).toEqual({
       action: "play",
       creator: null,
       episode: null,
@@ -199,6 +201,7 @@ describe("shared voice context resolver", () => {
       season: null,
       title: "Second stored choice"
     });
+    expect(resolved.kind === "media" && hasContextualPlaybackConsent(resolved)).toBe(true);
     expect(resolveVoiceMediaReferenceIntent(referenceIntent({
       ordinal: 3,
       reference: "candidate"

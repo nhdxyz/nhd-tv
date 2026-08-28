@@ -102,16 +102,11 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back. Hold to force return Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <button class="voice-button" id="voice-button" type="button" disabled aria-label="Hold to speak a voice command" aria-describedby="voice-help">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
-            <span>Hold</span>
-          </button>
           <button class="remote-icon-button" data-action="home" type="button" disabled aria-label="NHD Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10.5 8-6.5 8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" /><path d="M9.5 20v-6h5v6" /></svg>
           </button>
         </div>
 
-        <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
         <section class="voice-confirm" id="voice-confirm" aria-live="polite" hidden>
           <small>Confirm voice command</small>
           <strong id="voice-confirm-copy">Play this title?</strong>
@@ -134,6 +129,15 @@ export const REMOTE_HTML = `<!doctype html>
             <span class="precision-status" aria-hidden="true"><i></i></span>
           </div>
         </div>
+
+        <section class="voice-control" aria-label="AI voice control">
+          <button class="voice-button" id="voice-button" type="button" disabled aria-label="Hold to speak a voice command" aria-describedby="voice-help">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
+            <span id="voice-button-copy">Hold to talk</span>
+            <small>Ask NHD-TV</small>
+          </button>
+          <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
+        </section>
 
         <div class="playback-controls" aria-label="Playback controls">
           <button data-action="rewind" data-feedback="Playback control sent" type="button" disabled aria-label="Rewind">
@@ -164,27 +168,11 @@ export const REMOTE_HTML = `<!doctype html>
             <svg class="arrows-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18m-4-4 4 4-4 4M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4" /></svg>
             <span id="control-mode-copy">Pointer</span>
           </button>
-          <button class="quick-launch-toggle utility-button" id="quick-launch-toggle" type="button" disabled aria-label="Recent apps">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>
-            <span>Apps</span>
-          </button>
           <button class="search-toggle utility-button" id="search-toggle" type="button" disabled aria-label="Search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4 4" /></svg>
             <span id="search-toggle-copy">Search</span>
           </button>
         </div>
-
-        <section class="quick-launch-panel" id="quick-launch-panel" aria-labelledby="quick-launch-title" hidden>
-          <div class="quick-launch-heading">
-            <div>
-              <small>Quick launch</small>
-              <strong id="quick-launch-title">Recent apps</strong>
-            </div>
-            <button id="quick-launch-close" type="button" aria-label="Close recent apps">×</button>
-          </div>
-          <div class="quick-launch-list" id="quick-launch-list"></div>
-          <p id="quick-launch-empty">Open an app on NHD-TV and it will appear here.</p>
-        </section>
 
         <form class="search-panel" id="search-panel" hidden>
           <label id="search-label" for="search-query">Search your services</label>
@@ -216,6 +204,7 @@ export const REMOTE_CSS = `:root {
   --accent-ink: #11120e;
   --panel: #171716;
   --panel-raised: #222220;
+  --touch-target: 3rem;
   color: #f2f2ee;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: dark;
@@ -231,6 +220,7 @@ body {
   padding: max(0.7rem, env(safe-area-inset-top)) 0.8rem max(0.75rem, env(safe-area-inset-bottom));
   overflow: hidden;
   background: #090909;
+  background: radial-gradient(circle at 50% -12%, #25251f 0, #11110f 28%, #090909 58%);
 }
 
 body::before {
@@ -345,21 +335,21 @@ input {
   display: flex;
   min-height: 0;
   margin-top: 0.45rem;
-  padding: 0.72rem;
+  padding: 0.78rem;
   flex: 1;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid #30302d;
-  border-radius: 1.7rem;
-  background: #151514;
+  border-radius: 1.8rem;
+  background: rgb(21 21 20 / 96%);
   box-shadow: inset 0 1px rgb(255 255 255 / 4%), 0 1.4rem 3.2rem rgb(0 0 0 / 44%);
 }
 
 .remote-context {
   display: grid;
   min-height: 3.2rem;
-  padding: 0.48rem 0.62rem 0.58rem;
+  padding: 0.42rem 0.55rem 0.52rem;
   grid-template-columns: 1fr auto;
   align-items: center;
   column-gap: 0.8rem;
@@ -407,13 +397,14 @@ input {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  min-height: 3.55rem;
+  min-height: 3.4rem;
+  padding: 0 0.15rem;
   justify-content: space-between;
 }
 .remote-icon-button {
   display: grid;
-  width: 2.8rem;
-  height: 2.8rem;
+  width: var(--touch-target);
+  height: var(--touch-target);
   place-items: center;
   border-radius: 999px;
   border: 1px solid #30302d;
@@ -421,44 +412,71 @@ input {
   color: #c9c9c4;
 }
 
+.voice-control {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+  margin-bottom: 0.62rem;
+}
 .voice-button {
   display: grid;
-  width: 3.15rem;
-  height: 3.15rem;
-  padding: 0.35rem 0 0.28rem;
-  place-items: center;
-  gap: 0.05rem;
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.72rem 1rem;
+  grid-template-columns: 2.55rem 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 0.82rem;
   border: 0;
-  border-radius: 50%;
+  border-radius: 1.35rem;
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 0 0 0.18rem color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: 0 0.7rem 1.6rem color-mix(in srgb, var(--accent) 14%, transparent), inset 0 1px rgb(255 255 255 / 20%);
+  text-align: left;
+  touch-action: none;
 }
 .voice-button svg {
-  width: 1.25rem;
-  height: 1.25rem;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 2rem;
+  height: 2rem;
+  justify-self: center;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
+  stroke-width: 1.75;
 }
-.voice-button span { font-size: 0.47rem; font-weight: 950; letter-spacing: 0.06em; text-transform: uppercase; }
+.voice-button span {
+  align-self: end;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.voice-button small {
+  align-self: start;
+  font-size: 0.57rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  opacity: 0.68;
+  text-transform: uppercase;
+}
 .voice-button:not(:disabled):active,
-.voice-button.is-recording { transform: scale(0.94); }
+.voice-button.is-recording { transform: scale(0.975); }
 .voice-button.is-recording {
   background: #ff465f;
   color: #fff;
   animation: voice-pulse 1s ease-in-out infinite;
 }
 .voice-button.is-processing { animation: voice-pulse 0.7s ease-in-out infinite; }
-.voice-button:disabled { background: #2a2a27; color: #777771; box-shadow: none; }
+.voice-button:disabled { background: #282826; color: #74746f; box-shadow: inset 0 0 0 1px #333330; }
 .voice-help {
   min-height: 0.8rem;
-  margin: -0.16rem 0 0.14rem;
+  margin: 0;
   overflow: hidden;
-  color: #74746e;
-  font-size: 0.55rem;
+  color: #85857e;
+  font-size: 0.58rem;
   line-height: 1.25;
   text-align: center;
   text-overflow: ellipsis;
@@ -469,7 +487,7 @@ input {
   z-index: 5;
   right: 0.8rem;
   left: 0.8rem;
-  top: 7.6rem;
+  top: 6.9rem;
   display: grid;
   padding: 1rem;
   gap: 0.5rem;
@@ -483,7 +501,7 @@ input {
 .voice-confirm strong { font-size: 0.9rem; line-height: 1.35; }
 .voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .voice-confirm button {
-  min-height: 2.7rem;
+  min-height: 3rem;
   border: 1px solid #3b3b37;
   border-radius: 0.7rem;
   background: #242422;
@@ -493,7 +511,7 @@ input {
   font-weight: 850;
 }
 #voice-confirm-play { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-@keyframes voice-pulse { 50% { box-shadow: 0 0 0 0.48rem rgb(255 70 95 / 13%); } }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 0 0.4rem rgb(255 70 95 / 13%), 0 0.8rem 1.8rem rgb(255 70 95 / 14%); } }
 .remote-icon-button svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -513,7 +531,7 @@ input {
 .control-surface {
   display: grid;
   min-height: 0;
-  padding: 0.25rem 0 0.7rem;
+  padding: 0.2rem 0 0.55rem;
   flex: 1 1 auto;
   place-items: center;
 }
@@ -522,7 +540,7 @@ input {
 .dpad {
   position: relative;
   display: grid;
-  width: min(78vw, 35dvh, 18rem);
+  width: clamp(11rem, 30dvh, 15.75rem);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
@@ -586,7 +604,7 @@ input {
 .precision-pad {
   position: relative;
   display: grid;
-  width: min(78vw, 35dvh, 18rem);
+  width: clamp(11rem, 30dvh, 15.75rem);
   aspect-ratio: 1;
   margin: 0 auto;
   place-content: center;
@@ -671,9 +689,9 @@ input {
   border-radius: 0.9rem;
   background: transparent;
 }
-.playback-controls { margin-bottom: 0.42rem; }
+.playback-controls { margin-bottom: 0.46rem; }
 .volume-controls {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.46rem;
   gap: 0;
   border: 1px solid #30302d;
   background: #1c1c1a;
@@ -690,9 +708,9 @@ input {
   font-size: 1rem;
   font-weight: 750;
 }
-.playback-controls button { min-height: 2.85rem; }
+.playback-controls button { min-height: 3rem; }
 .volume-controls button {
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   border-width: 0 1px 0 0;
   border-radius: 0;
   background: transparent;
@@ -719,17 +737,17 @@ input {
 
 .remote-utilities {
   display: grid;
-  min-height: 3rem;
+  min-height: 3.15rem;
   margin-bottom: 0;
   align-items: center;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.38rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.46rem;
 }
 .utility-button {
   display: flex;
   width: 100%;
   min-width: 0;
-  height: 2.95rem;
+  height: 3.15rem;
   padding: 0 0.55rem;
   align-items: center;
   justify-content: center;
@@ -760,73 +778,13 @@ input {
 .control-mode.is-precision .pointer-icon { display: none; }
 .control-mode.is-precision .arrows-icon { display: block; }
 
-.quick-launch-panel {
-  min-height: 0;
-  padding: 0.75rem;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  border: 1px solid #30302d;
-  border-radius: 0.95rem;
-  background: #1a1a18;
-}
-.quick-launch-panel[hidden] { display: none; }
-.quick-launch-heading {
-  display: flex;
-  margin-bottom: 0.7rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.quick-launch-heading div { display: grid; gap: 0.08rem; }
-.quick-launch-heading small {
-  color: #85857f;
-  font-size: 0.56rem;
-  font-weight: 900;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-.quick-launch-heading strong { font-size: 0.88rem; }
-.quick-launch-heading button {
-  width: 2.35rem;
-  height: 2.35rem;
-  border: 0;
-  border-radius: 50%;
-  background: #292927;
-  color: #deded9;
-  font: inherit;
-  font-size: 1.15rem;
-}
-.quick-launch-list { display: grid; gap: 0.5rem; }
-.quick-app {
-  display: grid;
-  min-height: 3.45rem;
-  padding: 0.55rem 0.7rem;
-  grid-template-columns: 2.25rem 1fr auto;
-  align-items: center;
-  gap: 0.65rem;
-  border: 1px solid #30302d;
-  border-radius: 0.75rem;
-  background: #222220;
-  color: #f8fafc;
-  font: inherit;
-  text-align: left;
-}
-.quick-app > span {
-  display: grid;
-  width: 2.25rem;
-  height: 2.25rem;
-  place-items: center;
-  border-radius: 0.7rem;
-  background: #30302d;
-  font-size: 0.8rem;
-  font-weight: 950;
-}
-.quick-app strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.quick-app small { color: #9c9c95; font-size: 0.6rem; font-weight: 850; }
-.quick-app:active { transform: scale(0.98); filter: brightness(1.2); }
-#quick-launch-empty { margin: 1.1rem 0; color: #8b8b84; font-size: 0.7rem; line-height: 1.45; text-align: center; }
-
 button:disabled { opacity: 0.42; }
+button:focus-visible,
+.precision-pad:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .search-panel {
   margin-top: 0.65rem;
@@ -864,17 +822,11 @@ button:disabled { opacity: 0.42; }
 
 body.is-typing .control-surface,
 body.is-typing .control-mode,
-body.is-typing .quick-launch-toggle,
+body.is-typing .voice-control,
 body.is-typing .playback-controls,
 body.is-typing .volume-controls { display: none; }
 body.is-typing .remote-card { justify-content: flex-start; }
 body.is-typing .remote-utilities { display: none; }
-body.is-launching .control-surface,
-body.is-launching .playback-controls,
-body.is-launching .control-mode,
-body.is-launching .search-toggle,
-body.is-launching .volume-controls { display: none; }
-body.is-launching .remote-utilities { display: none; }
 
 .confirmed { animation: confirmed 220ms ease-out; }
 .is-repeating { filter: brightness(1.16); }
@@ -887,16 +839,18 @@ body:not(.is-connected) .privacy-note { display: none; }
 body.is-connected .footnote { display: none; }
 
 @media (max-height: 700px) {
-  .remote-card { padding: 0.75rem; }
-  .remote-icon-button { width: 2.8rem; height: 2.8rem; }
-  .remote-context { min-height: 3rem; padding-block: 0.5rem; }
+  .remote-card { padding: 0.68rem; }
+  .remote-context { min-height: 2.85rem; padding-block: 0.38rem; }
+  .remote-top-actions { min-height: 3.15rem; }
   .dpad,
-  .precision-pad { width: min(78vw, 30dvh, 15rem); }
-  .remote-utilities { min-height: 2.5rem; }
-  .utility-button { height: 2.75rem; }
-  .playback-controls button { min-height: 2.65rem; }
-  .volume-controls button { min-height: 2.35rem; }
-  .privacy-note { margin-top: 0.5rem; }
+  .precision-pad { width: clamp(10.5rem, 27dvh, 13rem); }
+  .voice-control { margin-bottom: 0.45rem; }
+  .voice-button { min-height: 4.15rem; padding-block: 0.58rem; }
+  .remote-utilities { min-height: 3rem; }
+  .utility-button { height: 3rem; }
+  .playback-controls button { min-height: 2.85rem; }
+  .volume-controls button { min-height: 2.75rem; }
+  .privacy-note { margin-top: 0.38rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -914,17 +868,13 @@ export const REMOTE_JS = `(() => {
   const dpad = document.querySelector(".dpad");
   const precisionPad = document.querySelector("#precision-pad");
   const controlMode = document.querySelector("#control-mode");
-  const quickLaunchToggle = document.querySelector("#quick-launch-toggle");
-  const quickLaunchPanel = document.querySelector("#quick-launch-panel");
-  const quickLaunchClose = document.querySelector("#quick-launch-close");
-  const quickLaunchList = document.querySelector("#quick-launch-list");
-  const quickLaunchEmpty = document.querySelector("#quick-launch-empty");
   const searchLabel = document.querySelector("#search-label");
   const remoteModeLabel = document.querySelector("#remote-mode-label");
   const activeServiceLabel = document.querySelector("#active-service-label");
   const controlModeCopy = document.querySelector("#control-mode-copy");
   const searchToggleCopy = document.querySelector("#search-toggle-copy");
   const voiceButton = document.querySelector("#voice-button");
+  const voiceButtonCopy = document.querySelector("#voice-button-copy");
   const voiceHelp = document.querySelector("#voice-help");
   const voiceConfirm = document.querySelector("#voice-confirm");
   const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
@@ -956,6 +906,7 @@ export const REMOTE_JS = `(() => {
   let voiceStopTimer = null;
   let voiceStarting = false;
   let voiceReleaseRequested = false;
+  let voiceDiscardRequested = false;
   let voiceProcessing = false;
   let pendingVoiceConfirmation = null;
   const POINTER_INTERVAL_MS = 32;
@@ -1044,11 +995,9 @@ export const REMOTE_JS = `(() => {
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
     controlMode.disabled = !enabled;
-    quickLaunchToggle.disabled = !enabled;
     updateVoiceButton();
     if (!enabled) {
       resetTextEntry();
-      closeQuickLaunch();
     }
   }
 
@@ -1069,6 +1018,22 @@ export const REMOTE_JS = `(() => {
       throw error;
     }
     return body;
+  }
+
+  function sendVoiceActivity(phase, keepalive = false) {
+    const token = controllerToken;
+    if (!token) return;
+    try {
+      void fetch("/api/voice/activity", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ phase }),
+        keepalive
+      }).catch(() => {});
+    } catch {}
   }
 
   function closeVoiceConfirmation() {
@@ -1093,6 +1058,7 @@ export const REMOTE_JS = `(() => {
   async function uploadVoiceRecording(blob, durationMs) {
     if (!controllerToken) return;
     voiceProcessing = true;
+    voiceButtonCopy.textContent = "Understanding";
     updateVoiceButton();
     setState("Understanding voice command…");
     try {
@@ -1125,9 +1091,11 @@ export const REMOTE_JS = `(() => {
         if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
       }
     } catch (error) {
+      sendVoiceActivity("cancelled");
       setState(error instanceof Error ? error.message : "Voice command failed", "error");
     } finally {
       voiceProcessing = false;
+      voiceButtonCopy.textContent = "Hold to talk";
       updateVoiceButton();
     }
   }
@@ -1135,7 +1103,16 @@ export const REMOTE_JS = `(() => {
   function finishVoiceRecording() {
     const recorder = voiceRecorder;
     if (recorder === null || recorder.state === "inactive") return;
+    sendVoiceActivity("understanding");
     recorder.stop();
+  }
+
+  function cancelVoiceRecording() {
+    voiceReleaseRequested = true;
+    voiceDiscardRequested = true;
+    sendVoiceActivity("cancelled", true);
+    const recorder = voiceRecorder;
+    if (recorder !== null && recorder.state !== "inactive") recorder.stop();
   }
 
   async function startVoiceRecording() {
@@ -1150,6 +1127,7 @@ export const REMOTE_JS = `(() => {
     closeVoiceConfirmation();
     voiceStarting = true;
     voiceReleaseRequested = false;
+    voiceDiscardRequested = false;
     setState("Starting microphone…");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1162,6 +1140,7 @@ export const REMOTE_JS = `(() => {
       });
       if (voiceReleaseRequested) {
         stream.getTracks().forEach((track) => track.stop());
+        sendVoiceActivity("cancelled");
         setState("Microphone ready — hold again to speak", "connected");
         return;
       }
@@ -1186,9 +1165,17 @@ export const REMOTE_JS = `(() => {
         clearVoiceStopTimer();
         stopVoiceStream();
         voiceButton.classList.remove("is-recording");
-        voiceButton.querySelector("span").textContent = "Hold";
+        voiceButtonCopy.textContent = "Hold to talk";
+        if (voiceDiscardRequested) {
+          voiceDiscardRequested = false;
+          recordedChunks.length = 0;
+          setState("Voice command cancelled", "connected");
+          updateVoiceButton();
+          return;
+        }
         if (durationMs < 150 || recordedChunks.length === 0) {
           recordedChunks.length = 0;
+          sendVoiceActivity("cancelled");
           setState("Hold the microphone a little longer", "error");
           updateVoiceButton();
           return;
@@ -1200,7 +1187,8 @@ export const REMOTE_JS = `(() => {
       recorder.start(250);
       voiceStartedAt = performance.now();
       voiceButton.classList.add("is-recording");
-      voiceButton.querySelector("span").textContent = "Speak";
+      voiceButtonCopy.textContent = "Listening";
+      sendVoiceActivity("listening");
       setState("Listening…", "connected");
       if (navigator.vibrate) navigator.vibrate(12);
       voiceStopTimer = setTimeout(() => {
@@ -1209,6 +1197,7 @@ export const REMOTE_JS = `(() => {
       }, 19_500);
     } catch (error) {
       stopVoiceStream();
+      sendVoiceActivity("cancelled");
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";
       setState(
         denied ? "Allow microphone access in Safari to use voice" : "The microphone is unavailable",
@@ -1335,99 +1324,9 @@ export const REMOTE_JS = `(() => {
     showNavigationMode();
   }
 
-  function closeQuickLaunch() {
-    quickLaunchPanel.hidden = true;
-    document.body.classList.remove("is-launching");
-    showNavigationMode();
-  }
-
-  function renderRecentApps(services) {
-    quickLaunchList.replaceChildren();
-    const safeServices = Array.isArray(services)
-      ? services.filter((service) =>
-        service && typeof service.id === "string" && typeof service.name === "string"
-      ).slice(0, 3)
-      : [];
-    quickLaunchEmpty.hidden = safeServices.length > 0;
-
-    for (const service of safeServices) {
-      const button = document.createElement("button");
-      const mark = document.createElement("span");
-      const name = document.createElement("strong");
-      const action = document.createElement("small");
-      button.type = "button";
-      button.className = "quick-app";
-      button.setAttribute("aria-label", "Open " + service.name);
-      mark.setAttribute("aria-hidden", "true");
-      mark.textContent = service.name.slice(0, 1).toUpperCase();
-      name.textContent = service.name;
-      action.textContent = "Open";
-      button.append(mark, name, action);
-      button.addEventListener("click", () => void launchRecentApp(service, button));
-      quickLaunchList.append(button);
-    }
-  }
-
-  async function openQuickLaunch() {
-    if (!controllerToken) return;
-    resetTextEntry();
-    quickLaunchPanel.hidden = false;
-    quickLaunchEmpty.hidden = false;
-    quickLaunchEmpty.textContent = "Loading recent apps…";
-    document.body.classList.add("is-launching");
-    remoteModeLabel.textContent = "Recent apps";
-
-    try {
-      const result = await jsonRequest("/api/apps", {
-        headers: { "Authorization": "Bearer " + controllerToken }
-      });
-      renderContext(result.context);
-      renderVoiceStatus(result.voice);
-      quickLaunchEmpty.textContent = "Open an app on NHD-TV and it will appear here.";
-      renderRecentApps(result.services);
-    } catch (error) {
-      if (error && error.status === 401) {
-        controllerToken = null;
-        sessionStorage.removeItem("nhd-controller-token");
-        setEnabled(false);
-      }
-      quickLaunchEmpty.textContent = error instanceof Error ? error.message : "Recent apps unavailable";
-      setState(quickLaunchEmpty.textContent, "error");
-    }
-  }
-
-  async function launchRecentApp(service, button) {
-    if (!controllerToken) return;
-    button.disabled = true;
-    try {
-      const result = await jsonRequest("/api/launch", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + controllerToken,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ serviceId: service.id })
-      });
-      renderContext(result.context);
-      confirmCommand(button);
-      closeQuickLaunch();
-      setState(service.name + " opened", "connected");
-    } catch (error) {
-      button.disabled = false;
-      setState(error instanceof Error ? error.message : "App launch failed", "error");
-    }
-  }
-
   async function sendAction(action, button, quiet = false) {
     if (document.body.classList.contains("is-typing")) {
       resetTextEntry();
-      if (action === "back") {
-        confirmCommand(button);
-        return;
-      }
-    }
-    if (document.body.classList.contains("is-launching")) {
-      closeQuickLaunch();
       if (action === "back") {
         confirmCommand(button);
         return;
@@ -1764,7 +1663,6 @@ export const REMOTE_JS = `(() => {
       resetTextEntry();
       return;
     }
-    closeQuickLaunch();
     resetTextEntry();
     searchLabel.textContent = currentSearchLabel;
     searchQuery.placeholder = "Title, person, or topic";
@@ -1774,16 +1672,6 @@ export const REMOTE_JS = `(() => {
     searchQuery.focus();
     searchPanel.scrollIntoView({ block: "nearest" });
   });
-
-  quickLaunchToggle.addEventListener("click", () => {
-    if (quickLaunchToggle.disabled) return;
-    if (!quickLaunchPanel.hidden) {
-      closeQuickLaunch();
-      return;
-    }
-    void openQuickLaunch();
-  });
-  quickLaunchClose.addEventListener("click", closeQuickLaunch);
 
   voiceButton.addEventListener("pointerdown", (event) => {
     if (event.isPrimary === false || voiceButton.disabled) return;
@@ -1796,7 +1684,7 @@ export const REMOTE_JS = `(() => {
     finishVoiceRecording();
   };
   voiceButton.addEventListener("pointerup", releaseVoiceButton);
-  voiceButton.addEventListener("pointercancel", releaseVoiceButton);
+  voiceButton.addEventListener("pointercancel", cancelVoiceRecording);
   voiceButton.addEventListener("keydown", (event) => {
     if ((event.key === " " || event.key === "Enter") && !event.repeat) {
       event.preventDefault();
@@ -1812,6 +1700,7 @@ export const REMOTE_JS = `(() => {
   voiceButton.addEventListener("click", (event) => event.preventDefault());
   voiceConfirmCancel.addEventListener("click", () => {
     closeVoiceConfirmation();
+    sendVoiceActivity("cancelled");
     setState("Voice command cancelled", "connected");
   });
   voiceConfirmPlay.addEventListener("click", () => void confirmVoiceCommand());
@@ -1902,7 +1791,10 @@ export const REMOTE_JS = `(() => {
 
   setEnabled(false);
   usePrecisionMode(false);
-  window.addEventListener("pagehide", disconnectRemote);
+  window.addEventListener("pagehide", () => {
+    cancelVoiceRecording();
+    disconnectRemote();
+  });
   setInterval(() => void sendHeartbeat(), 10_000);
   beginPairing();
 })();`;

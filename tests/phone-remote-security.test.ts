@@ -107,7 +107,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('fetch("/api/disconnect"');
     expect(REMOTE_JS).toContain('await jsonRequest("/api/heartbeat"');
     expect(REMOTE_JS).toContain('setInterval(() => void sendHeartbeat(), 10_000)');
-    expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
+    expect(REMOTE_JS).toContain('window.addEventListener("pagehide", () => {');
+    expect(REMOTE_JS).toContain("cancelVoiceRecording();\n    disconnectRemote();");
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm"');
     expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
     expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
@@ -121,6 +122,11 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("new MediaRecorder(stream");
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
+    expect(REMOTE_JS).toContain('fetch("/api/voice/activity"');
+    expect(REMOTE_JS).toContain('sendVoiceActivity("listening")');
+    expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
+    expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
+    expect(REMOTE_JS).toContain(".catch(() => {})");
     expect(REMOTE_JS).toContain("finishVoiceRecording");
     expect(REMOTE_JS).toContain("stopVoiceStream");
     expect(REMOTE_JS).toContain("}, 19_500);");
@@ -151,7 +157,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="remote-top-actions"');
     expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back. Hold to force return Home"');
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
-    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(11);
+    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(10);
     expect(REMOTE_HTML).not.toContain(">Back<");
     expect(REMOTE_HTML).toContain('id="active-service-label">NHD Home<');
     expect(REMOTE_HTML).toContain('class="remote-context" aria-live="polite"');
@@ -218,21 +224,25 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('event.target.closest("input") === null');
   });
 
-  it("offers an authenticated three-app quick launcher without exposing service URLs", () => {
-    expect(REMOTE_HTML).toContain('id="quick-launch-toggle"');
-    expect(REMOTE_HTML).toContain('id="quick-launch-panel"');
-    expect(REMOTE_HTML).toContain('id="quick-launch-list"');
-    expect(REMOTE_HTML).toContain(">Apps<");
+  it("makes push-to-talk the thumb-zone hero and removes the app launcher", () => {
+    const navigationIndex = REMOTE_HTML.indexOf('class="control-surface"');
+    const voiceIndex = REMOTE_HTML.indexOf('class="voice-control"');
+    const playbackIndex = REMOTE_HTML.indexOf('class="playback-controls"');
+
+    expect(navigationIndex).toBeGreaterThan(-1);
+    expect(voiceIndex).toBeGreaterThan(navigationIndex);
+    expect(playbackIndex).toBeGreaterThan(voiceIndex);
+    expect(REMOTE_HTML).toContain('class="voice-control" aria-label="AI voice control"');
+    expect(REMOTE_HTML).toContain('id="voice-button-copy">Hold to talk<');
+    expect(REMOTE_HTML).toContain("<small>Ask NHD-TV</small>");
     expect(REMOTE_HTML).toContain('id="control-mode-copy">Pointer<');
     expect(REMOTE_HTML).toContain('id="search-toggle-copy">Search<');
-    expect(REMOTE_JS).toContain('jsonRequest("/api/apps"');
-    expect(REMOTE_JS).toContain('jsonRequest("/api/launch"');
-    expect(REMOTE_JS).toContain("body: JSON.stringify({ serviceId: service.id })");
-    expect(REMOTE_JS).toContain("document.createElement(\"button\")");
-    expect(REMOTE_JS).toContain(".slice(0, 3)");
-    expect(serverSource).toContain('url.pathname === "/api/apps"');
-    expect(serverSource).toContain('url.pathname === "/api/launch"');
-    expect(serverSource).toContain("Object.keys(body).some((key) => key !== \"serviceId\")");
+    expect(REMOTE_CSS).toContain("min-height: 4.5rem;");
+    expect(REMOTE_CSS).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(REMOTE_HTML).not.toContain("quick-launch");
+    expect(REMOTE_HTML).not.toContain(">Apps<");
+    expect(REMOTE_JS).not.toContain('jsonRequest("/api/apps"');
+    expect(REMOTE_JS).not.toContain('jsonRequest("/api/launch"');
     expect(REMOTE_JS).not.toContain("startUrl");
   });
 

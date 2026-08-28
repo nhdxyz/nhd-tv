@@ -1596,6 +1596,12 @@ async function executeVoiceCommandPlanCore(
     signal?.throwIfAborted();
     return result;
   }
+  if (plan.kind === "set-system-volume") {
+    presentPhoneVoiceProgress(`Setting volume to ${plan.volumePercent}%…`);
+    const result = await systemVolumeController.setVolume(plan.volumePercent);
+    signal?.throwIfAborted();
+    return result;
+  }
   if (plan.kind === "query-current-media") {
     syncVoiceContextFromServiceHost();
     return answerCurrentMediaQuestion(

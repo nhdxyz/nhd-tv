@@ -26,6 +26,7 @@ function outputIntent(overrides: Record<string, unknown> = {}) {
     semanticControlAction: null,
     offsetSeconds: null,
     positionSeconds: null,
+    volumePercent: null,
     mediaAction: "play",
     reference: null,
     ordinal: null,
@@ -88,6 +89,9 @@ describe("OpenAI voice client", () => {
         "Never reinterpret a media title, playback control, or longer request"
       );
       expect(body.instructions).toContain("Use kind=semantic-control");
+      expect(body.instructions).toContain("controlAction=set-volume");
+      expect(body.instructions).toContain("volumePercent set to an explicit whole-number percent");
+      expect(body.instructions).toContain("Never guess, round, clamp, or infer");
       expect(body.instructions).toContain("A relative seek requires only offsetSeconds");
       expect(body.instructions).toContain("A bare fast-forward or rewind with no amount remains");
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
@@ -133,6 +137,41 @@ describe("OpenAI voice client", () => {
       kind: "control"
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Set volume to twenty percent", 20],
+    ["Turn the TV volume down to 0%", 0],
+    ["Volume at one hundred percent", 100]
+  ] as const)("routes the bounded absolute volume %s locally", async (phrase, volumePercent) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+      action: "set-volume",
+      kind: "control",
+      volumePercent
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts a structured absolute-volume intent outside the local phrase set", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json({
+      output_text: JSON.stringify(outputIntent({
+        controlAction: "set-volume",
+        kind: "control",
+        mediaAction: null,
+        mediaType: null,
+        title: null,
+        volumePercent: 35
+      }))
+    }));
+
+    await expect(client(fetchMock).interpret("Please make the sound level 35 percent"))
+      .resolves.toEqual({
+        action: "set-volume",
+        kind: "control",
+        volumePercent: 35
+      });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([

@@ -10,6 +10,7 @@ class FakeVolumeBackend implements SystemVolumeBackend {
   muted = false;
   readonly muteChanges: boolean[] = [];
   volume = 50;
+  readonly volumeChanges: number[] = [];
 
   async getMuted(): Promise<boolean> {
     return this.muted;
@@ -25,6 +26,7 @@ class FakeVolumeBackend implements SystemVolumeBackend {
   }
 
   async setVolume(volume: number): Promise<void> {
+    this.volumeChanges.push(volume);
     this.volume = volume;
   }
 }
@@ -85,6 +87,36 @@ describe("system volume controller", () => {
     expect(backend.volume).toBe(100);
   });
 
+  it("sets an exact bounded system volume and unmutes", async () => {
+    const backend = new FakeVolumeBackend();
+    backend.muted = true;
+    const controller = new SystemVolumeController(backend);
+
+    await expect(controller.setVolume(20)).resolves.toEqual({
+      detail: "System volume 20%",
+      handled: true
+    });
+    expect(backend).toMatchObject({ muted: false, volume: 20 });
+    await controller.setVolume(0);
+    await controller.setVolume(100);
+    expect(backend.volumeChanges).toEqual([20, 0, 100]);
+  });
+
+  it.each([-1, 101, 20.5, Number.NaN])(
+    "rejects an invalid exact system volume without touching the backend: %s",
+    async (volumePercent) => {
+      const backend = new FakeVolumeBackend();
+      const controller = new SystemVolumeController(backend);
+
+      await expect(controller.setVolume(volumePercent)).resolves.toEqual({
+        detail: "System volume must be a whole percent from 0% to 100%",
+        handled: false
+      });
+      expect(backend).toMatchObject({ muted: false, volume: 50 });
+      expect(backend.volumeChanges).toEqual([]);
+    }
+  );
+
   it("toggles mute without reading provider media elements", async () => {
     const backend = new FakeVolumeBackend();
     const controller = new SystemVolumeController(backend);
@@ -135,6 +167,8 @@ describe("system volume controller", () => {
     backend.setMuted = async () => { throw new Error("unsupported"); };
     await expect(controller.getMuted()).resolves.toBeNull();
     await expect(controller.setMuted(true)).resolves.toMatchObject({ handled: false });
+    backend.setVolume = async () => { throw new Error("unsupported"); };
+    await expect(controller.setVolume(20)).resolves.toMatchObject({ handled: false });
   });
 
   it("mutes only for the active voice capture and restores audible playback", async () => {

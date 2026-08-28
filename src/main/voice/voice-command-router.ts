@@ -1,7 +1,7 @@
 import type { RemoteAction, VoicePlaybackMode } from "../contracts";
 import type {
   VoiceAppIntent,
-  VoiceControlAction,
+  VoiceControlIntent,
   VoiceCurrentMediaIntent,
   VoiceIntent,
   VoiceMediaIntent,
@@ -37,6 +37,7 @@ export type VoiceCommandPlan =
   | { kind: "close-service" }
   | { kind: "launch-service"; serviceId: string; serviceName: string }
   | { kind: "set-system-muted"; muted: boolean }
+  | { kind: "set-system-volume"; volumePercent: number }
   | {
     candidateServiceIds: VoiceServiceId[];
     confirmationRequired: boolean;
@@ -79,10 +80,10 @@ function remoteActionPlan(action: RemoteAction): VoiceCommandPlan {
 }
 
 function controlPlan(
-  action: VoiceControlAction,
+  intent: VoiceControlIntent,
   context: VoiceCommandContext
 ): VoiceCommandPlan {
-  switch (action) {
+  switch (intent.action) {
     case "back":
     case "down":
     case "fast-forward":
@@ -95,7 +96,9 @@ function controlPlan(
     case "up":
     case "volume-down":
     case "volume-up":
-      return remoteActionPlan(action);
+      return remoteActionPlan(intent.action);
+    case "set-volume":
+      return { kind: "set-system-volume", volumePercent: intent.volumePercent };
     case "mute":
       return context.muted === true
         ? { detail: "Audio is already muted.", kind: "no-op" }
@@ -266,6 +269,6 @@ export function planVoiceCommand(
     };
   }
   return intent.kind === "control"
-    ? controlPlan(intent.action, context)
+    ? controlPlan(intent, context)
     : mediaPlan(intent, context);
 }

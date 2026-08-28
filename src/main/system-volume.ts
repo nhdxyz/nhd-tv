@@ -65,6 +65,31 @@ export class SystemVolumeController {
     }
   }
 
+  async setVolume(volumePercent: number): Promise<SystemVolumeResult> {
+    if (
+      !Number.isInteger(volumePercent) ||
+      volumePercent < 0 ||
+      volumePercent > 100
+    ) {
+      return {
+        detail: "System volume must be a whole percent from 0% to 100%",
+        handled: false
+      };
+    }
+    try {
+      await this.#backend.setVolume(volumePercent);
+      if (await this.#backend.getMuted()) {
+        await this.#backend.setMuted(false);
+      }
+      return { detail: `System volume ${volumePercent}%`, handled: true };
+    } catch {
+      return {
+        detail: "System volume is unavailable here — use the TV volume controls",
+        handled: false
+      };
+    }
+  }
+
   async apply(action: SystemVolumeAction): Promise<SystemVolumeResult> {
     try {
       if (action === "mute") {
@@ -75,11 +100,7 @@ export class SystemVolumeController {
 
       const direction = action === "volume-up" ? 1 : -1;
       const volume = boundedVolume(await this.#backend.getVolume() + direction * VOLUME_STEP);
-      await this.#backend.setVolume(volume);
-      if (await this.#backend.getMuted()) {
-        await this.#backend.setMuted(false);
-      }
-      return { detail: `System volume ${volume}%`, handled: true };
+      return await this.setVolume(volume);
     } catch {
       return {
         detail: "System volume is unavailable here — use the TV volume controls",

@@ -13,6 +13,7 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     semanticControlAction: null,
     offsetSeconds: null,
     positionSeconds: null,
+    volumePercent: null,
     mediaAction: "play",
     reference: null,
     ordinal: null,
@@ -38,6 +39,7 @@ describe("voice intent boundary", () => {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "volumePercent",
       "mediaAction",
       "reference",
       "ordinal",
@@ -111,6 +113,53 @@ describe("voice intent boundary", () => {
       offsetSeconds: null,
       positionSeconds: 754
     });
+  });
+
+  it.each([0, 20, 100])("parses the bounded absolute volume %s%%", (volumePercent) => {
+    expect(parseVoiceIntent(mediaIntent({
+      controlAction: "set-volume",
+      kind: "control",
+      mediaAction: null,
+      mediaType: null,
+      title: null,
+      volumePercent
+    }))).toEqual({
+      action: "set-volume",
+      kind: "control",
+      volumePercent
+    });
+  });
+
+  it.each([-1, 101, 20.5, "20"])(
+    "rejects an invalid absolute volume value %s",
+    (volumePercent) => {
+      expect(() => parseVoiceIntent(mediaIntent({
+        controlAction: "set-volume",
+        kind: "control",
+        mediaAction: null,
+        mediaType: null,
+        title: null,
+        volumePercent
+      }))).toThrow("invalid number");
+    }
+  );
+
+  it("strictly isolates the absolute volume parameter", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      controlAction: "set-volume",
+      kind: "control",
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toThrow("require a volume percent");
+    expect(() => parseVoiceIntent(mediaIntent({
+      controlAction: "volume-up",
+      kind: "control",
+      mediaAction: null,
+      mediaType: null,
+      title: null,
+      volumePercent: 20
+    }))).toThrow("Only absolute volume controls");
   });
 
   it.each([
@@ -349,6 +398,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      volumePercent: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -368,6 +418,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      volumePercent: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -387,6 +438,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      volumePercent: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -442,6 +494,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      volumePercent: null,
       mediaAction: null,
       reference: null,
       ordinal: null,

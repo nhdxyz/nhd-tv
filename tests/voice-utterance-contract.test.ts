@@ -57,7 +57,39 @@ describe("common voice utterance contract", () => {
     expect(voiceTranscriptShortcut("Play Up")).toBeNull();
     expect(voiceTranscriptShortcut("Go to Outdoor Boys channel")).toBeNull();
     expect(voiceTranscriptShortcut("Skip")).toBeNull();
-    expect(voiceTranscriptShortcut("Set volume to twenty percent")).toBeNull();
+  });
+
+  it.each([
+    ["Set volume to twenty percent", 20],
+    ["set the volume at 35", 35],
+    ["turn the TV volume down to 0%", 0],
+    ["put volume at ninety nine percent", 99],
+    ["volume to one hundred percent", 100]
+  ] as const)("normalizes the absolute volume %s", (phrase, volumePercent) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "set-volume",
+      kind: "control",
+      volumePercent
+    });
+  });
+
+  it.each([
+    "set volume to -1 percent",
+    "set volume to minus one percent",
+    "set volume to 101 percent",
+    "set volume to 20.5 percent",
+    "set volume to loud"
+  ])("rejects an invalid absolute volume without guessing: %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({ kind: "unknown" });
+  });
+
+  it("does not steal volume-like media titles or relative controls", () => {
+    expect(voiceTranscriptShortcut("Play Volume 2")).toBeNull();
+    expect(voiceTranscriptShortcut("Volume 2")).toBeNull();
+    expect(voiceTranscriptShortcut("turn it up")).toEqual({
+      action: "volume-up",
+      kind: "control"
+    });
   });
 
   it.each([

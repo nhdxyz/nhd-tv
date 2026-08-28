@@ -13,6 +13,8 @@ import {
   normalizeVoiceAppName
 } from "./voice-app-matcher";
 
+type VoiceSimpleControlAction = Exclude<VoiceControlAction, "set-volume">;
+
 const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = {
   cancel: "cancel",
   confirm: "confirm",
@@ -25,7 +27,7 @@ const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = 
   yes: "confirm"
 };
 
-const CONTROL_PHRASES: Readonly<Record<string, VoiceControlAction>> = {
+const CONTROL_PHRASES: Readonly<Record<string, VoiceSimpleControlAction>> = {
   "close app": "close-app",
   "close this app": "close-app",
   continue: "resume",
@@ -268,6 +270,41 @@ function englishInteger(value: string): number | null {
   return sawNumber ? total + current : null;
 }
 
+function boundedVolumePercent(value: string): number | null {
+  const amount = value.replace(/ (?:per cent|percent)$/, "").trim();
+  if (/^\d{1,3}$/.test(amount)) {
+    const numeric = Number(amount);
+    return numeric >= 0 && numeric <= 100 ? numeric : null;
+  }
+
+  const oneToNineteen = "(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)";
+  const oneToNine = "(?:one|two|three|four|five|six|seven|eight|nine)";
+  const tens = "(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)";
+  const naturalPercent = new RegExp(
+    `^(?:${oneToNineteen}|${tens}(?: ${oneToNine})?|(?:a|one) hundred)$`
+  );
+  if (!naturalPercent.test(amount)) return null;
+  const numeric = englishInteger(amount);
+  return numeric !== null && numeric >= 0 && numeric <= 100 ? numeric : null;
+}
+
+function absoluteVolumeShortcut(phrase: string): VoiceIntent | null {
+  const explicit = /^(?:set|turn|put) (?:the )?(?:tv )?volume(?: (?:up|down))? (?:to|at) (.+)$/.exec(
+    phrase
+  );
+  const direct = /^volume (?:to|at) (.+)$/.exec(phrase);
+  const amount = explicit?.[1] ?? direct?.[1];
+  if (amount === undefined) return null;
+  const volumePercent = boundedVolumePercent(amount);
+  return volumePercent === null
+    ? { kind: "unknown" }
+    : {
+      action: "set-volume",
+      kind: "control",
+      volumePercent
+    };
+}
+
 function durationSeconds(value: string): number | null {
   const tokens = value.trim().split(" ");
   const factors: Readonly<Record<string, number>> = {
@@ -364,6 +401,7 @@ function normalizedPhrase(value: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("en-US")
+    .replace(/(^|[\s:(])[-\u2212]\s*(?=\d)/g, "$1minus ")
     .replace(/[^a-z0-9+:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -399,6 +437,8 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   const phrase = normalizedPhrase(value);
   if (phrase.length === 0) return null;
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
+  const absoluteVolume = absoluteVolumeShortcut(phrase);
+  if (absoluteVolume !== null) return absoluteVolume;
   const currentMediaAction = CURRENT_MEDIA_PHRASES[phrase];
   if (currentMediaAction !== undefined) {
     return { action: currentMediaAction, kind: "current-media" };

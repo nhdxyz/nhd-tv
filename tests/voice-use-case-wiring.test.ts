@@ -20,6 +20,14 @@ describe("voice use-case execution wiring", () => {
     expect(operation).toBeGreaterThan(setMuted);
   });
 
+  it("sets absolute volume before acquiring a provider operation", () => {
+    const setVolume = execution.indexOf('plan.kind === "set-system-volume"');
+    const operation = execution.indexOf("serviceHost?.beginOperation()");
+    expect(setVolume).toBeGreaterThan(-1);
+    expect(execution).toContain("systemVolumeController.setVolume(plan.volumePercent)");
+    expect(operation).toBeGreaterThan(setVolume);
+  });
+
   it("revalidates and opens only the planned enabled app", () => {
     expect(execution).toContain('plan.kind === "launch-service"');
     expect(execution).toContain("enabledServiceIds.includes(plan.serviceId)");

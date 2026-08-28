@@ -83,6 +83,17 @@ describe("voice command planning", () => {
     });
   });
 
+  it.each([0, 20, 100])("routes absolute volume %s%% outside provider actions", (volumePercent) => {
+    expect(planVoiceCommand({
+      action: "set-volume",
+      kind: "control",
+      volumePercent
+    }, context)).toEqual({
+      kind: "set-system-volume",
+      volumePercent
+    });
+  });
+
   it("routes current-media questions without provider navigation", () => {
     expect(planVoiceCommand({ action: "identity", kind: "current-media" }, context)).toEqual({
       action: "identity",

@@ -14,6 +14,7 @@ const VOICE_CONTROL_ACTIONS = [
   "resume",
   "rewind",
   "select",
+  "set-volume",
   "stop",
   "unmute",
   "up",
@@ -69,6 +70,7 @@ const VOICE_INTENT_KEYS = [
   "semanticControlAction",
   "offsetSeconds",
   "positionSeconds",
+  "volumePercent",
   "mediaAction",
   "reference",
   "ordinal",
@@ -91,10 +93,16 @@ export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
 export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
 export type VoiceSemanticControlAction = (typeof VOICE_SEMANTIC_CONTROL_ACTIONS)[number];
 
-export interface VoiceControlIntent {
-  action: VoiceControlAction;
-  kind: "control";
-}
+export type VoiceControlIntent =
+  | {
+    action: Exclude<VoiceControlAction, "set-volume">;
+    kind: "control";
+  }
+  | {
+    action: "set-volume";
+    kind: "control";
+    volumePercent: number;
+  };
 
 /** A bare spoken decision for an already-pending confirmation question. */
 export interface VoiceConfirmationIntent {
@@ -223,6 +231,9 @@ export const VOICE_INTENT_JSON_SCHEMA = {
     positionSeconds: {
       anyOf: [{ maximum: 86_400, minimum: 0, type: "integer" }, { type: "null" }]
     },
+    volumePercent: {
+      anyOf: [{ maximum: 100, minimum: 0, type: "integer" }, { type: "null" }]
+    },
     mediaAction: {
       anyOf: [
         { enum: VOICE_MEDIA_ACTIONS, type: "string" },
@@ -345,6 +356,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "volumePercent",
       "mediaAction",
       "reference",
       "ordinal",
@@ -395,6 +407,20 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     ) {
       throw new TypeError("The voice control intent is inconsistent.");
     }
+    const volumePercent = boundedIntegerRange(value.volumePercent, 0, 100);
+    if (value.controlAction === "set-volume") {
+      if (volumePercent === null) {
+        throw new TypeError("Absolute volume controls require a volume percent.");
+      }
+      return {
+        action: "set-volume",
+        kind: "control",
+        volumePercent
+      };
+    }
+    if (volumePercent !== null) {
+      throw new TypeError("Only absolute volume controls may contain a volume percent.");
+    }
     return { action: value.controlAction, kind: "control" };
   }
 
@@ -407,6 +433,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "semanticControlAction",
         "offsetSeconds",
         "positionSeconds",
+        "volumePercent",
         "mediaAction",
         "reference",
         "ordinal",
@@ -439,6 +466,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "volumePercent",
       "mediaType",
       "title",
       "creator",
@@ -473,6 +501,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "confirmationAction",
       "currentMediaAction",
       "controlAction",
+      "volumePercent",
       "mediaAction",
       "reference",
       "ordinal",
@@ -519,6 +548,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     value.semanticControlAction !== null ||
     value.offsetSeconds !== null ||
     value.positionSeconds !== null ||
+    value.volumePercent !== null ||
     value.reference !== null ||
     value.ordinal !== null
   ) {

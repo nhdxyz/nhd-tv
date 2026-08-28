@@ -128,6 +128,27 @@ export function voiceProviderCommandHandled(
     executionResult === "playing-windowed";
 }
 
+export function voiceProviderTerminalDetail(
+  executionResult: VoiceMediaExecutionResult,
+  providerName: string,
+  title: string
+): string | null {
+  switch (executionResult) {
+    case "age-gate-required":
+      return `Complete the age check on ${providerName}, then try again.`;
+    case "consent-required":
+      return `Finish the ${providerName} consent prompt on the TV, then try again.`;
+    case "content-private":
+      return `${title} is private on ${providerName}.`;
+    case "content-unavailable":
+      return `${title} is unavailable on ${providerName}.`;
+    case "sign-in-required":
+      return `Sign in to ${providerName} on the TV, then try again.`;
+    default:
+      return null;
+  }
+}
+
 function providerTerminalPageDetectorScript(
   providerId: "netflix" | "spotify" | "youtube"
 ): string {

@@ -8,6 +8,7 @@ import {
   netflixContentIdFromUrl,
   parseVoiceProviderAutomationResult,
   voiceProviderCommandHandled,
+  voiceProviderTerminalDetail,
   youtubeContentIdFromUrl,
   type VoiceProviderAutomationResult
 } from "../src/main/voice/voice-provider-automation";
@@ -1220,6 +1221,21 @@ describe("voice provider automation", () => {
     expect(voiceProviderCommandHandled(intent({ action: "open" }), "failed")).toBe(true);
     expect(voiceProviderCommandHandled(intent({ action: "open" }), "content-private"))
       .toBe(false);
+  });
+
+  it("turns provider terminal states into immediate, actionable TV guidance", () => {
+    expect(voiceProviderTerminalDetail("sign-in-required", "Spotify", "Runaway"))
+      .toBe("Sign in to Spotify on the TV, then try again.");
+    expect(voiceProviderTerminalDetail("consent-required", "YouTube", "Outdoor Boys"))
+      .toBe("Finish the YouTube consent prompt on the TV, then try again.");
+    expect(voiceProviderTerminalDetail("content-unavailable", "Netflix", "Apollo 13"))
+      .toBe("Apollo 13 is unavailable on Netflix.");
+    expect(voiceProviderTerminalDetail("content-private", "YouTube", "Private upload"))
+      .toBe("Private upload is private on YouTube.");
+    expect(voiceProviderTerminalDetail("age-gate-required", "YouTube", "Restricted video"))
+      .toBe("Complete the age check on YouTube, then try again.");
+    expect(voiceProviderTerminalDetail("complete", "Netflix", "Breaking Bad"))
+      .toBeNull();
   });
 
   it("extracts only bounded Netflix title and watch ids from trusted URLs", () => {

@@ -155,6 +155,7 @@ import {
 import {
   applyYouTubeLatestSort,
   voiceProviderCommandHandled,
+  voiceProviderTerminalDetail,
   type VoiceMediaExecutionResult
 } from "./voice/voice-provider-automation";
 import { executeVoiceProviderDestination } from "./voice/voice-provider-destination-executor";
@@ -1744,8 +1745,13 @@ async function executeGoogleWatchPlan(
   }
   const handled = voiceProviderCommandHandled(plan.intent, automationResult);
   const resolvedTitle = result.resolvedTitle ?? plan.intent.title;
+  const terminalDetail = voiceProviderTerminalDetail(
+    automationResult,
+    definition.name,
+    resolvedTitle
+  );
   return {
-    detail: plan.intent.action === "play"
+    detail: terminalDetail ?? (plan.intent.action === "play"
       ? automationResult === "complete"
         ? `Playing ${resolvedTitle} on ${definition.name}.`
         : automationResult === "playing-windowed"
@@ -1753,7 +1759,7 @@ async function executeGoogleWatchPlan(
           : automationResult === "profile-required"
             ? "Choose your Netflix profile on the TV, then say the command again."
           : `Opened ${resolvedTitle} on ${definition.name}, but could not start playback automatically.`
-      : `Opened ${resolvedTitle} on ${definition.name}.`,
+      : `Opened ${resolvedTitle} on ${definition.name}.`),
     handled
   };
 }
@@ -2040,12 +2046,17 @@ async function executeVoiceCommandPlanCore(
   const handled = isVoiceDiscoveryIntent(plan.intent) ||
     plan.intent.action === "search" ||
     voiceProviderCommandHandled(plan.intent, automationResult);
+  const terminalDetail = voiceProviderTerminalDetail(
+    automationResult,
+    definition.name,
+    plan.intent.title
+  );
   return {
     detail: plan.intent.action === "search"
       ? providerAppliedQuery
         ? `Searched ${definition.name} for ${destination.query}.`
         : `Opened ${definition.name} search.`
-      : discoveryDetail ?? (automationResult === "complete"
+      : discoveryDetail ?? terminalDetail ?? (automationResult === "complete"
         ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
         : automationResult === "playing-windowed"
           ? `Playing ${plan.intent.title} on ${definition.name}, but I couldn't verify full screen.`

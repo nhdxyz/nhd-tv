@@ -1761,6 +1761,7 @@ async function createMainWindow(): Promise<void> {
 
   mainWindow.on("closed", () => {
     const remoteToStop = phoneRemote;
+    const tailscaleToRelease = tailscaleSecureRemote;
     const watchCacheToClose = googleWatchCache;
     const watchResolverToDestroy = googleWatchResolver;
 
@@ -1768,11 +1769,13 @@ async function createMainWindow(): Promise<void> {
     googleWatchCache = null;
     googleWatchResolver = null;
     phoneRemote = null;
+    tailscaleSecureRemote = null;
     serviceHost = null;
     mainWindow = null;
     watchResolverToDestroy?.destroy();
     watchCacheToClose?.close();
-    void remoteToStop?.stop();
+    void (remoteToStop?.stop() ?? Promise.resolve())
+      .finally(() => tailscaleToRelease?.release());
   });
 
   await mainWindow.loadURL("app://shell/index.html");

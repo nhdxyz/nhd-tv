@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const NHD_TV_TAILSCALE_HTTPS_PORT = 8_443;
@@ -131,13 +131,28 @@ export function createTailscaleCommandRunner(executable = "tailscale"): Tailscal
 export class TailscaleSecureRemote {
   readonly #markerPath: string;
   readonly #run: TailscaleCommandRunner;
+  #sequence: Promise<void> = Promise.resolve();
 
   constructor(markerPath: string, run: TailscaleCommandRunner = createTailscaleCommandRunner()) {
     this.#markerPath = markerPath;
     this.#run = run;
   }
 
-  async prepare(localPort: number): Promise<TailscaleSecureRemoteResult> {
+  prepare(localPort: number): Promise<TailscaleSecureRemoteResult> {
+    return this.#enqueue(() => this.#prepare(localPort));
+  }
+
+  release(): Promise<boolean> {
+    return this.#enqueue(() => this.#release());
+  }
+
+  #enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#sequence.catch(() => undefined).then(operation);
+    this.#sequence = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  async #prepare(localPort: number): Promise<TailscaleSecureRemoteResult> {
     if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65_535) {
       return { detail: "The phone remote exposed an invalid local port.", origin: null, state: "error" };
     }
@@ -214,6 +229,41 @@ export class TailscaleSecureRemote {
     }
   }
 
+  async #release(): Promise<boolean> {
+    const marker = await this.#readMarker();
+    if (marker === null) return false;
+
+    try {
+      const hostname = tailscaleHttpsHostname(
+        parseJson(await this.#run(["status", "--json"]))
+      );
+      if (hostname === null || hostname !== marker.hostname) return false;
+      const serveStatus = parseJson(await this.#run(["serve", "status", "--json"])) ?? {};
+      const current = serveProxyTarget(serveStatus, hostname);
+      if (current.proxyTarget === null) {
+        await this.#deleteMarker();
+        return false;
+      }
+      if (current.proxyTarget !== marker.proxyTarget) return false;
+
+      await this.#run([
+        "serve",
+        "--bg",
+        "--yes",
+        `--https=${NHD_TV_TAILSCALE_HTTPS_PORT}`,
+        "off"
+      ]);
+      const verifiedStatus = parseJson(
+        await this.#run(["serve", "status", "--json"])
+      ) ?? {};
+      if (serveProxyTarget(verifiedStatus, hostname).occupied) return false;
+      await this.#deleteMarker();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async #readMarker(): Promise<TailscaleMarker | null> {
     try {
       return validMarker(JSON.parse(await readFile(this.#markerPath, "utf8")));
@@ -231,5 +281,20 @@ export class TailscaleSecureRemote {
       mode: 0o600
     });
     await rename(temporaryPath, this.#markerPath);
+  }
+
+  async #deleteMarker(): Promise<void> {
+    try {
+      await unlink(this.#markerPath);
+    } catch (error) {
+      if (
+        typeof error !== "object" ||
+        error === null ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      ) {
+        throw error;
+      }
+    }
   }
 }

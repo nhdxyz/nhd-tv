@@ -140,4 +140,47 @@ describe("Tailscale secure remote", () => {
     await expect(new TailscaleSecureRemote(await markerPath(), run).prepare(43_123)).resolves
       .toMatchObject({ origin: null, state: "unavailable" });
   });
+
+  it("releases only the exact app-owned listener and preserves port 443", async () => {
+    const statePath = await markerPath();
+    const target = "http://127.0.0.1:43123";
+    const responses = [
+      status(),
+      serveStatus(undefined, true),
+      "",
+      serveStatus(target, true),
+      status(),
+      serveStatus(target, true),
+      "",
+      serveStatus(undefined, true)
+    ];
+    const run = vi.fn<TailscaleCommandRunner>(async () => JSON.stringify(responses.shift()));
+    const remote = new TailscaleSecureRemote(statePath, run);
+    await remote.prepare(43_123);
+
+    await expect(remote.release()).resolves.toBe(true);
+    expect(run).toHaveBeenCalledWith([
+      "serve",
+      "--bg",
+      "--yes",
+      `--https=${NHD_TV_TAILSCALE_HTTPS_PORT}`,
+      "off"
+    ]);
+    await expect(readFile(statePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not release a listener changed by another owner", async () => {
+    const statePath = await markerPath();
+    const ownedTarget = "http://127.0.0.1:43123";
+    const setupResponses = [status(), serveStatus(), "", serveStatus(ownedTarget)];
+    const setupRun = vi.fn<TailscaleCommandRunner>(
+      async () => JSON.stringify(setupResponses.shift())
+    );
+    await new TailscaleSecureRemote(statePath, setupRun).prepare(43_123);
+
+    const responses = [status(), serveStatus("http://127.0.0.1:49999")];
+    const run = vi.fn<TailscaleCommandRunner>(async () => JSON.stringify(responses.shift()));
+    await expect(new TailscaleSecureRemote(statePath, run).release()).resolves.toBe(false);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
 });

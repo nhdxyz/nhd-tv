@@ -25,6 +25,7 @@ import {
 } from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 import type { TailscaleSecureRemoteResult } from "./tailscale-secure-remote";
+import { VoiceConfirmationReplayCache } from "./voice-confirmation-replay";
 import {
   VoiceActivityLease,
   VOICE_COMMAND_ID_PATTERN,
@@ -42,8 +43,12 @@ const MIN_COMMAND_INTERVAL_MS = 24;
 const MIN_POINTER_INTERVAL_MS = 16;
 const MIN_VOICE_INTERVAL_MS = 1_000;
 const VOICE_CONFIRMATION_TTL_MS = 30_000;
+const VOICE_CONFIRMATION_REPLAY_TTL_MS = 120_000;
 const VOICE_CONFIRMATION_ID_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+const VOICE_COMMAND_OPERATION_TIMEOUT_MS = 120_000;
+const VOICE_CONFIRM_OPERATION_TIMEOUT_MS = 60_000;
 const VOICE_UPLOAD_BODY_TIMEOUT_MS = 15_000;
+const VOICE_DISCONNECT_CONFIRM_GRACE_MS = 5_000;
 const VOICE_AUDIO_TYPES = new Set([
   "audio/mp4",
   "audio/mpeg",
@@ -82,14 +87,20 @@ export interface PhoneRemoteServerOptions {
   onCancelVoice?: (confirmationId: string, commandId: string) =>
     boolean |
     Promise<boolean>;
-  onConfirmVoice?: (confirmationId: string, commandId: string) =>
+  onConfirmVoice?: (
+    confirmationId: string,
+    commandId: string,
+    signal: AbortSignal
+  ) =>
     PhoneRemoteVoiceResult |
     Promise<PhoneRemoteVoiceResult>;
   onVoiceActivity?: (activity: PhoneRemoteVoiceActivity) => void | Promise<void>;
   onVoice?: (
     clip: VoiceAudioClip,
-    commandId: string
+    commandId: string,
+    signal: AbortSignal
   ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
+  onVoiceTimeout?: (commandId: string) => void | Promise<void>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
 
@@ -120,6 +131,11 @@ interface PendingVoiceConfirmationBinding {
   expiresAt: number;
 }
 
+interface VoiceConfirmationExecutionResponse {
+  result: PhoneRemoteVoiceResult;
+  statusCode: number;
+}
+
 function parseVoiceConfirmationId(
   value: Record<string, unknown> | null
 ): string | null {
@@ -132,6 +148,22 @@ function parseVoiceConfirmationId(
     return null;
   }
   return value.confirmationId;
+}
+
+export function parseDisconnectVoiceConfirmationId(
+  value: Record<string, unknown> | null
+): string | null | undefined {
+  if (
+    value === null ||
+    Object.keys(value).some((key) => key !== "confirmationId")
+  ) {
+    return undefined;
+  }
+  if (value.confirmationId === undefined) return null;
+  return typeof value.confirmationId === "string" &&
+    VOICE_CONFIRMATION_ID_PATTERN.test(value.confirmationId)
+    ? value.confirmationId
+    : undefined;
 }
 
 export function parsePhoneRemoteVoiceActivity(
@@ -354,10 +386,45 @@ class VoiceUploadBodyTimeoutError extends Error {
   }
 }
 
+export class VoiceOperationTimeoutError extends Error {
+  constructor() {
+    super("Voice operation timed out");
+    this.name = "VoiceOperationTimeoutError";
+  }
+}
+
+export async function runVoiceOperationWithDeadline<T>(
+  operation: (signal: AbortSignal) => T | Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError("A positive voice operation timeout is required");
+  }
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      const error = new VoiceOperationTimeoutError();
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+  }
+}
+
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #voiceActivityLease = new VoiceActivityLease();
   readonly #pendingVoiceConfirmations = new Map<string, PendingVoiceConfirmationBinding>();
+  readonly #voiceConfirmationReplays =
+    new VoiceConfirmationReplayCache<VoiceConfirmationExecutionResponse>(
+      VOICE_CONFIRMATION_REPLAY_TTL_MS
+    );
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
   readonly #onGetContext: PhoneRemoteServerOptions["onGetContext"];
   readonly #onGetVoiceStatus: PhoneRemoteServerOptions["onGetVoiceStatus"];
@@ -372,8 +439,13 @@ export class PhoneRemoteServer {
   readonly #onConfirmVoice: PhoneRemoteServerOptions["onConfirmVoice"];
   readonly #onVoiceActivity: PhoneRemoteServerOptions["onVoiceActivity"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
+  readonly #onVoiceTimeout: PhoneRemoteServerOptions["onVoiceTimeout"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   readonly #deferredVoiceDisconnects = new Set<string>();
+  readonly #deferredDisconnectConfirmationIds = new Map<string, string>();
+  readonly #deferredDisconnectTimers = new Map<string, NodeJS.Timeout>();
+  readonly #disconnectingControllers = new Set<string>();
+  #activeVoiceConfirmationId: string | null = null;
   #activeVoiceControllerId: string | null = null;
   #expiresAt: number | null = null;
   #lastCommandAt = 0;
@@ -405,6 +477,7 @@ export class PhoneRemoteServer {
     this.#onConfirmVoice = options.onConfirmVoice;
     this.#onVoiceActivity = options.onVoiceActivity;
     this.#onVoice = options.onVoice;
+    this.#onVoiceTimeout = options.onVoiceTimeout;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
 
@@ -542,7 +615,13 @@ export class PhoneRemoteServer {
     this.#manager.revokeAll();
     this.#voiceActivityLease.reset();
     this.#pendingVoiceConfirmations.clear();
+    this.#voiceConfirmationReplays.clear();
     this.#deferredVoiceDisconnects.clear();
+    this.#deferredDisconnectConfirmationIds.clear();
+    for (const timeout of this.#deferredDisconnectTimers.values()) clearTimeout(timeout);
+    this.#deferredDisconnectTimers.clear();
+    this.#disconnectingControllers.clear();
+    this.#activeVoiceConfirmationId = null;
     this.#activeVoiceControllerId = null;
     this.#voiceInFlight = false;
     this.#expiresAt = null;
@@ -972,6 +1051,7 @@ export class PhoneRemoteServer {
 
       this.#lastVoiceAt = now;
       this.#voiceInFlight = true;
+      this.#activeVoiceConfirmationId = null;
       this.#activeVoiceControllerId = controllerId;
       try {
         await this.#cancelAllVoiceConfirmations();
@@ -999,18 +1079,39 @@ export class PhoneRemoteServer {
           writeJson(response, 413, { error: "The voice recording is empty or too large" });
           return;
         }
-        const result = await this.#onVoice({
-          bytes,
-          durationMs: metadata.durationMs,
-          mimeType: metadata.mimeType
-        }, metadata.commandId);
+        let result: PhoneRemoteVoiceResult;
+        try {
+          result = await runVoiceOperationWithDeadline(
+            (signal) => this.#onVoice?.({
+              bytes,
+              durationMs: metadata.durationMs,
+              mimeType: metadata.mimeType
+            }, metadata.commandId, signal) ?? Promise.resolve({
+              detail: "Voice control is unavailable.",
+              outcome: "failed" as const
+            }),
+            VOICE_COMMAND_OPERATION_TIMEOUT_MS
+          );
+        } catch (error) {
+          if (error instanceof VoiceOperationTimeoutError) {
+            this.#publishVoiceTimeout(metadata.commandId);
+            if (!response.destroyed && !response.writableEnded) {
+              writeJson(response, 504, {
+                detail: "The voice command timed out before it could finish.",
+                outcome: "failed"
+              } satisfies PhoneRemoteVoiceResult);
+            }
+            return;
+          }
+          throw error;
+        }
         let responseResult = result;
         if (
           result.outcome === "confirmation-required" &&
           result.confirmationId !== undefined &&
           VOICE_CONFIRMATION_ID_PATTERN.test(result.confirmationId)
         ) {
-          if (this.#authorizeController(token) !== controllerId) {
+          if (this.#manager.authorizeController(token) !== controllerId) {
             await this.#notifyVoiceConfirmationCancelled(
               result.confirmationId,
               metadata.commandId
@@ -1049,7 +1150,7 @@ export class PhoneRemoteServer {
       const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
         ? authorization.slice("Bearer ".length)
         : null;
-      const controllerId = this.#authorizeController(token);
+      const controllerId = this.#manager.authorizeController(token);
       if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
@@ -1062,6 +1163,18 @@ export class PhoneRemoteServer {
       const confirmationId = parseVoiceConfirmationId(await readJsonBody(request));
       if (confirmationId === null) {
         writeJson(response, 400, { error: "A valid voice confirmation is required" });
+        return;
+      }
+      const deferredConfirmationId = this.#deferredDisconnectConfirmationIds.get(controllerId);
+      const disconnecting = this.#disconnectingControllers.has(controllerId);
+      const replay = this.#voiceConfirmationReplays.get(confirmationId, controllerId);
+      if (replay !== null && (!disconnecting || deferredConfirmationId === confirmationId)) {
+        const cached = await replay;
+        writeJson(response, cached.statusCode, cached.result);
+        return;
+      }
+      if (disconnecting && deferredConfirmationId !== confirmationId) {
+        writeJson(response, 401, { error: "Remote session is disconnecting" });
         return;
       }
       const binding = this.#voiceConfirmationForController(confirmationId, controllerId);
@@ -1081,13 +1194,50 @@ export class PhoneRemoteServer {
 
       this.#pendingVoiceConfirmations.delete(confirmationId);
       this.#voiceInFlight = true;
+      this.#activeVoiceConfirmationId = confirmationId;
       this.#activeVoiceControllerId = controllerId;
-      try {
-        const result = await this.#onConfirmVoice(confirmationId, binding.commandId);
-        writeJson(response, result.outcome === "failed" ? 422 : 200, result);
-      } finally {
-        await this.#finishVoiceOperation(controllerId, binding.commandId);
-      }
+      const execution = (async (): Promise<VoiceConfirmationExecutionResponse> => {
+        try {
+          const result = await runVoiceOperationWithDeadline(
+            (signal) => this.#onConfirmVoice?.(
+              confirmationId,
+              binding.commandId,
+              signal
+            ) ?? Promise.resolve({
+              detail: "Voice confirmation is unavailable.",
+              outcome: "failed" as const
+            }),
+            VOICE_CONFIRM_OPERATION_TIMEOUT_MS
+          );
+          return {
+            result,
+            statusCode: result.outcome === "failed" ? 422 : 200
+          };
+        } catch (error) {
+          if (error instanceof VoiceOperationTimeoutError) {
+            this.#publishVoiceTimeout(binding.commandId);
+            return {
+              result: {
+                detail: "Playback did not start before the voice confirmation timed out.",
+                outcome: "failed"
+              },
+              statusCode: 504
+            };
+          }
+          return {
+            result: {
+              detail: "Voice confirmation could not be completed.",
+              outcome: "failed"
+            },
+            statusCode: 422
+          };
+        } finally {
+          await this.#finishVoiceOperation(controllerId, binding.commandId);
+        }
+      })();
+      this.#voiceConfirmationReplays.set(confirmationId, controllerId, execution);
+      const completed = await execution;
+      writeJson(response, completed.statusCode, completed.result);
       return;
     }
 
@@ -1144,17 +1294,42 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      const controllerId = this.#authorizeController(token);
+      const controllerId = this.#manager.authorizeController(token);
       if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session is already disconnected" });
         return;
       }
+      const confirmationId = parseDisconnectVoiceConfirmationId(await readJsonBody(request));
+      if (confirmationId === undefined) {
+        this.#disconnectingControllers.add(controllerId);
+        await this.#completeControllerDisconnect(controllerId);
+        writeJson(response, 400, { error: "Disconnect body is invalid" });
+        return;
+      }
+      if (this.#disconnectingControllers.has(controllerId)) {
+        writeJson(response, 202, { deferred: true, ok: true });
+        return;
+      }
       if (this.#activeVoiceControllerId === controllerId) {
-        this.#deferredVoiceDisconnects.add(controllerId);
+        this.#deferControllerDisconnect(
+          controllerId,
+          this.#activeVoiceConfirmationId === confirmationId
+            ? confirmationId ?? undefined
+            : undefined
+        );
+        writeJson(response, 202, { deferred: true, ok: true });
+        return;
+      }
+      if (
+        confirmationId !== null &&
+        this.#voiceConfirmationForController(confirmationId, controllerId) !== null
+      ) {
+        this.#deferControllerDisconnect(controllerId, confirmationId);
         writeJson(response, 202, { deferred: true, ok: true });
         return;
       }
 
+      this.#disconnectingControllers.add(controllerId);
       await this.#completeControllerDisconnect(controllerId);
       writeJson(response, 200, { ok: true });
       return;
@@ -1164,6 +1339,13 @@ export class PhoneRemoteServer {
   }
 
   async #completeControllerDisconnect(controllerId: string): Promise<void> {
+    const graceTimer = this.#deferredDisconnectTimers.get(controllerId);
+    if (graceTimer !== undefined) clearTimeout(graceTimer);
+    this.#deferredDisconnectTimers.delete(controllerId);
+    this.#deferredDisconnectConfirmationIds.delete(controllerId);
+    this.#deferredVoiceDisconnects.delete(controllerId);
+    this.#disconnectingControllers.delete(controllerId);
+    this.#voiceConfirmationReplays.deleteController(controllerId);
     this.#manager.revokeControllerId(controllerId);
     await this.#cancelVoiceConfirmationsForController(controllerId);
     const releasedCommandId = this.#voiceActivityLease.releaseControllerCommand(controllerId);
@@ -1177,15 +1359,50 @@ export class PhoneRemoteServer {
     void this.ensurePairing().catch(() => undefined);
   }
 
+  #deferControllerDisconnect(
+    controllerId: string,
+    confirmationId?: string
+  ): void {
+    this.#disconnectingControllers.add(controllerId);
+    this.#deferredVoiceDisconnects.add(controllerId);
+    if (confirmationId === undefined) return;
+
+    this.#deferredDisconnectConfirmationIds.set(controllerId, confirmationId);
+    this.#scheduleDeferredDisconnectCompletion(controllerId);
+  }
+
+  #scheduleDeferredDisconnectCompletion(controllerId: string): void {
+    const existingTimer = this.#deferredDisconnectTimers.get(controllerId);
+    if (existingTimer !== undefined) clearTimeout(existingTimer);
+    const timer = setTimeout(() => {
+      this.#deferredDisconnectTimers.delete(controllerId);
+      if (this.#activeVoiceControllerId === controllerId) return;
+      this.#deferredDisconnectConfirmationIds.delete(controllerId);
+      void this.#completeControllerDisconnect(controllerId);
+    }, VOICE_DISCONNECT_CONFIRM_GRACE_MS);
+    this.#deferredDisconnectTimers.set(controllerId, timer);
+  }
+
   async #finishVoiceOperation(controllerId: string, commandId: string): Promise<void> {
+    const activeConfirmationId = this.#activeVoiceConfirmationId;
     this.#voiceActivityLease.finishUpload(controllerId, commandId);
     this.#voiceInFlight = false;
     if (this.#activeVoiceControllerId === controllerId) {
+      this.#activeVoiceConfirmationId = null;
       this.#activeVoiceControllerId = null;
     }
-    if (this.#deferredVoiceDisconnects.delete(controllerId)) {
-      await this.#completeControllerDisconnect(controllerId);
+    if (!this.#deferredVoiceDisconnects.has(controllerId)) return;
+
+    const deferredConfirmationId = this.#deferredDisconnectConfirmationIds.get(controllerId);
+    if (
+      activeConfirmationId !== null &&
+      deferredConfirmationId === activeConfirmationId
+    ) {
+      this.#scheduleDeferredDisconnectCompletion(controllerId);
+      return;
     }
+    this.#deferredVoiceDisconnects.delete(controllerId);
+    await this.#completeControllerDisconnect(controllerId);
   }
 
   #bindVoiceConfirmation(
@@ -1194,6 +1411,7 @@ export class PhoneRemoteServer {
     commandId: string
   ): number {
     this.#cleanupVoiceConfirmations();
+    this.#voiceConfirmationReplays.delete(confirmationId);
     this.#pendingVoiceConfirmations.delete(confirmationId);
     const expiresAt = Date.now() + VOICE_CONFIRMATION_TTL_MS;
     this.#pendingVoiceConfirmations.set(confirmationId, {
@@ -1243,6 +1461,14 @@ export class PhoneRemoteServer {
     }
   }
 
+  #publishVoiceTimeout(commandId: string): void {
+    try {
+      void Promise.resolve(this.#onVoiceTimeout?.(commandId)).catch(() => undefined);
+    } catch {
+      // The operation deadline must always release the shared voice lease.
+    }
+  }
+
   #voiceConfirmationForController(
     confirmationId: string,
     controllerId: string
@@ -1285,7 +1511,7 @@ export class PhoneRemoteServer {
   #authorizeController(token: unknown): string | null {
     const before = this.#manager.connectedControllers;
     const controllerId = this.#manager.authorizeController(token);
-    if (controllerId === null) return null;
+    if (controllerId === null || this.#disconnectingControllers.has(controllerId)) return null;
 
     if (before === 0 && this.#manager.connectedControllers > 0) {
       if (!this.#manager.hasPendingRequest) {

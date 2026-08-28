@@ -76,7 +76,7 @@ export const REMOTE_HTML = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#05070b" />
     <title>NHD-TV Remote</title>
     <link rel="stylesheet" href="/remote.css" />
@@ -108,7 +108,7 @@ export const REMOTE_HTML = `<!doctype html>
         </div>
 
         <section class="voice-confirm" id="voice-confirm" aria-live="polite" hidden>
-          <small>Confirm voice command</small>
+          <small id="voice-confirm-label">Confirm voice command</small>
           <strong id="voice-confirm-copy">Play this title?</strong>
           <div>
             <button id="voice-confirm-cancel" type="button">Cancel</button>
@@ -204,6 +204,7 @@ export const REMOTE_CSS = `:root {
   --accent-ink: #11120e;
   --panel: #171716;
   --panel-raised: #222220;
+  --navigation-size: clamp(11rem, 30dvh, 15.75rem);
   --touch-target: 3rem;
   color: #f2f2ee;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -217,7 +218,11 @@ body {
   height: 100dvh;
   min-height: 100dvh;
   margin: 0;
-  padding: max(0.7rem, env(safe-area-inset-top)) 0.8rem max(0.75rem, env(safe-area-inset-bottom));
+  padding:
+    max(0.7rem, env(safe-area-inset-top))
+    max(0.8rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom))
+    max(0.8rem, env(safe-area-inset-left));
   overflow: hidden;
   background: #090909;
   background: radial-gradient(circle at 50% -12%, #25251f 0, #11110f 28%, #090909 58%);
@@ -256,7 +261,6 @@ body[data-active-service="spotify"] {
 
 html,
 body {
-  touch-action: manipulation;
   overscroll-behavior: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -264,7 +268,6 @@ body {
 }
 
 button {
-  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
@@ -500,6 +503,7 @@ input {
 .voice-confirm small { color: var(--accent); font-size: 0.55rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
 .voice-confirm strong { font-size: 0.9rem; line-height: 1.35; }
 .voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.voice-confirm[data-mode="retry"] > div { grid-template-columns: 1fr; }
 .voice-confirm button {
   min-height: 3rem;
   border: 1px solid #3b3b37;
@@ -532,7 +536,7 @@ input {
   display: grid;
   min-height: 0;
   padding: 0.2rem 0 0.55rem;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   place-items: center;
 }
 .control-surface > * { grid-area: 1 / 1; }
@@ -540,7 +544,7 @@ input {
 .dpad {
   position: relative;
   display: grid;
-  width: clamp(11rem, 30dvh, 15.75rem);
+  width: var(--navigation-size);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
@@ -560,6 +564,7 @@ input {
   background: transparent;
   color: #a7a7a1;
   font: inherit;
+  touch-action: manipulation;
 }
 .dpad button span { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; }
 .dpad .up { grid-area: up; }
@@ -604,7 +609,7 @@ input {
 .precision-pad {
   position: relative;
   display: grid;
-  width: clamp(11rem, 30dvh, 15.75rem);
+  width: var(--navigation-size);
   aspect-ratio: 1;
   margin: 0 auto;
   place-content: center;
@@ -839,11 +844,10 @@ body:not(.is-connected) .privacy-note { display: none; }
 body.is-connected .footnote { display: none; }
 
 @media (max-height: 700px) {
+  :root { --navigation-size: clamp(8.25rem, 27dvh, 13rem); }
   .remote-card { padding: 0.68rem; }
   .remote-context { min-height: 2.85rem; padding-block: 0.38rem; }
   .remote-top-actions { min-height: 3.15rem; }
-  .dpad,
-  .precision-pad { width: clamp(10.5rem, 27dvh, 13rem); }
   .voice-control { margin-bottom: 0.45rem; }
   .voice-button { min-height: 4.15rem; padding-block: 0.58rem; }
   .remote-utilities { min-height: 3rem; }
@@ -851,6 +855,18 @@ body.is-connected .footnote { display: none; }
   .playback-controls button { min-height: 2.85rem; }
   .volume-controls button { min-height: 2.75rem; }
   .privacy-note { margin-top: 0.38rem; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .remote-context { order: 0; }
+  .remote-top-actions { order: 1; }
+  .voice-control { order: 2; }
+  .control-surface { order: 3; }
+  .playback-controls { order: 4; }
+  .volume-controls { order: 5; }
+  .remote-utilities { order: 6; }
+  .search-panel { order: 7; }
+  .privacy-note { order: 8; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -877,6 +893,7 @@ export const REMOTE_JS = `(() => {
   const voiceButtonCopy = document.querySelector("#voice-button-copy");
   const voiceHelp = document.querySelector("#voice-help");
   const voiceConfirm = document.querySelector("#voice-confirm");
+  const voiceConfirmLabel = document.querySelector("#voice-confirm-label");
   const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
   const voiceConfirmCancel = document.querySelector("#voice-confirm-cancel");
   const voiceConfirmPlay = document.querySelector("#voice-confirm-play");
@@ -911,14 +928,16 @@ export const REMOTE_JS = `(() => {
   let voiceProcessing = false;
   let pendingVoiceConfirmation = null;
   let voiceConfirmationTimer = null;
-  let voiceConfirmationRequestInFlight = false;
+  let activeVoiceConfirmationId = null;
   let pageTerminationPending = false;
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const DIRECTION_REPEAT_DELAY_MS = 380;
   const DIRECTION_REPEAT_INTERVAL_MS = 115;
-  const VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS = 25_000;
+  const VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS = 65_000;
+  const VOICE_CANCELLATION_REQUEST_TIMEOUT_MS = 10_000;
   const VOICE_CONFIRMATION_TTL_MS = 30_000;
+  const VOICE_CONFIRMATION_REPLAY_TTL_MS = 120_000;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
   const edgeScroll = (${precisionEdgeScroll.toString()});
@@ -932,17 +951,11 @@ export const REMOTE_JS = `(() => {
     return null;
   })();
 
-  for (const gestureEvent of ["gesturestart", "gesturechange"]) {
-    document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
-  }
   document.addEventListener("selectstart", (event) => {
     if (!(event.target instanceof Element) || event.target.closest("input") === null) {
       event.preventDefault();
     }
   });
-  document.addEventListener("wheel", (event) => {
-    if (event.ctrlKey) event.preventDefault();
-  }, { passive: false });
 
   function setState(message, kind) {
     const dot = document.createElement("span");
@@ -957,9 +970,12 @@ export const REMOTE_JS = `(() => {
       typeof navigator.mediaDevices.getUserMedia === "function" &&
       supportedVoiceMimeType !== null;
     const ready = remoteEnabled && voiceAvailable && browserReady;
-    voiceButton.disabled = !ready || voiceProcessing;
+    const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
+    voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult;
     voiceButton.classList.toggle("is-processing", voiceProcessing);
-    voiceHelp.textContent = !window.isSecureContext
+    voiceHelp.textContent = awaitingSubmittedResult
+      ? "Check the playback result before starting another voice command."
+      : !window.isSecureContext
       ? "Voice requires the secure Tailscale QR code."
       : supportedVoiceMimeType === null
         ? "This browser cannot record a supported voice format."
@@ -1060,7 +1076,9 @@ export const REMOTE_JS = `(() => {
 
   function updateVoiceConfirmationButtons() {
     const disabled = !remoteEnabled || voiceProcessing || pendingVoiceConfirmation === null;
-    voiceConfirmCancel.disabled = disabled;
+    const retry = pendingVoiceConfirmation?.submitted === true;
+    voiceConfirmCancel.hidden = retry;
+    voiceConfirmCancel.disabled = disabled || retry;
     voiceConfirmPlay.disabled = disabled;
   }
 
@@ -1069,7 +1087,11 @@ export const REMOTE_JS = `(() => {
     clearVoiceConfirmationTimer();
     pendingVoiceConfirmation = null;
     voiceConfirm.hidden = true;
+    voiceConfirm.dataset.mode = "decision";
+    voiceConfirmLabel.textContent = "Confirm voice command";
+    voiceConfirmPlay.textContent = "Play";
     updateVoiceConfirmationButtons();
+    updateVoiceButton();
     return pending;
   }
 
@@ -1085,9 +1107,14 @@ export const REMOTE_JS = `(() => {
     }
     pending.expiresAt = expiresAt;
     pendingVoiceConfirmation = pending;
+    const retry = pending.submitted === true;
+    voiceConfirm.dataset.mode = retry ? "retry" : "decision";
+    voiceConfirmLabel.textContent = retry ? "Playback request" : "Confirm voice command";
+    voiceConfirmPlay.textContent = retry ? "Check result" : "Play";
     voiceConfirmCopy.textContent = pending.detail;
     voiceConfirm.hidden = false;
     updateVoiceConfirmationButtons();
+    updateVoiceButton();
     voiceConfirmationTimer = setTimeout(() => {
       if (pendingVoiceConfirmation?.confirmationId !== pending.confirmationId) return;
       closeVoiceConfirmation();
@@ -1098,6 +1125,12 @@ export const REMOTE_JS = `(() => {
 
   async function cancelVoiceConfirmation(pending, showStatus) {
     if (!controllerToken || pending === null) return;
+    if (showStatus) setState("Voice command cancelled", "connected");
+    const requestController = new AbortController();
+    const requestTimeout = setTimeout(
+      () => requestController.abort(),
+      VOICE_CANCELLATION_REQUEST_TIMEOUT_MS
+    );
     try {
       await jsonRequest("/api/voice/confirm/cancel", {
         method: "POST",
@@ -1105,18 +1138,23 @@ export const REMOTE_JS = `(() => {
           "Authorization": "Bearer " + controllerToken,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ confirmationId: pending.confirmationId })
+        body: JSON.stringify({ confirmationId: pending.confirmationId }),
+        keepalive: true,
+        signal: requestController.signal
       });
-      if (showStatus) setState("Voice command cancelled", "connected");
     } catch (error) {
       if (showStatus) {
         setState(
           error && error.status === 410
             ? "Voice confirmation already expired"
-            : error instanceof Error ? error.message : "Could not cancel voice command",
+            : error && error.name === "AbortError"
+              ? "The TV did not respond to Cancel"
+              : error instanceof Error ? error.message : "Could not cancel voice command",
           error && error.status === 410 ? "connected" : "error"
         );
       }
+    } finally {
+      clearTimeout(requestTimeout);
     }
   }
 
@@ -1325,9 +1363,12 @@ export const REMOTE_JS = `(() => {
     if (!controllerToken || pendingVoiceConfirmation === null || voiceProcessing) return;
     const pending = pendingVoiceConfirmation;
     const confirmationId = pending.confirmationId;
+    const replayExpiresAt = Number.isFinite(pending.replayExpiresAt)
+      ? pending.replayExpiresAt
+      : Date.now() + VOICE_CONFIRMATION_REPLAY_TTL_MS;
     closeVoiceConfirmation();
     voiceProcessing = true;
-    voiceConfirmationRequestInFlight = true;
+    activeVoiceConfirmationId = confirmationId;
     updateVoiceButton();
     setState("Starting playback…");
     const requestController = new AbortController();
@@ -1350,18 +1391,29 @@ export const REMOTE_JS = `(() => {
       if (navigator.vibrate) navigator.vibrate(18);
     } catch (error) {
       const status = error && typeof error.status === "number" ? error.status : null;
-      const retryable = status === null || status === 409 || status >= 500;
+      const retryable = status === null || status === 409 || (status >= 500 && status !== 504);
+      const retryPending = status === 409
+        ? pending
+        : {
+          ...pending,
+          detail: "Playback may already be running. Check the result without starting it again.",
+          expiresAt: replayExpiresAt,
+          replayExpiresAt,
+          submitted: true
+        };
       if (
         retryable &&
         !pageTerminationPending &&
         controllerToken !== null &&
         remoteEnabled &&
-        showVoiceConfirmation(pending)
+        showVoiceConfirmation(retryPending)
       ) {
         setState(
-          error && error.name === "AbortError"
-            ? "Confirmation timed out — tap Play again"
-            : "Could not confirm yet — tap Play again",
+          status === 409
+            ? "Another command is active — tap Play again"
+            : error && error.name === "AbortError"
+              ? "Response timed out — check the result"
+              : "Connection interrupted — check the result",
           "error"
         );
       } else if (status === 401) {
@@ -1374,11 +1426,10 @@ export const REMOTE_JS = `(() => {
       }
     } finally {
       clearTimeout(requestTimeout);
-      voiceConfirmationRequestInFlight = false;
+      if (activeVoiceConfirmationId === confirmationId) activeVoiceConfirmationId = null;
       voiceProcessing = false;
       updateVoiceButton();
       updateVoiceConfirmationButtons();
-      if (pageTerminationPending) disconnectRemote();
     }
   }
 
@@ -1437,6 +1488,8 @@ export const REMOTE_JS = `(() => {
   function disconnectRemote() {
     if (!controllerToken) return;
     const token = controllerToken;
+    const confirmationId = activeVoiceConfirmationId;
+    activeVoiceConfirmationId = null;
     controllerToken = null;
     sessionStorage.removeItem("nhd-controller-token");
     setEnabled(false);
@@ -1446,7 +1499,7 @@ export const REMOTE_JS = `(() => {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json"
       },
-      body: "{}",
+      body: JSON.stringify(confirmationId === null ? {} : { confirmationId }),
       keepalive: true
     });
   }
@@ -1505,8 +1558,9 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  async function sendHeartbeat() {
+  async function sendHeartbeat(showConnected = false) {
     if (!controllerToken) return;
+    const stateBeforeRequest = state.textContent;
     try {
       const result = await jsonRequest("/api/heartbeat", {
         method: "POST",
@@ -1518,6 +1572,9 @@ export const REMOTE_JS = `(() => {
       });
       renderContext(result.context);
       renderVoiceStatus(result.voice);
+      if (showConnected && state.textContent === stateBeforeRequest) {
+        setState("Connected", "connected");
+      }
     } catch (error) {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
@@ -1942,7 +1999,7 @@ export const REMOTE_JS = `(() => {
     cancelVoiceRecording();
     if (event.persisted) return;
     pageTerminationPending = true;
-    if (!voiceConfirmationRequestInFlight) disconnectRemote();
+    disconnectRemote();
   });
   window.addEventListener("pageshow", (event) => {
     pageTerminationPending = false;
@@ -1958,7 +2015,7 @@ export const REMOTE_JS = `(() => {
       return;
     }
     setState("Reconnecting…");
-    void sendHeartbeat();
+    void sendHeartbeat(true);
   });
   setInterval(() => void sendHeartbeat(), 10_000);
   beginPairing();

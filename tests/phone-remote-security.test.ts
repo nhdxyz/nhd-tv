@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  parseDisconnectVoiceConfirmationId,
   parseVoiceUploadMetadata,
   remotePostHeadersAreAllowed,
   secureRemoteHeadersAllowMicrophone,
@@ -98,6 +99,16 @@ describe("phone remote boundary", () => {
     expect(shouldAutoApprovePairing(2, true)).toBe(false);
   });
 
+  it("accepts only an exact confirmation binding on unload disconnects", () => {
+    expect(parseDisconnectVoiceConfirmationId({})).toBeNull();
+    expect(parseDisconnectVoiceConfirmationId({
+      confirmationId: "confirmation_token_1234"
+    })).toBe("confirmation_token_1234");
+    expect(parseDisconnectVoiceConfirmationId({ confirmationId: "short" })).toBeUndefined();
+    expect(parseDisconnectVoiceConfirmationId({ extra: true })).toBeUndefined();
+    expect(parseDisconnectVoiceConfirmationId(null)).toBeUndefined();
+  });
+
   it("exposes only the bounded search text field and no credential controls", () => {
     expect(() => new Function(REMOTE_JS)).not.toThrow();
     expect(REMOTE_HTML.match(/<input\b/g)).toHaveLength(1);
@@ -116,13 +127,39 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", (event) => {');
     expect(REMOTE_JS).toContain('window.addEventListener("pageshow", (event) => {');
     expect(REMOTE_JS).toContain("if (event.persisted) return;");
-    expect(REMOTE_JS).toContain("if (!voiceConfirmationRequestInFlight) disconnectRemote();");
+    expect(REMOTE_JS).toContain("activeVoiceConfirmationId = confirmationId;");
+    expect(REMOTE_JS).toContain("disconnectRemote();");
+    expect(REMOTE_JS).toContain("JSON.stringify(confirmationId === null ? {} : { confirmationId })");
+    expect(REMOTE_JS).toContain("void sendHeartbeat(true);");
+    expect(REMOTE_JS).toContain("state.textContent === stateBeforeRequest");
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm"');
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm/cancel"');
     expect(serverSource).toContain("beginBoundOperation(controllerId, binding.commandId)");
     expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
     expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
     expect(serverSource).toContain("VOICE_UPLOAD_BODY_TIMEOUT_MS");
+    expect(serverSource).toContain("VOICE_COMMAND_OPERATION_TIMEOUT_MS");
+    expect(serverSource).toContain("VOICE_CONFIRM_OPERATION_TIMEOUT_MS");
+    expect(serverSource).toContain("#voiceConfirmationReplays.get(confirmationId, controllerId)");
+    expect(serverSource).toContain(
+      "#voiceConfirmationReplays.set(confirmationId, controllerId, execution)"
+    );
+    expect(serverSource).toContain("#disconnectingControllers.has(controllerId)");
+    const confirmationRoute = serverSource.slice(
+      serverSource.indexOf('url.pathname === "/api/voice/confirm"'),
+      serverSource.indexOf('url.pathname === "/api/voice/confirm/cancel"')
+    );
+    expect(confirmationRoute.indexOf("#voiceConfirmationReplays.get"))
+      .toBeLessThan(confirmationRoute.indexOf("if (disconnecting &&"));
+    expect(confirmationRoute).toContain(
+      "replay !== null && (!disconnecting || deferredConfirmationId === confirmationId)"
+    );
+    expect(confirmationRoute).toContain("#activeVoiceConfirmationId = confirmationId");
+    expect(serverSource).toContain("#activeVoiceConfirmationId === confirmationId");
+    expect(serverSource).toContain(
+      "deferredConfirmationId === activeConfirmationId"
+    );
+    expect(serverSource).toContain("#scheduleDeferredDisconnectCompletion(controllerId)");
     expect(serverSource).toContain("await this.#cancelAllVoiceConfirmations()");
   });
 
@@ -136,6 +173,19 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm/cancel"');
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS");
+    expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REPLAY_TTL_MS");
+    expect(REMOTE_JS).toContain("VOICE_CANCELLATION_REQUEST_TIMEOUT_MS");
+    expect(REMOTE_JS).toContain("status >= 500 && status !== 504");
+    expect(REMOTE_JS).toContain('voiceConfirmPlay.textContent = retry ? "Check result" : "Play"');
+    expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
+    expect(REMOTE_JS).toContain("submitted: true");
+    expect(REMOTE_JS).toContain(
+      "voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult"
+    );
+    expect(REMOTE_JS).toContain(
+      "Check the playback result before starting another voice command."
+    );
+    expect(REMOTE_CSS).toContain('.voice-confirm[data-mode="retry"]');
     expect(REMOTE_JS).toContain("keepalive: true");
     expect(REMOTE_JS).toContain("voiceConfirmCancel.disabled = disabled");
     expect(REMOTE_JS).toContain("voiceConfirmPlay.disabled = disabled");
@@ -206,11 +256,17 @@ describe("phone remote boundary", () => {
     expect(REMOTE_CSS).not.toContain("--accent-glow");
   });
 
-  it("prevents accidental viewport and trackpad zoom on the appliance remote", () => {
-    expect(REMOTE_HTML).toContain("maximum-scale=1");
-    expect(REMOTE_HTML).toContain("user-scalable=no");
-    expect(REMOTE_JS).toContain('"gesturestart"');
-    expect(REMOTE_JS).toContain("event.ctrlKey");
+  it("keeps zoom available while reserving gestures on interactive surfaces", () => {
+    expect(REMOTE_HTML).toContain("width=device-width, initial-scale=1, viewport-fit=cover");
+    expect(REMOTE_HTML).not.toContain("maximum-scale");
+    expect(REMOTE_HTML).not.toContain("user-scalable");
+    expect(REMOTE_JS).not.toContain('"gesturestart"');
+    expect(REMOTE_JS).not.toContain("event.ctrlKey");
+    expect(REMOTE_CSS).not.toMatch(/html,\s*body\s*\{[^}]*touch-action:/s);
+    expect(REMOTE_CSS).not.toMatch(/\nbutton\s*\{[^}]*touch-action:/s);
+    expect(REMOTE_CSS).toMatch(/\.dpad button\s*\{[^}]*touch-action:\s*manipulation;/s);
+    expect(REMOTE_CSS).toMatch(/\.voice-button\s*\{[^}]*touch-action:\s*none;/s);
+    expect(REMOTE_CSS).toMatch(/\.precision-pad\s*\{[^}]*touch-action:\s*none;/s);
   });
 
   it("confirms accepted commands with optional haptic feedback", () => {

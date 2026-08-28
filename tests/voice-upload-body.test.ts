@@ -1,7 +1,11 @@
 import type { IncomingMessage } from "node:http";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { readVoiceBody } from "../src/main/remote/phone-remote-server";
+import {
+  readVoiceBody,
+  runVoiceOperationWithDeadline,
+  VoiceOperationTimeoutError
+} from "../src/main/remote/phone-remote-server";
 
 function incoming(stream: PassThrough): IncomingMessage {
   return stream as unknown as IncomingMessage;
@@ -23,5 +27,16 @@ describe("phone voice upload body", () => {
       "Voice upload body timed out"
     );
     expect(stream.destroyed).toBe(true);
+  });
+
+  it("aborts and releases a voice operation that never settles", async () => {
+    let operationSignal: AbortSignal | null = null;
+    const operation = runVoiceOperationWithDeadline((signal) => {
+      operationSignal = signal;
+      return new Promise<never>(() => undefined);
+    }, 10);
+
+    await expect(operation).rejects.toBeInstanceOf(VoiceOperationTimeoutError);
+    expect(operationSignal?.aborted).toBe(true);
   });
 });

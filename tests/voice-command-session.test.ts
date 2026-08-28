@@ -202,6 +202,111 @@ describe("voice command session", () => {
     now += 31_000;
   });
 
+  it("accepts a spoken yes only when it is bound to the pending confirmation", async () => {
+    const intents: VoiceIntent[] = [
+      mediaIntent(),
+      { action: "confirm", kind: "confirmation" }
+    ];
+    const execute = vi.fn(async () => ({ detail: "Playing Breaking Bad", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_spoken_yes",
+      understand: async () => ({
+        intent: intents.shift() ?? { kind: "unknown" },
+        transcript: intents.length === 1 ? "play breaking bad" : "yes"
+      })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({
+      confirmationId: "confirmation_spoken_yes",
+      outcome: "confirmation-required"
+    });
+    await expect(session.process(
+      clip,
+      undefined,
+      "confirmation_spoken_yes"
+    )).resolves.toEqual({
+      detail: "Playing Breaking Bad",
+      outcome: "completed",
+      transcript: "yes"
+    });
+    expect(execute).toHaveBeenCalledOnce();
+
+    const unboundExecute = vi.fn(async () => ({ detail: "No confirmation", handled: false }));
+    const unbound = new VoiceCommandSession({
+      execute: unboundExecute,
+      getContext: () => context(),
+      understand: async () => ({
+        intent: { action: "confirm", kind: "confirmation" },
+        transcript: "yes"
+      })
+    });
+    await expect(unbound.process(clip)).resolves.toMatchObject({ outcome: "failed" });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(unboundExecute).toHaveBeenCalledWith(expect.objectContaining({
+      handled: false,
+      kind: "no-op"
+    }));
+  });
+
+  it("cancels a bound playback request by voice without executing it", async () => {
+    const intents: VoiceIntent[] = [
+      mediaIntent(),
+      { action: "cancel", kind: "confirmation" }
+    ];
+    const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_spoken_no",
+      understand: async () => ({
+        intent: intents.shift() ?? { kind: "unknown" },
+        transcript: intents.length === 1 ? "play breaking bad" : "no"
+      })
+    });
+
+    await session.process(clip);
+    await expect(session.process(
+      clip,
+      undefined,
+      "confirmation_spoken_no"
+    )).resolves.toEqual({
+      detail: "Cancelled that playback request.",
+      outcome: "completed",
+      transcript: "no"
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await expect(session.confirm("confirmation_spoken_no")).resolves.toMatchObject({
+      outcome: "failed"
+    });
+  });
+
+  it("supersedes a bound confirmation when the user gives a different command", async () => {
+    const intents: VoiceIntent[] = [mediaIntent(), { action: "volume-up", kind: "control" }];
+    const execute = vi.fn(async () => ({ detail: "Volume sent", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_superseded",
+      understand: async () => ({
+        intent: intents.shift() ?? { kind: "unknown" },
+        transcript: intents.length === 1 ? "play breaking bad" : "turn it up"
+      })
+    });
+
+    await session.process(clip);
+    await expect(session.process(
+      clip,
+      undefined,
+      "confirmation_superseded"
+    )).resolves.toMatchObject({ outcome: "completed", transcript: "turn it up" });
+    expect(execute).toHaveBeenCalledOnce();
+    await expect(session.confirm("confirmation_superseded")).resolves.toMatchObject({
+      outcome: "failed"
+    });
+  });
+
   it("revalidates the active profile and enabled services when confirmation is tapped", async () => {
     let currentContext = context("confirm");
     const execute = vi.fn(async () => ({ detail: "Checked current profile", handled: true }));

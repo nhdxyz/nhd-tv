@@ -87,7 +87,8 @@ export class VoiceCommandSession {
 
   async process(
     clip: VoiceAudioClip,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    pendingConfirmationId?: unknown
   ): Promise<VoiceCommandSessionResult> {
     this.#removeExpired();
     let transcriptReported = false;
@@ -99,6 +100,24 @@ export class VoiceCommandSession {
     const { intent, transcript } = await this.#understand(clip, signal, reportTranscript);
     signal?.throwIfAborted();
     reportTranscript(transcript);
+    const boundConfirmationId = normalizedConfirmationId(pendingConfirmationId);
+    if (intent.kind === "confirmation" && boundConfirmationId !== null) {
+      if (intent.action === "cancel") {
+        const cancelled = this.cancel(boundConfirmationId);
+        return {
+          detail: cancelled
+            ? "Cancelled that playback request."
+            : "That voice confirmation expired. Hold the microphone and try again.",
+          outcome: cancelled ? "completed" : "failed",
+          transcript
+        };
+      }
+      const confirmed = await this.confirm(boundConfirmationId, signal);
+      return { ...confirmed, transcript };
+    }
+    if (boundConfirmationId !== null) {
+      this.cancel(boundConfirmationId);
+    }
     const plan = planVoiceCommand(intent, await this.#getContext());
     signal?.throwIfAborted();
 

@@ -3,6 +3,7 @@ import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail,
+  watchOffersShouldExpand,
   watchOffersShouldBeComplete
 } from "../src/main/voice/google-watch-selection";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
@@ -136,9 +137,9 @@ describe("Google watch selection", () => {
     });
   });
 
-  it("expands generic multi-provider playback before applying lineup order", () => {
+  it("starts playback with partial offers while lookups request the complete list", () => {
     expect(watchOffersShouldBeComplete(intent(), ["netflix", "disney-plus"]))
-      .toBe(true);
+      .toBe(false);
     expect(watchOffersShouldBeComplete(intent(), ["netflix", "spotify"]))
       .toBe(false);
     expect(watchOffersShouldBeComplete(intent({ providerHint: "netflix" }), [
@@ -147,6 +148,65 @@ describe("Google watch selection", () => {
     ])).toBe(false);
     expect(watchOffersShouldBeComplete(intent({ action: "lookup" }), ["netflix"]))
       .toBe(true);
+  });
+
+  it("expands an incomplete result when it has no launchable enabled offer", () => {
+    expect(watchOffersShouldExpand(
+      { offersComplete: false },
+      null,
+      ["netflix", "disney-plus"]
+    )).toBe(true);
+  });
+
+  it("keeps an incomplete result when it already selected the preferred provider", () => {
+    const partialResult: GoogleWatchResult = {
+      ...result,
+      offers: [result.offers[1]!],
+      offersComplete: false
+    };
+    const selected = selectEnabledWatchOffer(
+      partialResult,
+      ["spotify", "netflix", "disney-plus"]
+    );
+    expect(selected).toMatchObject({ serviceId: "netflix" });
+    expect(watchOffersShouldExpand(
+      partialResult,
+      selected,
+      ["spotify", "netflix", "disney-plus"]
+    )).toBe(false);
+  });
+
+  it("expands an incomplete result when a higher-priority provider could be missing", () => {
+    const partialResult: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "subscription",
+        priceText: null,
+        providerContentId: "movie-id",
+        providerHost: "www.disneyplus.com",
+        providerName: "Disney+",
+        rawLabel: "Disney+ Subscription",
+        watchUrl: "https://www.disneyplus.com/video/movie-id"
+      }],
+      offersComplete: false
+    };
+    const selected = selectEnabledWatchOffer(partialResult, ["netflix", "disney-plus"]);
+    expect(selected).toMatchObject({ serviceId: "disney-plus" });
+    expect(watchOffersShouldExpand(
+      partialResult,
+      selected,
+      ["netflix", "disney-plus"]
+    )).toBe(true);
+  });
+
+  it("never re-expands a result Google already marked complete", () => {
+    expect(watchOffersShouldExpand(
+      result,
+      selectEnabledWatchOffer(result, ["disney-plus", "netflix"]),
+      ["disney-plus", "netflix"]
+    )).toBe(false);
+    expect(watchOffersShouldExpand(result, null, ["netflix"]))
+      .toBe(false);
   });
 
   it("maps a subscribed Disney Plus offer into the app-owned service", () => {

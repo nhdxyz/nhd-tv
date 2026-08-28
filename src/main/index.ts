@@ -114,6 +114,7 @@ import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail,
+  watchOffersShouldExpand,
   watchOffersShouldBeComplete
 } from "./voice/google-watch-selection";
 import {
@@ -1268,7 +1269,7 @@ async function executeGoogleWatchPlan(
   }
 
   let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
-  if (selected === null && !result.offersComplete) {
+  if (watchOffersShouldExpand(result, selected, plan.candidateServiceIds)) {
     result = await resolver.resolve(lookup, { completeOffers: true, signal });
     signal?.throwIfAborted();
     if (!googleWatchResultMatchesIntent(result, plan.intent)) {

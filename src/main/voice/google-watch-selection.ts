@@ -102,14 +102,9 @@ export function watchOfferServiceId(offer: GoogleWatchOffer): string | null {
 
 export function watchOffersShouldBeComplete(
   intent: VoiceMediaIntent,
-  enabledServiceIds: readonly VoiceServiceId[]
+  _enabledServiceIds: readonly VoiceServiceId[]
 ): boolean {
-  if (intent.action === "lookup") return true;
-  if (intent.action !== "play" || intent.providerHint !== null) return false;
-  const mapped = new Set(enabledServiceIds.filter((serviceId) =>
-    LAUNCHABLE_WATCH_SERVICES.has(serviceId)
-  ));
-  return mapped.size > 1;
+  return intent.action === "lookup";
 }
 
 export function selectEnabledWatchOffer(
@@ -125,6 +120,21 @@ export function selectEnabledWatchOffer(
     if (offer !== undefined) return { offer, serviceId };
   }
   return null;
+}
+
+export function watchOffersShouldExpand(
+  result: Pick<GoogleWatchResult, "offersComplete">,
+  selected: SelectedWatchOffer | null,
+  enabledServiceIds: readonly VoiceServiceId[]
+): boolean {
+  if (result.offersComplete) return false;
+  if (selected === null) return true;
+
+  const preferredLaunchableService = enabledServiceIds.find((serviceId) =>
+    LAUNCHABLE_WATCH_SERVICES.has(serviceId)
+  );
+  return preferredLaunchableService !== undefined &&
+    preferredLaunchableService !== selected.serviceId;
 }
 
 function offerDescription(

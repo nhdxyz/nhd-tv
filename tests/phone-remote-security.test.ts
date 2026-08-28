@@ -123,6 +123,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain("finishVoiceRecording");
     expect(REMOTE_JS).toContain("stopVoiceStream");
+    expect(REMOTE_JS).toContain("}, 19_500);");
     expect(REMOTE_JS).not.toContain("localStorage");
     expect(REMOTE_JS).not.toMatch(/sessionStorage\.(?:setItem|getItem)\([^)]*(?:audio|voice|transcript)/i);
   });

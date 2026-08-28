@@ -1206,7 +1206,7 @@ export const REMOTE_JS = `(() => {
       voiceStopTimer = setTimeout(() => {
         finishVoiceRecording();
         if (navigator.vibrate) navigator.vibrate(24);
-      }, 20_000);
+      }, 19_500);
     } catch (error) {
       stopVoiceStream();
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";

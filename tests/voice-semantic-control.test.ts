@@ -1,0 +1,317 @@
+import { describe, expect, it } from "vitest";
+import {
+  MAX_VOICE_ABSOLUTE_SEEK_SECONDS,
+  MAX_VOICE_RELATIVE_SEEK_SECONDS,
+  buildVoiceSemanticControlScript,
+  normalizeVoiceSemanticControlRequest,
+  parseVoiceSemanticControlResult,
+  type VoiceSemanticControlRequest,
+  type VoiceSemanticControlResult
+} from "../src/main/voice/voice-semantic-control";
+
+class FakeElement {
+  clicked = false;
+  disabled = false;
+  hidden = false;
+  isConnected = true;
+  readonly #attributes: Record<string, string>;
+  readonly #visible: boolean;
+  textContent: string;
+
+  constructor(options: {
+    attributes?: Record<string, string>;
+    text?: string;
+    visible?: boolean;
+  } = {}) {
+    this.#attributes = options.attributes ?? {};
+    this.#visible = options.visible ?? true;
+    this.textContent = options.text ?? "";
+  }
+
+  click(): void {
+    this.clicked = true;
+  }
+
+  contains(value: unknown): boolean {
+    return value === this;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.#attributes[name] ?? null;
+  }
+
+  getBoundingClientRect(): { height: number; width: number } {
+    return this.#visible ? { height: 90, width: 160 } : { height: 0, width: 0 };
+  }
+}
+
+class FakeVideo extends FakeElement {
+  currentTime: number;
+  duration: number;
+  ended = false;
+  paused: boolean;
+  requestedFullscreen = false;
+
+  constructor(options: {
+    currentTime?: number;
+    duration?: number;
+    paused?: boolean;
+    visible?: boolean;
+  } = {}) {
+    super({ visible: options.visible });
+    this.currentTime = options.currentTime ?? 0;
+    this.duration = options.duration ?? 600;
+    this.paused = options.paused ?? false;
+  }
+
+  requestFullscreen(): Promise<void> {
+    this.requestedFullscreen = true;
+    return Promise.resolve();
+  }
+}
+
+interface FakeDocumentOptions {
+  controls?: Readonly<Record<string, readonly FakeElement[]>>;
+  fullscreenElement?: FakeElement | null;
+  fullscreenPlayer?: boolean;
+  videos?: readonly FakeVideo[];
+}
+
+function execute(
+  provider: unknown,
+  request: VoiceSemanticControlRequest,
+  options: FakeDocumentOptions = {}
+): VoiceSemanticControlResult {
+  const script = buildVoiceSemanticControlScript(provider, request);
+  if (script === null) throw new Error("Expected a script");
+  const exitState = { called: false };
+  const documentValue = {
+    exitFullscreen: () => {
+      exitState.called = true;
+      return Promise.resolve();
+    },
+    fullscreenElement: options.fullscreenElement ?? null,
+    querySelector: (selector: string) => selector.includes("ytp-fullscreen") && options.fullscreenPlayer
+      ? new FakeElement()
+      : null,
+    querySelectorAll: (selector: string) => {
+      if (selector === "video") return [...(options.videos ?? [])];
+      const matches: FakeElement[] = [];
+      for (const [needle, elements] of Object.entries(options.controls ?? {})) {
+        if (!selector.includes(needle)) continue;
+        for (const element of elements) {
+          if (!matches.includes(element)) matches.push(element);
+        }
+      }
+      return matches;
+    }
+  };
+  const run = new Function(
+    "document",
+    "HTMLElement",
+    "HTMLVideoElement",
+    "getComputedStyle",
+    `return ${script};`
+  );
+  return run(
+    documentValue,
+    FakeElement,
+    FakeVideo,
+    () => ({ display: "block", opacity: "1", visibility: "visible" })
+  ) as VoiceSemanticControlResult;
+}
+
+describe("voice semantic controls", () => {
+  it("accepts only the closed action union and exact payload shapes", () => {
+    const requests: VoiceSemanticControlRequest[] = [
+      { action: "seek-relative", offsetSeconds: -15 },
+      { action: "seek-absolute", positionSeconds: 125 },
+      { action: "restart" },
+      { action: "next" },
+      { action: "previous" },
+      { action: "skip-intro" },
+      { action: "skip-recap" },
+      { action: "skip-ad" },
+      { action: "captions-on" },
+      { action: "captions-off" },
+      { action: "fullscreen-enter" },
+      { action: "fullscreen-exit" }
+    ];
+    for (const request of requests) {
+      expect(normalizeVoiceSemanticControlRequest(request)).toEqual(request);
+    }
+
+    expect(normalizeVoiceSemanticControlRequest({ action: "pause" })).toBeNull();
+    expect(normalizeVoiceSemanticControlRequest({ action: "next", selector: "body" })).toBeNull();
+    expect(normalizeVoiceSemanticControlRequest(Object.assign(new Date(), { action: "next" })))
+      .toBeNull();
+  });
+
+  it("rejects non-integral, zero, and out-of-bounds seeks without coercion", () => {
+    expect(normalizeVoiceSemanticControlRequest({
+      action: "seek-relative",
+      offsetSeconds: MAX_VOICE_RELATIVE_SEEK_SECONDS
+    })).toEqual({
+      action: "seek-relative",
+      offsetSeconds: MAX_VOICE_RELATIVE_SEEK_SECONDS
+    });
+    expect(normalizeVoiceSemanticControlRequest({
+      action: "seek-absolute",
+      positionSeconds: MAX_VOICE_ABSOLUTE_SEEK_SECONDS
+    })).toEqual({
+      action: "seek-absolute",
+      positionSeconds: MAX_VOICE_ABSOLUTE_SEEK_SECONDS
+    });
+    for (const offsetSeconds of [0, 1.5, "10", Number.NaN, Number.POSITIVE_INFINITY,
+      MAX_VOICE_RELATIVE_SEEK_SECONDS + 1, -MAX_VOICE_RELATIVE_SEEK_SECONDS - 1]) {
+      expect(normalizeVoiceSemanticControlRequest({ action: "seek-relative", offsetSeconds }))
+        .toBeNull();
+    }
+    for (const positionSeconds of [-1, 1.5, "10", Number.NaN,
+      MAX_VOICE_ABSOLUTE_SEEK_SECONDS + 1]) {
+      expect(normalizeVoiceSemanticControlRequest({ action: "seek-absolute", positionSeconds }))
+        .toBeNull();
+    }
+  });
+
+  it("serializes only qualified provider IDs, actions, and bounded numbers", () => {
+    const injectedProvider = 'youtube"; globalThis.pwned = true; //';
+    const unsupported = buildVoiceSemanticControlScript(injectedProvider, { action: "next" });
+    expect(unsupported).toBe('(() => "unsupported")()');
+    expect(unsupported).not.toContain("pwned");
+    expect(buildVoiceSemanticControlScript("youtube", {
+      action: "seek-relative",
+      offsetSeconds: '10); globalThis.pwned = true; //' as unknown as number
+    })).toBeNull();
+
+    const script = buildVoiceSemanticControlScript("youtube", {
+      action: "seek-relative",
+      offsetSeconds: 10
+    });
+    expect(script).toContain('const provider = "youtube"');
+    expect(script).toContain('"offsetSeconds":10');
+    expect(script).not.toContain("eval(");
+    expect(script).not.toContain("innerHTML");
+    expect(script).not.toContain("location");
+    expect(() => new Function(script ?? "")).not.toThrow();
+  });
+
+  it("contains provider-owned Netflix and YouTube selectors and semantic labels", () => {
+    const netflix = buildVoiceSemanticControlScript("netflix", { action: "skip-intro" }) ?? "";
+    expect(netflix).toContain('data-uia="player-skip-intro');
+    expect(netflix).toContain("Skip Intro");
+    expect(netflix).toContain('data-uia="control-audio-subtitle');
+    expect(netflix).toContain("Audio & Subtitles");
+    expect(netflix).toContain('data-uia="control-fullscreen-enter');
+
+    const youtube = buildVoiceSemanticControlScript("youtube", { action: "skip-ad" }) ?? "";
+    expect(youtube).toContain("ytp-ad-skip-button-modern");
+    expect(youtube).toContain("Skip ads");
+    expect(youtube).toContain("ytp-subtitles-button");
+    expect(youtube).toContain("ytp-fullscreen-button");
+  });
+
+  it("performs bounded video seeks and makes absolute targets idempotent", () => {
+    const video = new FakeVideo({ currentTime: 30, duration: 100 });
+    expect(execute("youtube", { action: "seek-relative", offsetSeconds: 90 }, {
+      videos: [video]
+    })).toBe("acted");
+    expect(video.currentTime).toBe(99.75);
+
+    expect(execute("youtube", { action: "seek-absolute", positionSeconds: 50 }, {
+      videos: [video]
+    })).toBe("acted");
+    expect(video.currentTime).toBe(50);
+    expect(execute("youtube", { action: "seek-absolute", positionSeconds: 50 }, {
+      videos: [video]
+    })).toBe("complete");
+
+    video.currentTime = 0.3;
+    expect(execute("netflix", { action: "restart" }, { videos: [video] })).toBe("complete");
+  });
+
+  it("clicks only visible, enabled transport and skip controls", () => {
+    const next = new FakeElement({ attributes: { "aria-label": "Next video" } });
+    expect(execute("youtube", { action: "next" }, {
+      controls: { "ytp-next-button": [next] }
+    })).toBe("acted");
+    expect(next.clicked).toBe(true);
+
+    const hiddenSkip = new FakeElement({
+      attributes: { "aria-label": "Skip Intro" },
+      visible: false
+    });
+    expect(execute("netflix", { action: "skip-intro" }, {
+      controls: { "player-skip-intro": [hiddenSkip] }
+    })).toBe("unavailable");
+    expect(hiddenSkip.clicked).toBe(false);
+
+    const spotifyPrevious = new FakeElement({
+      attributes: { "data-testid": "control-button-skip-back" }
+    });
+    expect(execute("spotify", { action: "previous" }, {
+      controls: { "control-button-skip-back": [spotifyPrevious] }
+    })).toBe("acted");
+    expect(spotifyPrevious.clicked).toBe(true);
+  });
+
+  it("does not toggle observable caption state that is already correct", () => {
+    const captions = new FakeElement({ attributes: {
+      "aria-label": "Subtitles/closed captions",
+      "aria-pressed": "true"
+    } });
+    const options = { controls: { "ytp-subtitles-button": [captions] } };
+    expect(execute("youtube", { action: "captions-on" }, options)).toBe("complete");
+    expect(captions.clicked).toBe(false);
+    expect(execute("youtube", { action: "captions-off" }, options)).toBe("acted");
+    expect(captions.clicked).toBe(true);
+
+    const unknownState = new FakeElement({ attributes: {
+      "aria-label": "Subtitles/closed captions"
+    } });
+    expect(execute("youtube", { action: "captions-on" }, {
+      controls: { "ytp-subtitles-button": [unknownState] }
+    })).toBe("unavailable");
+    expect(unknownState.clicked).toBe(false);
+  });
+
+  it("makes fullscreen entry and exit idempotent before using controls", () => {
+    const video = new FakeVideo();
+    const fullscreen = new FakeElement();
+    fullscreen.contains = (value: unknown) => value === video;
+    const button = new FakeElement({ attributes: { "aria-label": "Full screen" } });
+
+    expect(execute("youtube", { action: "fullscreen-enter" }, {
+      controls: { "ytp-fullscreen-button": [button] },
+      fullscreenElement: fullscreen,
+      videos: [video]
+    })).toBe("complete");
+    expect(button.clicked).toBe(false);
+
+    expect(execute("youtube", { action: "fullscreen-enter" }, {
+      controls: { "ytp-fullscreen-button": [button] },
+      videos: [video]
+    })).toBe("acted");
+    expect(button.clicked).toBe(true);
+
+    button.clicked = false;
+    expect(execute("netflix", { action: "fullscreen-exit" }, {
+      controls: { "control-fullscreen-exit": [button] },
+      videos: [video]
+    })).toBe("complete");
+    expect(button.clicked).toBe(false);
+  });
+
+  it("returns unsupported without touching the DOM for unsupported combinations", () => {
+    const captions = new FakeElement();
+    expect(execute("spotify", { action: "captions-on" }, {
+      controls: { "ytp-subtitles-button": [captions] }
+    })).toBe("unsupported");
+    expect(captions.clicked).toBe(false);
+    expect(execute("youtube", { action: "skip-recap" })).toBe("unsupported");
+    expect(execute("custom-service", { action: "next" })).toBe("unsupported");
+    expect(parseVoiceSemanticControlResult("acted")).toBe("acted");
+    expect(parseVoiceSemanticControlResult({ state: "acted" })).toBe("unavailable");
+    expect(parseVoiceSemanticControlResult("anything-else")).toBe("unavailable");
+  });
+});

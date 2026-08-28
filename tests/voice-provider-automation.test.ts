@@ -335,6 +335,8 @@ describe("voice provider automation", () => {
       state: "navigated",
       youtubeContentId: "short"
     })).toBe("idle");
+    expect(parseVoiceProviderAutomationResult("profile-required"))
+      .toBe("profile-required");
 
     const byline = new FakeElement({ text: "Outdoor Boys" });
     const short = new FakeElement({
@@ -358,7 +360,7 @@ describe("voice provider automation", () => {
     )).toBe("complete");
   });
 
-  it("selects the hinted Netflix profile and falls back to the first normal profile", () => {
+  it("selects an exact Netflix profile-name hint among multiple profiles", () => {
     const nateName = new FakeElement({ text: "Nate" });
     const guestName = new FakeElement({ text: "Guest" });
     const nate = new FakeElement({
@@ -390,8 +392,24 @@ describe("voice provider automation", () => {
     )).toBe("profile-selected");
     expect(guest.clicked).toBe(true);
     expect(nate.clicked).toBe(false);
+  });
 
-    guest.clicked = false;
+  it("selects the only safe normal Netflix profile without a matching hint", () => {
+    const nateName = new FakeElement({ text: "Nate" });
+    const nate = new FakeElement({
+      selectors: { '.profile-name,[data-uia="profile-name"]': [nateName] },
+      text: "Nate"
+    });
+    const manage = new FakeElement({ attributes: { "aria-label": "Manage Profiles" } });
+    const documentValue = {
+      body: { innerText: "Who's watching?" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes('data-uia="profile-link"')
+        ? [nate, manage]
+        : []
+    };
+
     expect(executeProviderScript(
       buildNetflixVoiceAutomationScript(intent({
         mediaType: "show",
@@ -402,6 +420,62 @@ describe("voice provider automation", () => {
       "/browse"
     )).toBe("profile-selected");
     expect(nate.clicked).toBe(true);
+
+    nate.clicked = false;
+    expect(executeProviderScript(
+      buildNetflixVoiceAutomationScript(intent({
+        mediaType: "show",
+        providerHint: "netflix",
+        title: "Breaking Bad"
+      })),
+      documentValue,
+      "/browse"
+    )).toBe("profile-selected");
+    expect(nate.clicked).toBe(true);
+  });
+
+  it("leaves a multi-profile Netflix gate visible when the hint does not match", () => {
+    const nateName = new FakeElement({ text: "Nate" });
+    const guestName = new FakeElement({ text: "Guest" });
+    const nate = new FakeElement({
+      selectors: { '.profile-name,[data-uia="profile-name"]': [nateName] },
+      text: "Nate"
+    });
+    const guest = new FakeElement({
+      selectors: { '.profile-name,[data-uia="profile-name"]': [guestName] },
+      text: "Guest"
+    });
+    const documentValue = {
+      body: { innerText: "Who's watching?" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes('data-uia="profile-link"')
+        ? [nate, guest]
+        : []
+    };
+
+    expect(executeProviderScript(
+      buildNetflixVoiceAutomationScript(intent({
+        mediaType: "show",
+        providerHint: "netflix",
+        title: "Breaking Bad"
+      }), "Missing profile"),
+      documentValue,
+      "/browse"
+    )).toBe("profile-required");
+    expect(nate.clicked).toBe(false);
+    expect(guest.clicked).toBe(false);
+
+    expect(executeProviderScript(
+      buildNetflixVoiceAutomationScript(intent({
+        mediaType: "show",
+        providerHint: "netflix",
+        title: "Breaking Bad"
+      })),
+      documentValue,
+      "/browse"
+    )).toBe("profile-required");
+    expect(nate.clicked).toBe(false);
     expect(guest.clicked).toBe(false);
   });
 
@@ -615,7 +689,7 @@ describe("voice provider automation", () => {
     expect(resume.clicked).toBe(true);
   });
 
-  it("opens Netflix title details for episodes, shows, and open-only requests", () => {
+  it("opens Netflix title details for episodes, shows, untyped titles, and open requests", () => {
     const execute = (voiceIntent: VoiceMediaIntent) => {
       const watch = new FakeElement({ attributes: { href: "/watch/current" } });
       const title = new FakeElement({ attributes: { href: "/title/breaking-bad" } });
@@ -662,6 +736,16 @@ describe("voice provider automation", () => {
     expect(showResult.result).toBe("navigated");
     expect(showResult.title.clicked).toBe(true);
     expect(showResult.watch.clicked).toBe(false);
+
+    const untypedTitleResult = execute(intent({
+      creator: null,
+      mediaType: "title",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    }));
+    expect(untypedTitleResult.result).toBe("navigated");
+    expect(untypedTitleResult.title.clicked).toBe(true);
+    expect(untypedTitleResult.watch.clicked).toBe(false);
 
     const openResult = execute(intent({
       action: "open",
@@ -754,6 +838,44 @@ describe("voice provider automation", () => {
     }));
 
     expect(executeProviderScript(script, documentValue, "/search/Stronger")).toBe("idle");
+  });
+
+  it("does not treat a featured now-playing artist as the requested artist context", () => {
+    const featuredArtist = new FakeElement({
+      attributes: { href: "/artist/kanye" },
+      text: "Kanye West"
+    });
+    const nowPlaying = new FakeElement({
+      selectAll: (selector) => selector === "a[href]" ? [featuredArtist] : [],
+      selectors: {
+        '[data-testid="context-item-info-subtitles"],a[href^="/artist/"]': [
+          featuredArtist
+        ],
+        '[data-testid="context-item-info-title"],a[href^="/track/"]': [
+          new FakeElement({ text: "Forever" })
+        ]
+      }
+    });
+    const globalPause = new FakeElement({ attributes: { "aria-label": "Pause" } });
+    const documentValue = {
+      querySelector: (selector: string) => selector.includes("now-playing-widget")
+        ? nowPlaying
+        : null,
+      querySelectorAll: (selector: string) => selector.includes("control-button-playpause")
+        ? [globalPause]
+        : []
+    };
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      }), true),
+      documentValue,
+      "/search/Kanye%20West"
+    )).toBe("idle");
   });
 
   it("opens the exact Spotify artist profile before starting artist playback", () => {
@@ -923,6 +1045,7 @@ describe("voice provider automation", () => {
   it("reports play as handled only after provider automation verifies it", () => {
     const playIntent = intent({ action: "play" });
     expect(voiceProviderCommandHandled(playIntent, "failed")).toBe(false);
+    expect(voiceProviderCommandHandled(playIntent, "profile-required")).toBe(false);
     expect(voiceProviderCommandHandled(playIntent, "complete")).toBe(true);
     expect(voiceProviderCommandHandled(playIntent, "playing-windowed")).toBe(true);
     expect(voiceProviderCommandHandled(intent({ action: "open" }), "failed")).toBe(true);

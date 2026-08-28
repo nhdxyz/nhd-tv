@@ -7,6 +7,7 @@ export type VoiceProviderAutomationState =
   | "navigated"
   | "play-clicked"
   | "playing"
+  | "profile-required"
   | "profile-selected";
 
 export interface YouTubeVoiceNavigationResult {
@@ -21,7 +22,8 @@ export type VoiceProviderAutomationResult =
 export type VoiceMediaExecutionResult =
   | "complete"
   | "failed"
-  | "playing-windowed";
+  | "playing-windowed"
+  | "profile-required";
 
 const VOICE_PROVIDER_AUTOMATION_STATES: readonly VoiceProviderAutomationState[] = [
   "complete",
@@ -30,6 +32,7 @@ const VOICE_PROVIDER_AUTOMATION_STATES: readonly VoiceProviderAutomationState[] 
   "navigated",
   "play-clicked",
   "playing",
+  "profile-required",
   "profile-selected"
 ];
 const YOUTUBE_CONTENT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
@@ -63,7 +66,9 @@ export function voiceProviderCommandHandled(
   intent: VoiceMediaIntent,
   executionResult: VoiceMediaExecutionResult
 ): boolean {
-  return intent.action !== "play" || executionResult !== "failed";
+  return intent.action !== "play" ||
+    executionResult === "complete" ||
+    executionResult === "playing-windowed";
 }
 
 function serializedIntent(intent: VoiceMediaIntent): string {
@@ -204,7 +209,7 @@ export function buildSpotifyVoiceAutomationScript(
     )?.textContent);
     const nowPlayingMatches = intent.mediaType === "song" && nowPlayingTitle === titleIdentity &&
       (!creatorIdentity || nowPlayingCreator === creatorIdentity);
-    if (intent.action === "play" && nowPlaying && (nowPlayingMatches || candidateMatches(nowPlaying))) {
+    if (intent.action === "play" && nowPlaying && nowPlayingMatches) {
       const pause = globalPauseButton();
       if (pause instanceof HTMLElement) return "complete";
     }
@@ -466,18 +471,25 @@ export function buildNetflixVoiceAutomationScript(
     );
     if (profileGate) {
       const hintIdentity = identity(profileNameHint);
-      const selected = (hintIdentity
-        ? profileCandidates.find((element) => {
-          const name = element.querySelector('.profile-name,[data-uia="profile-name"]')?.textContent ??
-            element.getAttribute("aria-label") ?? element.textContent;
-          return identity(name) === hintIdentity;
-        })
-        : null) ?? profileCandidates[0];
+      const namedProfiles = profileCandidates.flatMap((element) => {
+        const name = element.querySelector('.profile-name,[data-uia="profile-name"]')?.textContent ??
+          element.getAttribute("aria-label") ?? element.textContent;
+        const nameIdentity = identity(name);
+        return nameIdentity ? [{ element, nameIdentity }] : [];
+      });
+      const exactMatches = hintIdentity
+        ? namedProfiles.filter(({ nameIdentity }) => nameIdentity === hintIdentity)
+        : [];
+      const selected = exactMatches.length === 1
+        ? exactMatches[0]?.element ?? null
+        : profileCandidates.length === 1 && namedProfiles.length === 1
+          ? namedProfiles[0]?.element ?? null
+          : null;
       if (selected instanceof HTMLElement) {
         selected.click();
         return "profile-selected";
       }
-      return "idle";
+      return "profile-required";
     }
     if (intent.action === "play") {
       const video = document.querySelector("video");
@@ -653,7 +665,8 @@ export function buildNetflixVoiceAutomationScript(
         element.getAttribute("href")?.startsWith("/title/")
       );
       const destination = intent.mediaType === "episode" ||
-        intent.mediaType === "show" || intent.action === "open"
+        intent.mediaType === "show" || intent.mediaType === "title" ||
+        intent.action === "open"
         ? titleDetails ?? exactCard
         : destinations[0] ?? exactCard;
       if (destination instanceof HTMLElement) {

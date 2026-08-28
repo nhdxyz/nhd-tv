@@ -23,6 +23,8 @@ function outputIntent(overrides: Record<string, unknown> = {}) {
     currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
+    reference: null,
+    ordinal: null,
     mediaType: "title",
     title: "Apollo 13",
     creator: null,
@@ -74,7 +76,9 @@ describe("OpenAI voice client", () => {
       expect(body.text.format.schema.additionalProperties).toBe(false);
       expect(body.instructions).toContain("mediaType=recommendation");
       expect(body.instructions).toContain("mediaType=similar-title");
-      expect(body.instructions).toContain('"play it" is unknown');
+      expect(body.instructions).toContain('"play it" is a last-media play reference');
+      expect(body.instructions).toContain("Never invent the referenced title");
+      expect(body.instructions).toContain("Only candidate references may use ordinal");
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       expect(body.instructions).toContain("Use kind=app");
       expect(body.instructions).toContain("Use kind=current-media");
@@ -119,6 +123,28 @@ describe("OpenAI voice client", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["Play it", "play", "last-media", null, null],
+    ["Open it", "open", "last-media", null, null],
+    ["Where can I watch it?", "lookup", "last-media", null, null],
+    ["Play this", "play", "current-media", null, null],
+    ["The third one", "play", "candidate", 3, null],
+    ["Netflix instead", "play", "last-media", null, "netflix"]
+  ] as const)(
+    "routes the shared-context reference %s locally",
+    async (phrase, action, reference, ordinal, providerHint) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+        action,
+        kind: "media-reference",
+        ordinal,
+        providerHint,
+        reference
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     ["What am I watching?", "identity"],

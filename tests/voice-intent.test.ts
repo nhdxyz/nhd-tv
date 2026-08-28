@@ -10,6 +10,8 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
+    reference: null,
+    ordinal: null,
     mediaType: "title",
     title: "Apollo 13",
     creator: null,
@@ -29,6 +31,8 @@ describe("voice intent boundary", () => {
       "currentMediaAction",
       "controlAction",
       "mediaAction",
+      "reference",
+      "ordinal",
       "mediaType",
       "title",
       "creator",
@@ -51,6 +55,64 @@ describe("voice intent boundary", () => {
       season: null,
       title: "Apollo 13"
     });
+  });
+
+  it("parses shared-context media references without inventing a title", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      title: null,
+      reference: "last-media"
+    }))).toEqual({
+      action: "play",
+      kind: "media-reference",
+      ordinal: null,
+      providerHint: null,
+      reference: "last-media"
+    });
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      ordinal: 3,
+      providerHint: "netflix",
+      reference: "candidate",
+      title: null
+    }))).toEqual({
+      action: "play",
+      kind: "media-reference",
+      ordinal: 3,
+      providerHint: "netflix",
+      reference: "candidate"
+    });
+  });
+
+  it("strictly bounds and isolates media-reference fields", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      ordinal: 11,
+      reference: "candidate",
+      title: null
+    }))).toThrow("invalid number");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      ordinal: 2,
+      reference: "last-media",
+      title: null
+    }))).toThrow("Only candidate references");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      reference: "last-media"
+    }))).toThrow("media-reference voice intent is inconsistent");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaAction: null,
+      mediaType: null,
+      reference: "last-media",
+      title: null
+    }))).toThrow("media-reference voice intent is incomplete");
   });
 
   it("parses an app launch without letting the model choose a URL or service id", () => {
@@ -147,6 +209,8 @@ describe("voice intent boundary", () => {
       currentMediaAction: null,
       controlAction: "pause",
       mediaAction: null,
+      reference: null,
+      ordinal: null,
       mediaType: null,
       title: null,
       creator: null,
@@ -160,6 +224,8 @@ describe("voice intent boundary", () => {
       currentMediaAction: null,
       controlAction: "close-app",
       mediaAction: null,
+      reference: null,
+      ordinal: null,
       mediaType: null,
       title: null,
       creator: null,
@@ -173,6 +239,8 @@ describe("voice intent boundary", () => {
       currentMediaAction: null,
       controlAction: "next-track",
       mediaAction: null,
+      reference: null,
+      ordinal: null,
       mediaType: null,
       title: null,
       creator: null,
@@ -222,6 +290,8 @@ describe("voice intent boundary", () => {
       currentMediaAction: null,
       controlAction: null,
       mediaAction: null,
+      reference: null,
+      ordinal: null,
       mediaType: null,
       title: null,
       creator: null,

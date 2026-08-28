@@ -28,7 +28,10 @@ Use kind=control for direct television controls.
 Use kind=current-media only for a read-only question about media already loaded on the TV. Use currentMediaAction=identity for "what am I watching" or a general question about what is playing; episode for the current episode; song for the current song; time-remaining for how much playback time remains; and end-time for the local clock time when playback will end. Use null for every other field. Never turn a current-media question into a search, playback, or navigation action.
 Use kind=app only when the user explicitly names an application or streaming service to open, launch, or switch to. Put the spoken app name in title and use null for every other field. App intents never name a URL or service ID.
 Use kind=media for searches, navigation, and playback.
-Use kind=unknown with every other field null when the request is incomplete, only refers to "it" or "that" without naming media, is unrelated to the TV, or is not confidently actionable. Never guess a missing title or creator.
+Use kind=media-reference only for an explicit follow-up reference whose target must come from the TV's existing context. Use mediaAction=play, open, lookup, or search and use null for title, mediaType, creator, season, episode, and recency. Never invent the referenced title, creator, candidate, or provider.
+Use reference=last-media for "it", "that", or another explicit reference to the last requested media. Use reference=current-media only for "this" or an explicit reference to media currently loaded on the TV. Use reference=candidate for a numbered choice such as "the second one", with ordinal set to its one-based number from 1 through 10. Only candidate references may use ordinal.
+For a supported provider correction such as "Netflix instead", use reference=last-media, mediaAction=play, and the corresponding providerHint. A provider hint never supplies a missing reference by itself.
+Use kind=unknown with every other field null when the request has no explicit media target or reference, is unrelated to the TV, or is not confidently actionable. Never guess a missing title, creator, or reference.
 Use mediaType=episode only when both season and episode are explicit.
 Use mediaType=recommendation and mediaAction=open for an open-ended movie or show request based on genre, mood, era, actors, themes, or a natural-language description. Put a short provider-search phrase that preserves those constraints in title.
 Use mediaType=similar-title and mediaAction=open when the user asks for movies or shows similar to a named title. Put only the named seed title in title.
@@ -46,7 +49,7 @@ A bare exact movie, show, or title name such as "Apollo 13" is a play request: u
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
 For an artist-only playback request, such as "play Kanye West on Spotify" or "play a song from Kanye West", use mediaType=artist, mediaAction=play, title=<artist name>, creator=<artist name>, and providerHint=spotify so Spotify can open the exact artist profile and start that artist's own playback. Do not invent a song title.
-Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is unknown.
+Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is a last-media play reference; "play this" is a current-media play reference; "the third one" is a candidate play reference with ordinal=3.
 Use null for every field that does not apply. Do not guess missing season or episode numbers.`;
 
 export type OpenAiVoiceErrorCode =

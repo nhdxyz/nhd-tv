@@ -22,6 +22,7 @@ const VOICE_CONTROL_ACTIONS = [
 ] as const;
 
 const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
+const VOICE_MEDIA_REFERENCES = ["candidate", "current-media", "last-media"] as const;
 const VOICE_CURRENT_MEDIA_ACTIONS = [
   "end-time",
   "episode",
@@ -50,6 +51,8 @@ const VOICE_INTENT_KEYS = [
   "currentMediaAction",
   "controlAction",
   "mediaAction",
+  "reference",
+  "ordinal",
   "mediaType",
   "title",
   "creator",
@@ -62,6 +65,7 @@ const VOICE_INTENT_KEYS = [
 export type VoiceControlAction = (typeof VOICE_CONTROL_ACTIONS)[number];
 export type VoiceCurrentMediaAction = (typeof VOICE_CURRENT_MEDIA_ACTIONS)[number];
 export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
+export type VoiceMediaReference = (typeof VOICE_MEDIA_REFERENCES)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
 export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
@@ -98,17 +102,30 @@ export interface VoiceMediaIntent {
   title: string;
 }
 
+/** A follow-up action whose media target must be resolved from shared TV context. */
+export interface VoiceMediaReferenceIntent {
+  action: VoiceMediaAction;
+  kind: "media-reference";
+  ordinal: number | null;
+  providerHint: VoiceProviderHint | null;
+  reference: VoiceMediaReference;
+}
+
 export type VoiceIntent =
   | VoiceAppIntent
   | VoiceControlIntent
   | VoiceCurrentMediaIntent
   | VoiceMediaIntent
+  | VoiceMediaReferenceIntent
   | VoiceUnknownIntent;
 
 export const VOICE_INTENT_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
-    kind: { enum: ["app", "control", "current-media", "media", "unknown"], type: "string" },
+    kind: {
+      enum: ["app", "control", "current-media", "media", "media-reference", "unknown"],
+      type: "string"
+    },
     currentMediaAction: {
       anyOf: [
         { enum: VOICE_CURRENT_MEDIA_ACTIONS, type: "string" },
@@ -127,6 +144,13 @@ export const VOICE_INTENT_JSON_SCHEMA = {
         { type: "null" }
       ]
     },
+    reference: {
+      anyOf: [
+        { enum: VOICE_MEDIA_REFERENCES, type: "string" },
+        { type: "null" }
+      ]
+    },
+    ordinal: { anyOf: [{ maximum: 10, minimum: 1, type: "integer" }, { type: "null" }] },
     mediaType: {
       anyOf: [
         { enum: VOICE_MEDIA_TYPES, type: "string" },
@@ -223,6 +247,8 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "currentMediaAction",
       "controlAction",
       "mediaAction",
+      "reference",
+      "ordinal",
       "mediaType",
       "creator",
       "season",
@@ -241,6 +267,8 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       !allNull(value, [
         "currentMediaAction",
         "mediaAction",
+        "reference",
+        "ordinal",
         "mediaType",
         "title",
         "creator",
@@ -261,6 +289,8 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       !allNull(value, [
         "controlAction",
         "mediaAction",
+        "reference",
+        "ordinal",
         "mediaType",
         "title",
         "creator",
@@ -282,10 +312,45 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     return { kind: "unknown" };
   }
 
+  if (value.kind === "media-reference") {
+    if (!allNull(value, [
+      "currentMediaAction",
+      "controlAction",
+      "mediaType",
+      "title",
+      "creator",
+      "season",
+      "episode",
+      "recency"
+    ])) {
+      throw new TypeError("The media-reference voice intent is inconsistent.");
+    }
+
+    const action = optionalOneOf(value.mediaAction, VOICE_MEDIA_ACTIONS);
+    const reference = optionalOneOf(value.reference, VOICE_MEDIA_REFERENCES);
+    const ordinal = boundedInteger(value.ordinal, 10);
+    const providerHint = optionalOneOf(value.providerHint, VOICE_PROVIDER_HINTS);
+    if (action === null || reference === null) {
+      throw new TypeError("The media-reference voice intent is incomplete.");
+    }
+    if (ordinal !== null && reference !== "candidate") {
+      throw new TypeError("Only candidate references may contain an ordinal.");
+    }
+    return {
+      action,
+      kind: "media-reference",
+      ordinal,
+      providerHint,
+      reference
+    };
+  }
+
   if (
     value.kind !== "media" ||
     value.currentMediaAction !== null ||
-    value.controlAction !== null
+    value.controlAction !== null ||
+    value.reference !== null ||
+    value.ordinal !== null
   ) {
     throw new TypeError("The voice intent kind is invalid.");
   }

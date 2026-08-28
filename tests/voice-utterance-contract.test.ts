@@ -49,12 +49,39 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
-    "Play it",
-    "put that on",
-    "the first one",
-    "on Netflix instead"
-  ])("safely rejects the underspecified media phrase %s", (phrase) => {
-    expect(voiceTranscriptShortcut(phrase)).toEqual({ kind: "unknown" });
+    ["Play it", "play", "last-media", null],
+    ["put that on", "play", "last-media", null],
+    ["open it", "open", "last-media", null],
+    ["where can I watch it", "lookup", "last-media", null],
+    ["what service has it", "lookup", "last-media", null],
+    ["play this", "play", "current-media", null],
+    ["the first one", "play", "candidate", 1],
+    ["the second one", "play", "candidate", 2],
+    ["the third one", "play", "candidate", 3],
+    ["the tenth one", "play", "candidate", 10]
+  ] as const)("represents the shared-context phrase %s", (phrase, action, reference, ordinal) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action,
+      kind: "media-reference",
+      ordinal,
+      providerHint: null,
+      reference
+    });
+  });
+
+  it.each([
+    ["on Netflix instead", "netflix"],
+    ["Spotify instead", "spotify"],
+    ["on YouTube instead", "youtube"],
+    ["Disney Plus instead", "disney-plus"]
+  ] as const)("preserves the provider correction %s", (phrase, providerHint) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "play",
+      kind: "media-reference",
+      ordinal: null,
+      providerHint,
+      reference: "last-media"
+    });
   });
 
   it("does not broaden underspecified guards into titled media or controls", () => {

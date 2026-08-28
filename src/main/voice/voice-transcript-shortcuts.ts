@@ -1,7 +1,10 @@
 import type {
   VoiceControlAction,
   VoiceCurrentMediaAction,
-  VoiceIntent
+  VoiceIntent,
+  VoiceMediaAction,
+  VoiceMediaReference,
+  VoiceProviderHint
 } from "./voice-intent";
 import {
   isKnownVoiceAppName,
@@ -98,12 +101,36 @@ const VOICE_MEDIA_PROVIDER_NAMES = new Set([
   "youtube"
 ]);
 
-const UNDERSPECIFIED_MEDIA_PHRASES = new Set([
-  "on netflix instead",
-  "play it",
-  "put that on",
-  "the first one"
-]);
+const MEDIA_REFERENCE_PHRASES: Readonly<Record<string, {
+  action: VoiceMediaAction;
+  ordinal: number | null;
+  reference: VoiceMediaReference;
+}>> = {
+  "open it": { action: "open", ordinal: null, reference: "last-media" },
+  "play it": { action: "play", ordinal: null, reference: "last-media" },
+  "play this": { action: "play", ordinal: null, reference: "current-media" },
+  "put that on": { action: "play", ordinal: null, reference: "last-media" },
+  "the eighth one": { action: "play", ordinal: 8, reference: "candidate" },
+  "the fifth one": { action: "play", ordinal: 5, reference: "candidate" },
+  "the first one": { action: "play", ordinal: 1, reference: "candidate" },
+  "the fourth one": { action: "play", ordinal: 4, reference: "candidate" },
+  "the ninth one": { action: "play", ordinal: 9, reference: "candidate" },
+  "the second one": { action: "play", ordinal: 2, reference: "candidate" },
+  "the seventh one": { action: "play", ordinal: 7, reference: "candidate" },
+  "the sixth one": { action: "play", ordinal: 6, reference: "candidate" },
+  "the tenth one": { action: "play", ordinal: 10, reference: "candidate" },
+  "the third one": { action: "play", ordinal: 3, reference: "candidate" },
+  "what service has it": { action: "lookup", ordinal: null, reference: "last-media" },
+  "where can i watch it": { action: "lookup", ordinal: null, reference: "last-media" }
+};
+
+const REFERENCE_PROVIDER_HINTS: Readonly<Record<string, VoiceProviderHint>> = {
+  disney: "disney-plus",
+  "disney plus": "disney-plus",
+  netflix: "netflix",
+  spotify: "spotify",
+  youtube: "youtube"
+};
 
 function normalizedPhrase(value: string): string {
   return value
@@ -144,7 +171,6 @@ function namesUnsupportedMediaProvider(phrase: string): boolean {
 export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   const phrase = normalizedPhrase(value);
   if (phrase.length === 0) return null;
-  if (UNDERSPECIFIED_MEDIA_PHRASES.has(phrase)) return { kind: "unknown" };
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
   const currentMediaAction = CURRENT_MEDIA_PHRASES[phrase];
   if (currentMediaAction !== undefined) {
@@ -152,6 +178,27 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   }
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };
+  const mediaReference = MEDIA_REFERENCE_PHRASES[phrase];
+  if (mediaReference !== undefined) {
+    return {
+      ...mediaReference,
+      kind: "media-reference",
+      providerHint: null
+    };
+  }
+  const providerCorrection = /^(?:on )?(.+) instead$/.exec(phrase);
+  const providerHint = providerCorrection === null
+    ? undefined
+    : REFERENCE_PROVIDER_HINTS[providerCorrection[1] ?? ""];
+  if (providerHint !== undefined) {
+    return {
+      action: "play",
+      kind: "media-reference",
+      ordinal: null,
+      providerHint,
+      reference: "last-media"
+    };
+  }
   const appName = appNameFromPhrase(phrase);
   return appName === null ? null : { kind: "app", title: appName };
 }

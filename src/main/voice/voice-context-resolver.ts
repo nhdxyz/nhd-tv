@@ -91,10 +91,11 @@ function contextReference(intent: VoiceMediaIntent): VoiceMediaReferenceInput | 
  */
 export function recordVoiceMediaIntentContext(
   store: VoiceContextStore,
-  intent: VoiceMediaIntent
+  intent: VoiceMediaIntent,
+  options: { preserveCandidates?: boolean } = {}
 ): boolean {
   const revisions = store.revisions();
-  if (!store.clearConversation(revisions)) return false;
+  if (!store.clearMediaReference(revisions, options.preserveCandidates === true)) return false;
   const reference = contextReference(intent);
   if (reference === null || !store.recordMediaTarget(reference, revisions)) return false;
   if (intent.providerHint === null) return true;

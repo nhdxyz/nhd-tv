@@ -1441,9 +1441,6 @@ async function understandVoiceCommandWithContext(
 
   syncVoiceContextFromServiceHost();
   const intent = resolveVoiceContextIntent(understood.intent, store.snapshot());
-  if (intent.kind === "media") {
-    recordVoiceMediaIntentContext(store, intent);
-  }
   return { ...understood, intent };
 }
 
@@ -2058,7 +2055,18 @@ async function executeVoiceCommandPlan(
       if (profileState === null) return voiceExecutionProfileChangedResult();
       executionScope = captureVoiceExecutionScope(profileState);
     }
-    return await executeVoiceCommandPlanCore(plan, signal, executionScope);
+    const result = await executeVoiceCommandPlanCore(plan, signal, executionScope);
+    signal?.throwIfAborted();
+    if (
+      plan.kind === "resolve-media" &&
+      result.handled &&
+      voiceContextStore !== null
+    ) {
+      recordVoiceMediaIntentContext(voiceContextStore, plan.intent, {
+        preserveCandidates: (result.choices?.length ?? 0) > 0
+      });
+    }
+    return result;
   } finally {
     signal?.removeEventListener("abort", cancelNavigation);
   }

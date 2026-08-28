@@ -104,15 +104,27 @@ describe("voice use-case execution wiring", () => {
     expect(source).toContain("playbackRate: snapshot.playbackRate");
   });
 
-  it("resolves follow-up references from fresh TV-wide context before recording the target", () => {
+  it("resolves follow-up references without committing an unexecuted target", () => {
     const sync = contextualUnderstanding.indexOf("syncVoiceContextFromServiceHost()");
     const resolve = contextualUnderstanding.indexOf("resolveVoiceContextIntent(");
-    const record = contextualUnderstanding.indexOf("recordVoiceMediaIntentContext(");
     expect(sync).toBeGreaterThan(-1);
     expect(resolve).toBeGreaterThan(sync);
-    expect(record).toBeGreaterThan(resolve);
+    expect(contextualUnderstanding).not.toContain("recordVoiceMediaIntentContext(");
     expect(source).toContain(
       "understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)"
     );
+  });
+
+  it("commits universal media context only after a handled, non-cancelled result", () => {
+    const execute = planWrapper.indexOf("await executeVoiceCommandPlanCore(");
+    const abort = planWrapper.indexOf("signal?.throwIfAborted()", execute);
+    const handled = planWrapper.indexOf("result.handled", execute);
+    const record = planWrapper.indexOf("recordVoiceMediaIntentContext(", execute);
+    expect(execute).toBeGreaterThan(-1);
+    expect(abort).toBeGreaterThan(execute);
+    expect(handled).toBeGreaterThan(abort);
+    expect(record).toBeGreaterThan(handled);
+    expect(planWrapper).toContain("preserveCandidates:");
+    expect(planWrapper).toContain("result.choices?.length");
   });
 });

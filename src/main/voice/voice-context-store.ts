@@ -814,6 +814,22 @@ export class VoiceContextStore {
     return true;
   }
 
+  clearMediaReference(
+    expected: VoiceContextRevisions,
+    preserveCandidates = false
+  ): boolean {
+    this.#pruneExpired();
+    if (!this.#matches(expected)) return false;
+    this.#lastMediaTarget = null;
+    this.#lastProvider = null;
+    this.#lastVerifiedAction = null;
+    if (!preserveCandidates) {
+      this.#candidates = null;
+      this.#pendingClarification = null;
+    }
+    return true;
+  }
+
   #matches(expected: VoiceContextRevisions): boolean {
     return expected.profileRevision === this.#revisions.profileRevision &&
       expected.serviceRevision === this.#revisions.serviceRevision &&

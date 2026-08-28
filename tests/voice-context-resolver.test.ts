@@ -91,6 +91,44 @@ describe("shared voice context resolver", () => {
     )).toMatchObject({ providerHint: null, title: "Dune" });
   });
 
+  it("can commit a target without erasing provider choices created by execution", () => {
+    const store = new VoiceContextStore({ now: () => 2_500 });
+    let scope = store.setActiveService({ id: "netflix", name: "Netflix" });
+    scope = store.observeMedia({
+      identity: { title: "Old title" },
+      mediaType: "movie",
+      playbackStatus: "playing"
+    }, scope) ?? scope;
+    expect(store.recordVerifiedAction({ kind: "play" }, scope)).toBe(true);
+    const candidates = store.setCandidates([{
+      identity: { title: "Apollo 13" },
+      mediaType: "movie",
+      provider: { id: "netflix", name: "Netflix" }
+    }, {
+      identity: { title: "Apollo 13" },
+      mediaType: "movie",
+      provider: { id: "disney-plus", name: "Disney+" }
+    }], scope);
+    expect(store.setPendingClarification({
+      candidateSetRevision: candidates?.revision,
+      kind: "provider-selection"
+    }, scope)).toBe(true);
+
+    expect(recordVoiceMediaIntentContext(store, mediaIntent(), {
+      preserveCandidates: true
+    })).toBe(true);
+    const conversation = store.snapshot().conversation;
+    expect(conversation.lastMediaTarget).toMatchObject({
+      identity: { title: "Apollo 13" }
+    });
+    expect(conversation.lastProvider).toBeNull();
+    expect(conversation.lastVerifiedAction).toBeNull();
+    expect(conversation.candidates?.candidates).toHaveLength(2);
+    expect(conversation.pendingClarification).toMatchObject({
+      kind: "provider-selection"
+    });
+  });
+
   it("returns unknown for every absent contextual reference", () => {
     const snapshot = new VoiceContextStore().snapshot();
     expect(resolveVoiceMediaReferenceIntent(referenceIntent(), snapshot)).toEqual({

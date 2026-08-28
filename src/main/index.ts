@@ -147,6 +147,7 @@ import {
   applyYouTubeLatestSort,
   voiceProviderCommandHandled
 } from "./voice/voice-provider-automation";
+import { executeVoiceProviderDestination } from "./voice/voice-provider-destination-executor";
 import {
   createVoicePresentationState,
   remainingVoiceTranscriptDisplayMilliseconds
@@ -1610,6 +1611,17 @@ async function executeVoiceCommandPlanCore(
     );
   }
   const operation = serviceHost?.beginOperation();
+  if (plan.kind === "open-provider-destination") {
+    return executeVoiceProviderDestination(plan, {
+      enabledServiceIds: localStateStore?.snapshot().preferences.enabledServiceIds ?? [],
+      getServiceDefinition,
+      host: serviceHost,
+      onProgress: presentPhoneVoiceProgress,
+      openService: openTrackedService,
+      operationToken: operation,
+      signal
+    });
+  }
   if (plan.kind === "semantic-control") {
     const activeServiceId = serviceHost?.activeServiceId ?? null;
     const definition = activeServiceId === null

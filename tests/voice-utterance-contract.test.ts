@@ -60,6 +60,41 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
+    ["Open my library", "library", null],
+    ["go to Spotify library", "library", "spotify"],
+    ["show my library on YouTube", "library", "youtube"],
+    ["Show my subscriptions", "subscriptions", null],
+    ["open YouTube subscriptions", "subscriptions", "youtube"],
+    ["take me to subscriptions on YouTube", "subscriptions", "youtube"],
+    ["open Netflix library", "library", "netflix"],
+    ["go to Spotify subscriptions", "subscriptions", "spotify"]
+  ] as const)("represents the fixed provider destination %s", (
+    phrase,
+    destination,
+    providerHint
+  ) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      destination,
+      kind: "provider-destination",
+      providerHint
+    });
+  });
+
+  it("does not steal library or subscription media requests", () => {
+    expect(voiceTranscriptShortcut("Library")).toBeNull();
+    expect(voiceTranscriptShortcut("Open Library")).toBeNull();
+    expect(voiceTranscriptShortcut("Play The Library")).toBeNull();
+    expect(voiceTranscriptShortcut("Open The Library 2017")).toBeNull();
+    expect(voiceTranscriptShortcut("Search for Library")).toBeNull();
+    expect(voiceTranscriptShortcut("Play My Library")).toBeNull();
+    expect(voiceTranscriptShortcut("Open Subscription")).toBeNull();
+    expect(voiceTranscriptShortcut("Open YouTube")).toEqual({
+      kind: "app",
+      title: "youtube"
+    });
+  });
+
+  it.each([
     ["Set volume to twenty percent", 20],
     ["set the volume at 35", 35],
     ["turn the TV volume down to 0%", 0],

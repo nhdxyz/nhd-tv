@@ -247,6 +247,151 @@ describe("voice command planning", () => {
     })).toMatchObject({ kind: "no-op" });
   });
 
+  it("opens only supported, enabled explicit provider destinations", () => {
+    expect(planVoiceCommand({
+      destination: "subscriptions",
+      kind: "provider-destination",
+      providerHint: "youtube"
+    }, context)).toEqual({
+      destination: "subscriptions",
+      kind: "open-provider-destination",
+      serviceId: "youtube",
+      serviceName: "YouTube"
+    });
+    expect(planVoiceCommand({
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: "spotify"
+    }, {
+      ...context,
+      enabledServiceIds: ["spotify", "youtube"]
+    })).toMatchObject({
+      destination: "library",
+      kind: "open-provider-destination",
+      serviceId: "spotify"
+    });
+    expect(planVoiceCommand({
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: "spotify"
+    }, context)).toEqual({
+      detail: "Spotify is not enabled in this profile.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
+  it("fails closed for explicit providers without that fixed destination", () => {
+    expect(planVoiceCommand({
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: "netflix"
+    }, context)).toMatchObject({
+      detail: "Netflix does not have a supported voice library destination.",
+      handled: false,
+      kind: "no-op"
+    });
+    expect(planVoiceCommand({
+      destination: "subscriptions",
+      kind: "provider-destination",
+      providerHint: "spotify"
+    }, {
+      ...context,
+      enabledServiceIds: ["spotify", "youtube"]
+    })).toMatchObject({
+      detail: "Spotify does not have a supported voice subscriptions destination.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
+  it("routes generic subscriptions only to enabled YouTube", () => {
+    expect(planVoiceCommand({
+      destination: "subscriptions",
+      kind: "provider-destination",
+      providerHint: null
+    }, context)).toMatchObject({
+      kind: "open-provider-destination",
+      serviceId: "youtube"
+    });
+    expect(planVoiceCommand({
+      destination: "subscriptions",
+      kind: "provider-destination",
+      providerHint: null
+    }, {
+      ...context,
+      enabledServiceIds: ["netflix"]
+    })).toEqual({
+      detail: "YouTube is not enabled in this profile.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
+  it("uses the active capable provider for a generic library", () => {
+    for (const activeServiceId of ["spotify", "youtube"] as const) {
+      expect(planVoiceCommand({
+        destination: "library",
+        kind: "provider-destination",
+        providerHint: null
+      }, {
+        ...context,
+        activeServiceId,
+        enabledServiceIds: ["spotify", "youtube"]
+      })).toMatchObject({
+        kind: "open-provider-destination",
+        serviceId: activeServiceId
+      });
+    }
+  });
+
+  it("fails a generic library closed while an unsupported provider is active", () => {
+    expect(planVoiceCommand({
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: null
+    }, {
+      ...context,
+      activeServiceId: "netflix",
+      enabledServiceIds: ["netflix", "spotify"]
+    })).toEqual({
+      detail: "Netflix does not have a supported voice library. Say Spotify library or YouTube library.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
+  it("uses a sole capable Home provider and asks when both libraries are enabled", () => {
+    const intent = {
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: null
+    } as const;
+    expect(planVoiceCommand(intent, {
+      ...context,
+      activeServiceId: null,
+      enabledServiceIds: ["netflix", "spotify"]
+    })).toMatchObject({ kind: "open-provider-destination", serviceId: "spotify" });
+    expect(planVoiceCommand(intent, {
+      ...context,
+      activeServiceId: null,
+      enabledServiceIds: ["spotify", "youtube"]
+    })).toEqual({
+      detail: "Say Spotify library or YouTube library.",
+      handled: false,
+      kind: "no-op"
+    });
+    expect(planVoiceCommand(intent, {
+      ...context,
+      activeServiceId: null,
+      enabledServiceIds: ["netflix"]
+    })).toEqual({
+      detail: "Enable Spotify or YouTube to open your library.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
   it("requires confirmation only before playback", () => {
     expect(planVoiceCommand(mediaIntent(), context)).toMatchObject({
       confirmationRequired: true,

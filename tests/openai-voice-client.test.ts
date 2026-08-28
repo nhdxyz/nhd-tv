@@ -36,6 +36,7 @@ function outputIntent(overrides: Record<string, unknown> = {}) {
     season: null,
     episode: null,
     providerHint: null,
+    providerDestination: null,
     recency: null,
     ...overrides
   };
@@ -96,6 +97,8 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("A bare fast-forward or rewind with no amount remains");
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       expect(body.instructions).toContain("Use kind=app");
+      expect(body.instructions).toContain("Use kind=provider-destination");
+      expect(body.instructions).toContain("Never output, infer, or encode a URL");
       expect(body.instructions).toContain("Use kind=current-media");
       expect(body.instructions).toContain("currentMediaAction=identity");
       expect(body.instructions).toContain("position for the elapsed playback position");
@@ -140,6 +143,45 @@ describe("OpenAI voice client", () => {
       kind: "control"
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Open my library", "library", null],
+    ["Go to Spotify library", "library", "spotify"],
+    ["Show my subscriptions", "subscriptions", null],
+    ["Take me to YouTube subscriptions", "subscriptions", "youtube"]
+  ] as const)(
+    "routes the fixed provider destination %s locally",
+    async (phrase, destination, providerHint) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+        destination,
+        kind: "provider-destination",
+        providerHint
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("accepts a structured provider destination outside the local phrase set", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json({
+      output_text: JSON.stringify(outputIntent({
+        kind: "provider-destination",
+        mediaAction: null,
+        mediaType: null,
+        providerDestination: "library",
+        providerHint: "youtube",
+        title: null
+      }))
+    }));
+
+    await expect(client(fetchMock).interpret("Could you display my YouTube library"))
+      .resolves.toEqual({
+        destination: "library",
+        kind: "provider-destination",
+        providerHint: "youtube"
+      });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([

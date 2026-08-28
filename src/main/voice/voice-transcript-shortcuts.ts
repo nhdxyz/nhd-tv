@@ -5,6 +5,7 @@ import type {
   VoiceIntent,
   VoiceMediaAction,
   VoiceMediaReference,
+  VoiceProviderDestination,
   VoiceProviderHint,
   VoiceSemanticControlAction
 } from "./voice-intent";
@@ -163,6 +164,32 @@ const REFERENCE_PROVIDER_HINTS: Readonly<Record<string, VoiceProviderHint>> = {
   spotify: "spotify",
   youtube: "youtube"
 };
+
+const PROVIDER_DESTINATION_VERB = "(?:go to|open|show|show me|take me to)";
+const PROVIDER_DESTINATION_NAME = "(?:disney|disney plus|netflix|spotify|youtube)";
+
+function providerDestinationShortcut(phrase: string): VoiceIntent | null {
+  const prefixed = new RegExp(
+    `^${PROVIDER_DESTINATION_VERB} (?:my )?(?:(${PROVIDER_DESTINATION_NAME}) )?(library|subscriptions)$`
+  ).exec(phrase);
+  const suffixed = new RegExp(
+    `^${PROVIDER_DESTINATION_VERB} (?:my )?(library|subscriptions) (?:in|on) (?:the )?(${PROVIDER_DESTINATION_NAME})$`
+  ).exec(phrase);
+  const destination = (prefixed?.[2] ?? suffixed?.[1]) as VoiceProviderDestination | undefined;
+  if (destination === undefined) return null;
+
+  const providerName = prefixed?.[1] ?? suffixed?.[2];
+  if (providerName === undefined && destination === "library" && !phrase.includes(" my ")) {
+    return null;
+  }
+  return {
+    destination,
+    kind: "provider-destination",
+    providerHint: providerName === undefined
+      ? null
+      : REFERENCE_PROVIDER_HINTS[providerName] ?? null
+  };
+}
 
 const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<Record<string, VoiceSemanticControlAction>> = {
   "captions off": "captions-off",
@@ -455,6 +482,8 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
   const absoluteVolume = absoluteVolumeShortcut(phrase);
   if (absoluteVolume !== null) return absoluteVolume;
+  const providerDestination = providerDestinationShortcut(phrase);
+  if (providerDestination !== null) return providerDestination;
   const currentMediaAction = CURRENT_MEDIA_PHRASES[phrase];
   if (currentMediaAction !== undefined) {
     return { action: currentMediaAction, kind: "current-media" };

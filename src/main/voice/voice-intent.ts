@@ -63,6 +63,7 @@ const VOICE_MEDIA_TYPES = [
   "video"
 ] as const;
 const VOICE_PROVIDER_HINTS = ["disney-plus", "netflix", "spotify", "youtube"] as const;
+const VOICE_PROVIDER_DESTINATIONS = ["library", "subscriptions"] as const;
 const VOICE_RECENCY_VALUES = ["latest"] as const;
 const VOICE_INTENT_KEYS = [
   "kind",
@@ -82,6 +83,7 @@ const VOICE_INTENT_KEYS = [
   "season",
   "episode",
   "providerHint",
+  "providerDestination",
   "recency"
 ] as const;
 
@@ -92,6 +94,7 @@ export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
 export type VoiceMediaReference = (typeof VOICE_MEDIA_REFERENCES)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
+export type VoiceProviderDestination = (typeof VOICE_PROVIDER_DESTINATIONS)[number];
 export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
 export type VoiceSemanticControlAction = (typeof VOICE_SEMANTIC_CONTROL_ACTIONS)[number];
 
@@ -169,6 +172,13 @@ export interface VoiceMediaReferenceIntent {
   reference: VoiceMediaReference;
 }
 
+/** A fixed, non-search provider page selected without model-supplied navigation data. */
+export interface VoiceProviderDestinationIntent {
+  destination: VoiceProviderDestination;
+  kind: "provider-destination";
+  providerHint: VoiceProviderHint | null;
+}
+
 /** A provider-aware playback operation with explicit, bounded parameters. */
 export interface VoiceSemanticControlIntent {
   action: VoiceSemanticControlAction;
@@ -184,6 +194,7 @@ export type VoiceIntent =
   | VoiceCurrentMediaIntent
   | VoiceMediaIntent
   | VoiceMediaReferenceIntent
+  | VoiceProviderDestinationIntent
   | VoiceSemanticControlIntent
   | VoiceUnknownIntent;
 
@@ -198,6 +209,7 @@ export const VOICE_INTENT_JSON_SCHEMA = {
         "current-media",
         "media",
         "media-reference",
+        "provider-destination",
         "semantic-control",
         "unknown"
       ],
@@ -262,6 +274,12 @@ export const VOICE_INTENT_JSON_SCHEMA = {
     providerHint: {
       anyOf: [
         { enum: VOICE_PROVIDER_HINTS, type: "string" },
+        { type: "null" }
+      ]
+    },
+    providerDestination: {
+      anyOf: [
+        { enum: VOICE_PROVIDER_DESTINATIONS, type: "string" },
         { type: "null" }
       ]
     },
@@ -367,6 +385,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "season",
       "episode",
       "providerHint",
+      "providerDestination",
       "recency"
     ])) {
       throw new TypeError("The voice app intent is inconsistent.");
@@ -404,6 +423,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "season",
         "episode",
         "providerHint",
+        "providerDestination",
         "recency"
       ])
     ) {
@@ -445,6 +465,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "season",
         "episode",
         "providerHint",
+        "providerDestination",
         "recency"
       ])
     ) {
@@ -474,6 +495,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "creator",
       "season",
       "episode",
+      "providerDestination",
       "recency"
     ])) {
       throw new TypeError("The media-reference voice intent is inconsistent.");
@@ -498,6 +520,27 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     };
   }
 
+  if (value.kind === "provider-destination") {
+    if (!allNull(value, VOICE_INTENT_KEYS.filter((key) =>
+      key !== "kind" && key !== "providerHint" && key !== "providerDestination"
+    ))) {
+      throw new TypeError("The provider-destination voice intent is inconsistent.");
+    }
+    const destination = optionalOneOf(
+      value.providerDestination,
+      VOICE_PROVIDER_DESTINATIONS
+    );
+    const providerHint = optionalOneOf(value.providerHint, VOICE_PROVIDER_HINTS);
+    if (destination === null) {
+      throw new TypeError("The provider-destination voice intent is incomplete.");
+    }
+    return {
+      destination,
+      kind: "provider-destination",
+      providerHint
+    };
+  }
+
   if (value.kind === "semantic-control") {
     if (!allNull(value, [
       "confirmationAction",
@@ -513,6 +556,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "season",
       "episode",
       "providerHint",
+      "providerDestination",
       "recency"
     ])) {
       throw new TypeError("The semantic-control voice intent is inconsistent.");
@@ -552,7 +596,8 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     value.positionSeconds !== null ||
     value.volumePercent !== null ||
     value.reference !== null ||
-    value.ordinal !== null
+    value.ordinal !== null ||
+    value.providerDestination !== null
   ) {
     throw new TypeError("The voice intent kind is invalid.");
   }

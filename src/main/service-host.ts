@@ -1603,9 +1603,14 @@ export class ServiceHost {
     }
   }
 
-  async navigate(url: string): Promise<void> {
-    const operation = this.beginOperation();
+  async navigate(
+    url: string,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<void> {
+    const operation = operationToken ?? this.beginOperation();
     this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1630,14 +1635,27 @@ export class ServiceHost {
       this.cancelQuit();
     }
 
-    await this.#checkpointPlayback(operation);
+    await waitWithSignal(this.#checkpointPlayback(operation), signal);
     this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     this.#invalidateCurrentMedia();
 
+    const cancelNavigation = () => {
+      if (
+        this.#view === view &&
+        this.#operationOwner.owns(operation) &&
+        !view.webContents.isDestroyed()
+      ) {
+        view.webContents.stop();
+      }
+    };
+    signal?.addEventListener("abort", cancelNavigation, { once: true });
     try {
-      await view.webContents.loadURL(url);
+      await waitWithSignal(view.webContents.loadURL(url), signal);
       this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
     } catch (error) {
+      signal?.throwIfAborted();
       this.#operationOwner.throwIfSuperseded(operation);
       if (
         !isExpectedAllowedNavigationAbort(
@@ -1649,6 +1667,8 @@ export class ServiceHost {
       ) {
         throw error;
       }
+    } finally {
+      signal?.removeEventListener("abort", cancelNavigation);
     }
   }
 

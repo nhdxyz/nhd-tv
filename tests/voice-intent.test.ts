@@ -23,6 +23,7 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     season: null,
     episode: null,
     providerHint: null,
+    providerDestination: null,
     recency: null,
     ...overrides
   };
@@ -49,8 +50,67 @@ describe("voice intent boundary", () => {
       "season",
       "episode",
       "providerHint",
+      "providerDestination",
       "recency"
     ]);
+  });
+
+  it("parses only the closed provider destinations without executable navigation data", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: "library",
+      title: null
+    }))).toEqual({
+      destination: "library",
+      kind: "provider-destination",
+      providerHint: null
+    });
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: "subscriptions",
+      providerHint: "youtube",
+      title: null
+    }))).toEqual({
+      destination: "subscriptions",
+      kind: "provider-destination",
+      providerHint: "youtube"
+    });
+  });
+
+  it("strictly isolates provider destinations and rejects model-supplied routes", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: "favorites",
+      title: null
+    }))).toThrow("unsupported enum");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: null,
+      title: null
+    }))).toThrow("provider-destination voice intent is incomplete");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: "library",
+      title: "library"
+    }))).toThrow("provider-destination voice intent is inconsistent");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "provider-destination",
+      mediaAction: null,
+      mediaType: null,
+      providerDestination: "library",
+      title: null,
+      url: "https://evil.example"
+    }))).toThrow("exactly the allowlisted fields");
   });
 
   it("parses only a bare bounded confirmation decision", () => {
@@ -408,6 +468,7 @@ describe("voice intent boundary", () => {
       season: null,
       episode: null,
       providerHint: null,
+      providerDestination: null,
       recency: null
     })).toEqual({ action: "pause", kind: "control" });
     expect(parseVoiceIntent({
@@ -428,6 +489,7 @@ describe("voice intent boundary", () => {
       season: null,
       episode: null,
       providerHint: null,
+      providerDestination: null,
       recency: null
     })).toEqual({ action: "close-app", kind: "control" });
     expect(parseVoiceIntent({
@@ -448,6 +510,7 @@ describe("voice intent boundary", () => {
       season: null,
       episode: null,
       providerHint: null,
+      providerDestination: null,
       recency: null
     })).toEqual({ action: "next-track", kind: "control" });
   });
@@ -506,6 +569,7 @@ describe("voice intent boundary", () => {
       season: null,
       episode: null,
       providerHint: null,
+      providerDestination: null,
       recency: null
     })).toEqual({ kind: "unknown" });
     expect(() => parseVoiceIntent(mediaIntent({

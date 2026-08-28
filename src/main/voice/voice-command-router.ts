@@ -5,6 +5,7 @@ import type {
   VoiceCurrentMediaIntent,
   VoiceIntent,
   VoiceMediaIntent,
+  VoiceProviderDestinationIntent,
   VoiceProviderHint,
   VoiceSemanticControlIntent
 } from "./voice-intent";
@@ -14,6 +15,11 @@ import {
   matchVoiceAppService,
   type VoiceAppService
 } from "./voice-app-matcher";
+import {
+  isVoiceProviderDestinationServiceId,
+  voiceProviderDestinationRoute,
+  type VoiceProviderDestinationServiceId
+} from "./voice-provider-destination";
 
 const VOICE_SERVICE_IDS = ["disney-plus", "netflix", "spotify", "youtube"] as const;
 
@@ -36,6 +42,12 @@ export type VoiceCommandPlan =
   | { detail: string; handled?: boolean; kind: "no-op" }
   | { kind: "close-service" }
   | { kind: "launch-service"; serviceId: string; serviceName: string }
+  | {
+    destination: VoiceProviderDestinationIntent["destination"];
+    kind: "open-provider-destination";
+    serviceId: VoiceProviderDestinationServiceId;
+    serviceName: string;
+  }
   | { kind: "set-system-muted"; muted: boolean }
   | { kind: "set-system-volume"; volumePercent: number }
   | {
@@ -238,6 +250,99 @@ function semanticControlPlan(
   return { kind: "semantic-control", request: { action: intent.action } };
 }
 
+function serviceName(serviceId: string, context: VoiceCommandContext): string {
+  return context.services.find((service) => service.id === serviceId)?.name ??
+    (serviceId === "disney-plus"
+      ? "Disney+"
+      : serviceId === "spotify"
+        ? "Spotify"
+        : serviceId === "youtube"
+          ? "YouTube"
+          : serviceId === "netflix"
+            ? "Netflix"
+            : "The current app");
+}
+
+function openProviderDestinationPlan(
+  intent: VoiceProviderDestinationIntent,
+  serviceId: VoiceProviderDestinationServiceId,
+  context: VoiceCommandContext
+): VoiceCommandPlan {
+  return {
+    destination: intent.destination,
+    kind: "open-provider-destination",
+    serviceId,
+    serviceName: serviceName(serviceId, context)
+  };
+}
+
+function providerDestinationPlan(
+  intent: VoiceProviderDestinationIntent,
+  context: VoiceCommandContext
+): VoiceCommandPlan {
+  if (intent.providerHint !== null) {
+    const route = voiceProviderDestinationRoute(intent.providerHint, intent.destination);
+    if (route === null) {
+      return {
+        detail: `${serviceName(intent.providerHint, context)} does not have a supported voice ${intent.destination} destination.`,
+        handled: false,
+        kind: "no-op"
+      };
+    }
+    if (!context.enabledServiceIds.includes(route.serviceId)) {
+      return {
+        detail: `${serviceName(route.serviceId, context)} is not enabled in this profile.`,
+        handled: false,
+        kind: "no-op"
+      };
+    }
+    return openProviderDestinationPlan(intent, route.serviceId, context);
+  }
+
+  if (intent.destination === "subscriptions") {
+    return context.enabledServiceIds.includes("youtube")
+      ? openProviderDestinationPlan(intent, "youtube", context)
+      : {
+        detail: "YouTube is not enabled in this profile.",
+        handled: false,
+        kind: "no-op"
+      };
+  }
+
+  if (context.activeServiceId !== null) {
+    if (!isVoiceProviderDestinationServiceId(context.activeServiceId)) {
+      return {
+        detail: `${serviceName(context.activeServiceId, context)} does not have a supported voice library. Say Spotify library or YouTube library.`,
+        handled: false,
+        kind: "no-op"
+      };
+    }
+    if (!context.enabledServiceIds.includes(context.activeServiceId)) {
+      return {
+        detail: `${serviceName(context.activeServiceId, context)} is not enabled in this profile.`,
+        handled: false,
+        kind: "no-op"
+      };
+    }
+    return openProviderDestinationPlan(intent, context.activeServiceId, context);
+  }
+
+  const enabled = (["spotify", "youtube"] as const).filter((serviceId) =>
+    context.enabledServiceIds.includes(serviceId)
+  );
+  const soleEnabledProvider = enabled.length === 1 ? enabled[0] : undefined;
+  if (soleEnabledProvider !== undefined) {
+    return openProviderDestinationPlan(intent, soleEnabledProvider, context);
+  }
+  return {
+    detail: enabled.length === 0
+      ? "Enable Spotify or YouTube to open your library."
+      : "Say Spotify library or YouTube library.",
+    handled: false,
+    kind: "no-op"
+  };
+}
+
 export function planVoiceCommand(
   intent: VoiceIntent,
   context: VoiceCommandContext
@@ -259,6 +364,9 @@ export function planVoiceCommand(
       handled: false,
       kind: "no-op"
     };
+  }
+  if (intent.kind === "provider-destination") {
+    return providerDestinationPlan(intent, context);
   }
   if (intent.kind === "semantic-control") return semanticControlPlan(intent);
   if (intent.kind === "media-reference") {

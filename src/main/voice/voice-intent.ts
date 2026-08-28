@@ -274,6 +274,14 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     throw new TypeError("Video intents may only target YouTube.");
   }
   if (
+    providerHint === "spotify" &&
+    !(["album", "artist", "playlist", "song"] as const).includes(
+      mediaType as "album" | "artist" | "playlist" | "song"
+    )
+  ) {
+    throw new TypeError("Spotify may only receive audio intents.");
+  }
+  if (
     (mediaType === "recommendation" || mediaType === "similar-title") &&
     (action !== "open" ||
       creator !== null ||

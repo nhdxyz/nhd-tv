@@ -159,9 +159,12 @@ function mediaPlan(
 ): VoiceCommandPlan {
   const enabled = supportedEnabledServices(context.enabledServiceIds, context.serviceOrder);
   const provider = impliedProvider(intent);
+  const eligible = provider === null && intent.action !== "search"
+    ? enabled.filter((serviceId) => serviceId !== "spotify")
+    : enabled;
   const candidateServiceIds = provider === null
-    ? enabled
-    : enabled.includes(provider)
+    ? eligible
+    : eligible.includes(provider)
       ? [provider]
       : [];
   const activeSearchService = intent.action === "search" && provider === null

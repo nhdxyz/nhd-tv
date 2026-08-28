@@ -158,6 +158,24 @@ describe("voice command planning", () => {
     });
   });
 
+  it("does not confirm or fall back to Spotify for a generic movie or show", () => {
+    expect(planVoiceCommand(mediaIntent(), {
+      ...context,
+      enabledServiceIds: ["spotify"],
+      serviceOrder: ["spotify"]
+    })).toMatchObject({
+      candidateServiceIds: [],
+      confirmationRequired: false,
+      launchAllowed: false
+    });
+    expect(planVoiceCommand(mediaIntent({ action: "search" }), {
+      ...context,
+      activeServiceId: "spotify",
+      enabledServiceIds: ["spotify"],
+      serviceOrder: ["spotify"]
+    })).toMatchObject({ candidateServiceIds: ["spotify"], launchAllowed: true });
+  });
+
   it("honors an explicit Disney Plus request when it is enabled", () => {
     expect(planVoiceCommand(mediaIntent({
       mediaType: "movie",

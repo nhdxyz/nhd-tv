@@ -201,6 +201,10 @@ describe("voice intent boundary", () => {
       mediaType: "video",
       providerHint: "spotify"
     }))).toThrow("only target YouTube");
+    expect(() => parseVoiceIntent(mediaIntent({
+      mediaType: "movie",
+      providerHint: "spotify"
+    }))).toThrow("only receive audio intents");
   });
 
   it("never turns an open-ended recommendation into automatic playback", () => {

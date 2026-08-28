@@ -1,4 +1,5 @@
 import type {
+  VoiceConfirmationAction,
   VoiceControlAction,
   VoiceCurrentMediaAction,
   VoiceIntent,
@@ -10,6 +11,18 @@ import {
   isKnownVoiceAppName,
   normalizeVoiceAppName
 } from "./voice-app-matcher";
+
+const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = {
+  cancel: "cancel",
+  confirm: "confirm",
+  "go ahead": "confirm",
+  "never mind": "cancel",
+  no: "cancel",
+  nope: "cancel",
+  yeah: "confirm",
+  yep: "confirm",
+  yes: "confirm"
+};
 
 const CONTROL_PHRASES: Readonly<Record<string, VoiceControlAction>> = {
   "close app": "close-app",
@@ -178,6 +191,10 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   }
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };
+  const confirmation = CONFIRMATION_PHRASES[phrase];
+  if (confirmation !== undefined) {
+    return { action: confirmation, kind: "confirmation" };
+  }
   const mediaReference = MEDIA_REFERENCE_PHRASES[phrase];
   if (mediaReference !== undefined) {
     return {

@@ -4,6 +4,20 @@ import { voiceTranscriptShortcut } from "../src/main/voice/voice-transcript-shor
 
 describe("common voice utterance contract", () => {
   it.each([
+    ["yes", "confirm"],
+    ["yeah", "confirm"],
+    ["yep", "confirm"],
+    ["confirm", "confirm"],
+    ["go ahead", "confirm"],
+    ["no", "cancel"],
+    ["nope", "cancel"],
+    ["cancel", "cancel"],
+    ["never mind", "cancel"]
+  ] as const)("represents the bare confirmation answer %s", (phrase, action) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({ action, kind: "confirmation" });
+  });
+
+  it.each([
     ["Pause the movie", "pause"],
     ["continue playing", "resume"],
     ["turn it up", "volume-up"],
@@ -93,6 +107,18 @@ describe("common voice utterance contract", () => {
       action: "pause",
       kind: "control"
     });
+  });
+
+  it("does not steal controls or media titles containing decision words", () => {
+    expect(voiceTranscriptShortcut("stop")).toEqual({ action: "stop", kind: "control" });
+    expect(voiceTranscriptShortcut("play it")).toMatchObject({
+      action: "play",
+      kind: "media-reference"
+    });
+    expect(voiceTranscriptShortcut("Play Yes Man")).toBeNull();
+    expect(voiceTranscriptShortcut("Play No Country for Old Men")).toBeNull();
+    expect(voiceTranscriptShortcut("Play Nope")).toBeNull();
+    expect(voiceTranscriptShortcut("Play Never Mind the Buzzcocks")).toBeNull();
   });
 
   it.each([

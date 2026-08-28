@@ -25,6 +25,7 @@ const AUDIO_TYPES: ReadonlyMap<string, string> = new Map([
 const VOICE_INTENT_INSTRUCTIONS = `You extract one command for a television interface.
 Return only the supplied JSON schema. Never output a URL, selector, service ID, code, or explanation.
 Use kind=control for direct television controls.
+Use kind=confirmation only for a bare answer to an already-pending confirmation question. Use confirmationAction=confirm for "yes", "yeah", "yep", "confirm", or "go ahead"; use confirmationAction=cancel for "no", "nope", "cancel", or "never mind". Use null for every other field. Never reinterpret a media title, playback control, or longer request containing one of those words as a confirmation.
 Use kind=current-media only for a read-only question about media already loaded on the TV. Use currentMediaAction=identity for "what am I watching" or a general question about what is playing; episode for the current episode; song for the current song; time-remaining for how much playback time remains; and end-time for the local clock time when playback will end. Use null for every other field. Never turn a current-media question into a search, playback, or navigation action.
 Use kind=app only when the user explicitly names an application or streaming service to open, launch, or switch to. Put the spoken app name in title and use null for every other field. App intents never name a URL or service ID.
 Use kind=media for searches, navigation, and playback.

@@ -20,6 +20,7 @@ function audioClip(overrides: Partial<VoiceAudioClip> = {}): VoiceAudioClip {
 function outputIntent(overrides: Record<string, unknown> = {}) {
   return {
     kind: "media",
+    confirmationAction: null,
     currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
@@ -79,6 +80,10 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain('"play it" is a last-media play reference');
       expect(body.instructions).toContain("Never invent the referenced title");
       expect(body.instructions).toContain("Only candidate references may use ordinal");
+      expect(body.instructions).toContain("Use kind=confirmation only for a bare answer");
+      expect(body.instructions).toContain(
+        "Never reinterpret a media title, playback control, or longer request"
+      );
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       expect(body.instructions).toContain("Use kind=app");
       expect(body.instructions).toContain("Use kind=current-media");
@@ -120,6 +125,22 @@ describe("OpenAI voice client", () => {
     await expect(voiceClient.interpret("Skip this song")).resolves.toEqual({
       action: "next-track",
       kind: "control"
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Yes", "confirm"],
+    ["yeah", "confirm"],
+    ["go ahead", "confirm"],
+    ["No", "cancel"],
+    ["cancel", "cancel"],
+    ["never mind", "cancel"]
+  ] as const)("routes the bare confirmation answer %s locally", async (phrase, action) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+      action,
+      kind: "confirmation"
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

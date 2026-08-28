@@ -21,6 +21,7 @@ const VOICE_CONTROL_ACTIONS = [
   "volume-up"
 ] as const;
 
+const VOICE_CONFIRMATION_ACTIONS = ["cancel", "confirm"] as const;
 const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
 const VOICE_MEDIA_REFERENCES = ["candidate", "current-media", "last-media"] as const;
 const VOICE_CURRENT_MEDIA_ACTIONS = [
@@ -48,6 +49,7 @@ const VOICE_PROVIDER_HINTS = ["disney-plus", "netflix", "spotify", "youtube"] as
 const VOICE_RECENCY_VALUES = ["latest"] as const;
 const VOICE_INTENT_KEYS = [
   "kind",
+  "confirmationAction",
   "currentMediaAction",
   "controlAction",
   "mediaAction",
@@ -63,6 +65,7 @@ const VOICE_INTENT_KEYS = [
 ] as const;
 
 export type VoiceControlAction = (typeof VOICE_CONTROL_ACTIONS)[number];
+export type VoiceConfirmationAction = (typeof VOICE_CONFIRMATION_ACTIONS)[number];
 export type VoiceCurrentMediaAction = (typeof VOICE_CURRENT_MEDIA_ACTIONS)[number];
 export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
 export type VoiceMediaReference = (typeof VOICE_MEDIA_REFERENCES)[number];
@@ -73,6 +76,12 @@ export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
 export interface VoiceControlIntent {
   action: VoiceControlAction;
   kind: "control";
+}
+
+/** A bare spoken decision for an already-pending confirmation question. */
+export interface VoiceConfirmationIntent {
+  action: VoiceConfirmationAction;
+  kind: "confirmation";
 }
 
 /** A read-only question about media already loaded on the TV. */
@@ -113,6 +122,7 @@ export interface VoiceMediaReferenceIntent {
 
 export type VoiceIntent =
   | VoiceAppIntent
+  | VoiceConfirmationIntent
   | VoiceControlIntent
   | VoiceCurrentMediaIntent
   | VoiceMediaIntent
@@ -123,8 +133,22 @@ export const VOICE_INTENT_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
     kind: {
-      enum: ["app", "control", "current-media", "media", "media-reference", "unknown"],
+      enum: [
+        "app",
+        "confirmation",
+        "control",
+        "current-media",
+        "media",
+        "media-reference",
+        "unknown"
+      ],
       type: "string"
+    },
+    confirmationAction: {
+      anyOf: [
+        { enum: VOICE_CONFIRMATION_ACTIONS, type: "string" },
+        { type: "null" }
+      ]
     },
     currentMediaAction: {
       anyOf: [
@@ -244,6 +268,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
 
   if (value.kind === "app") {
     if (!allNull(value, [
+      "confirmationAction",
       "currentMediaAction",
       "controlAction",
       "mediaAction",
@@ -261,10 +286,23 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     return { kind: "app", title: boundedText(value.title, 160, false) };
   }
 
+  if (value.kind === "confirmation") {
+    if (
+      !isOneOf(value.confirmationAction, VOICE_CONFIRMATION_ACTIONS) ||
+      !allNull(value, VOICE_INTENT_KEYS.filter((key) =>
+        key !== "kind" && key !== "confirmationAction"
+      ))
+    ) {
+      throw new TypeError("The voice confirmation intent is inconsistent.");
+    }
+    return { action: value.confirmationAction, kind: "confirmation" };
+  }
+
   if (value.kind === "control") {
     if (
       !isOneOf(value.controlAction, VOICE_CONTROL_ACTIONS) ||
       !allNull(value, [
+        "confirmationAction",
         "currentMediaAction",
         "mediaAction",
         "reference",
@@ -287,6 +325,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     if (
       !isOneOf(value.currentMediaAction, VOICE_CURRENT_MEDIA_ACTIONS) ||
       !allNull(value, [
+        "confirmationAction",
         "controlAction",
         "mediaAction",
         "reference",
@@ -314,6 +353,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
 
   if (value.kind === "media-reference") {
     if (!allNull(value, [
+      "confirmationAction",
       "currentMediaAction",
       "controlAction",
       "mediaType",
@@ -347,6 +387,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
 
   if (
     value.kind !== "media" ||
+    value.confirmationAction !== null ||
     value.currentMediaAction !== null ||
     value.controlAction !== null ||
     value.reference !== null ||

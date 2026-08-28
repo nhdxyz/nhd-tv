@@ -7,6 +7,7 @@ import {
 function mediaIntent(overrides: Record<string, unknown> = {}) {
   return {
     kind: "media",
+    confirmationAction: null,
     currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
@@ -28,6 +29,7 @@ describe("voice intent boundary", () => {
     expect(VOICE_INTENT_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(VOICE_INTENT_JSON_SCHEMA.required).toEqual([
       "kind",
+      "confirmationAction",
       "currentMediaAction",
       "controlAction",
       "mediaAction",
@@ -41,6 +43,39 @@ describe("voice intent boundary", () => {
       "providerHint",
       "recency"
     ]);
+  });
+
+  it("parses only a bare bounded confirmation decision", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      confirmationAction: "confirm",
+      kind: "confirmation",
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toEqual({ action: "confirm", kind: "confirmation" });
+    expect(parseVoiceIntent(mediaIntent({
+      confirmationAction: "cancel",
+      kind: "confirmation",
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toEqual({ action: "cancel", kind: "confirmation" });
+  });
+
+  it("rejects unsupported or inconsistent confirmation decisions", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      confirmationAction: "maybe",
+      kind: "confirmation",
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toThrow("confirmation intent is inconsistent");
+    expect(() => parseVoiceIntent(mediaIntent({
+      confirmationAction: "confirm",
+      kind: "confirmation",
+      mediaAction: null,
+      mediaType: null
+    }))).toThrow("confirmation intent is inconsistent");
   });
 
   it("parses a generic title request without choosing a provider", () => {
@@ -206,6 +241,7 @@ describe("voice intent boundary", () => {
   it("parses an allowlisted control with no media fields", () => {
     expect(parseVoiceIntent({
       kind: "control",
+      confirmationAction: null,
       currentMediaAction: null,
       controlAction: "pause",
       mediaAction: null,
@@ -221,6 +257,7 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "pause", kind: "control" });
     expect(parseVoiceIntent({
       kind: "control",
+      confirmationAction: null,
       currentMediaAction: null,
       controlAction: "close-app",
       mediaAction: null,
@@ -236,6 +273,7 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "close-app", kind: "control" });
     expect(parseVoiceIntent({
       kind: "control",
+      confirmationAction: null,
       currentMediaAction: null,
       controlAction: "next-track",
       mediaAction: null,
@@ -287,6 +325,7 @@ describe("voice intent boundary", () => {
   it("accepts only an entirely empty unknown intent", () => {
     expect(parseVoiceIntent({
       kind: "unknown",
+      confirmationAction: null,
       currentMediaAction: null,
       controlAction: null,
       mediaAction: null,

@@ -996,14 +996,17 @@ function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
 
 function voiceCommandContext(): VoiceCommandContext {
   const state = localStateStore?.snapshot();
+  const enabledServiceIds = state?.preferences.enabledServiceIds ?? [];
+  const serviceOrder = state?.preferences.serviceOrder ?? enabledServiceIds;
   return {
     activeServiceId: serviceHost?.activeServiceId ?? null,
-    enabledServiceIds: state?.preferences.enabledServiceIds ?? [],
+    enabledServiceIds,
     muted: null,
     playbackMode: state?.preferences.voicePlaybackMode ?? "confirm",
     playing: serviceHost?.activeServiceId === null || serviceHost === null
       ? false
-      : serviceHost.isPlaybackActive
+      : serviceHost.isPlaybackActive,
+    serviceOrder
   };
 }
 

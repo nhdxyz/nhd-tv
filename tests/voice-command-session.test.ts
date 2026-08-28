@@ -29,7 +29,8 @@ function context(playbackMode: "automatic" | "confirm" = "confirm") {
     enabledServiceIds: ["netflix"],
     muted: null,
     playbackMode,
-    playing: null
+    playing: null,
+    serviceOrder: ["netflix"]
   } as const;
 }
 

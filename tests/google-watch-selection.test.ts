@@ -55,6 +55,47 @@ describe("Google watch selection", () => {
     expect(watchAvailabilityDetail(result, ["spotify"]))
       .toBe("Apollo 13 is available on Apple TV $3.99, Netflix, but none are enabled in this profile.");
     expect(watchAvailabilityDetail(result, ["netflix"]))
-      .toContain("Netflix (enabled)");
+      .toContain("Netflix (subscribed)");
+  });
+
+  it("never launches a rent-or-buy offer just because its app is enabled", () => {
+    const youtubeFirst: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "purchase_or_rental",
+        priceText: "$3.99",
+        providerContentId: "video-id",
+        providerHost: "www.youtube.com",
+        providerName: "YouTube",
+        rawLabel: "YouTube $3.99",
+        watchUrl: "https://www.youtube.com/watch?v=video-id"
+      }, ...result.offers]
+    };
+    expect(selectEnabledWatchOffer(youtubeFirst, ["youtube", "netflix"])).toMatchObject({
+      offer: { providerName: "Netflix" },
+      serviceId: "netflix"
+    });
+    expect(selectEnabledWatchOffer(youtubeFirst, ["youtube"])).toBeNull();
+  });
+
+  it("uses lineup order to break ties between subscribed providers", () => {
+    const multiSubscription: GoogleWatchResult = {
+      ...result,
+      offers: [...result.offers, {
+        monetizationType: "subscription",
+        priceText: null,
+        providerContentId: "video-id",
+        providerHost: "www.youtube.com",
+        providerName: "YouTube",
+        rawLabel: "YouTube Subscription",
+        watchUrl: "https://www.youtube.com/watch?v=video-id"
+      }]
+    };
+    expect(selectEnabledWatchOffer(multiSubscription, ["youtube", "netflix"])).toMatchObject({
+      serviceId: "youtube"
+    });
+    expect(selectEnabledWatchOffer(multiSubscription, ["netflix", "youtube"])).toMatchObject({
+      serviceId: "netflix"
+    });
   });
 });

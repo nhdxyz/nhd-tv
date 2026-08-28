@@ -6,6 +6,10 @@ export interface SelectedWatchOffer {
   serviceId: VoiceServiceId;
 }
 
+export function isLaunchableWatchOffer(offer: GoogleWatchOffer): boolean {
+  return offer.monetizationType === "subscription" || offer.monetizationType === "free";
+}
+
 export function watchOfferServiceId(offer: GoogleWatchOffer): VoiceServiceId | null {
   if (offer.providerHost === "netflix.com" || offer.providerHost === "www.netflix.com") {
     return "netflix";
@@ -21,7 +25,9 @@ export function selectEnabledWatchOffer(
   enabledServiceIds: readonly VoiceServiceId[]
 ): SelectedWatchOffer | null {
   for (const serviceId of enabledServiceIds) {
-    const offer = result.offers.find((candidate) => watchOfferServiceId(candidate) === serviceId);
+    const offer = result.offers.find((candidate) =>
+      watchOfferServiceId(candidate) === serviceId && isLaunchableWatchOffer(candidate)
+    );
     if (offer !== undefined) return { offer, serviceId };
   }
   return null;
@@ -32,9 +38,11 @@ function offerDescription(
   enabledServiceIds: readonly VoiceServiceId[]
 ): string {
   const serviceId = watchOfferServiceId(offer);
-  const enabled = serviceId !== null && enabledServiceIds.includes(serviceId);
+  const subscribed = serviceId !== null &&
+    enabledServiceIds.includes(serviceId) &&
+    isLaunchableWatchOffer(offer);
   const cost = offer.priceText === null ? "" : ` ${offer.priceText}`;
-  return `${offer.providerName}${cost}${enabled ? " (enabled)" : ""}`;
+  return `${offer.providerName}${cost}${subscribed ? " (subscribed)" : ""}`;
 }
 
 export function watchAvailabilityDetail(
@@ -48,7 +56,9 @@ export function watchAvailabilityDetail(
   if (providers.length === 0) return `No watch providers were found for ${title}.`;
   const hasEnabled = result.offers.some((offer) => {
     const serviceId = watchOfferServiceId(offer);
-    return serviceId !== null && enabledServiceIds.includes(serviceId);
+    return serviceId !== null &&
+      enabledServiceIds.includes(serviceId) &&
+      isLaunchableWatchOffer(offer);
   });
   return hasEnabled
     ? `${title} is available on ${providers.join(", ")}.`

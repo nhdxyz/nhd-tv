@@ -16,6 +16,7 @@ export interface VoiceCommandContext {
   muted: boolean | null;
   playbackMode: VoicePlaybackMode;
   playing: boolean | null;
+  serviceOrder: readonly string[];
 }
 
 export type VoiceCommandPlan =
@@ -30,8 +31,17 @@ export type VoiceCommandPlan =
     launchAllowed: boolean;
   };
 
-function supportedEnabledServices(serviceIds: readonly string[]): VoiceServiceId[] {
-  return VOICE_SERVICE_IDS.filter((serviceId) => serviceIds.includes(serviceId));
+function supportedEnabledServices(
+  enabledServiceIds: readonly string[],
+  serviceOrder: readonly string[]
+): VoiceServiceId[] {
+  const enabled = new Set(enabledServiceIds);
+  const ordered = [...serviceOrder, ...VOICE_SERVICE_IDS];
+  return ordered.filter((serviceId, index): serviceId is VoiceServiceId =>
+    VOICE_SERVICE_IDS.includes(serviceId as VoiceServiceId) &&
+    enabled.has(serviceId) &&
+    ordered.indexOf(serviceId) === index
+  );
 }
 
 function impliedProvider(intent: VoiceMediaIntent): VoiceProviderHint | null {
@@ -91,7 +101,7 @@ function mediaPlan(
   intent: VoiceMediaIntent,
   context: VoiceCommandContext
 ): VoiceCommandPlan {
-  const enabled = supportedEnabledServices(context.enabledServiceIds);
+  const enabled = supportedEnabledServices(context.enabledServiceIds, context.serviceOrder);
   const provider = impliedProvider(intent);
   const candidateServiceIds = provider === null
     ? enabled

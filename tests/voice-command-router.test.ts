@@ -10,7 +10,8 @@ const context: VoiceCommandContext = {
   enabledServiceIds: ["netflix", "youtube"],
   muted: null,
   playbackMode: "confirm",
-  playing: true
+  playing: true,
+  serviceOrder: ["youtube", "netflix"]
 };
 
 function mediaIntent(overrides: Partial<VoiceMediaIntent> = {}): VoiceMediaIntent {
@@ -89,6 +90,12 @@ describe("voice command planning", () => {
     expect(planVoiceCommand(mediaIntent({ providerHint: "spotify" }), context)).toMatchObject({
       candidateServiceIds: [],
       launchAllowed: false
+    });
+  });
+
+  it("uses the user's lineup order when several services could handle a title", () => {
+    expect(planVoiceCommand(mediaIntent(), context)).toMatchObject({
+      candidateServiceIds: ["youtube", "netflix"]
     });
   });
 

@@ -24,6 +24,20 @@ const VOICE_CONTROL_ACTIONS = [
 const VOICE_CONFIRMATION_ACTIONS = ["cancel", "confirm"] as const;
 const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
 const VOICE_MEDIA_REFERENCES = ["candidate", "current-media", "last-media"] as const;
+const VOICE_SEMANTIC_CONTROL_ACTIONS = [
+  "captions-off",
+  "captions-on",
+  "fullscreen-enter",
+  "fullscreen-exit",
+  "next",
+  "previous",
+  "restart",
+  "seek-absolute",
+  "seek-relative",
+  "skip-ad",
+  "skip-intro",
+  "skip-recap"
+] as const;
 const VOICE_CURRENT_MEDIA_ACTIONS = [
   "end-time",
   "episode",
@@ -52,6 +66,9 @@ const VOICE_INTENT_KEYS = [
   "confirmationAction",
   "currentMediaAction",
   "controlAction",
+  "semanticControlAction",
+  "offsetSeconds",
+  "positionSeconds",
   "mediaAction",
   "reference",
   "ordinal",
@@ -72,6 +89,7 @@ export type VoiceMediaReference = (typeof VOICE_MEDIA_REFERENCES)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
 export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
+export type VoiceSemanticControlAction = (typeof VOICE_SEMANTIC_CONTROL_ACTIONS)[number];
 
 export interface VoiceControlIntent {
   action: VoiceControlAction;
@@ -120,6 +138,14 @@ export interface VoiceMediaReferenceIntent {
   reference: VoiceMediaReference;
 }
 
+/** A provider-aware playback operation with explicit, bounded parameters. */
+export interface VoiceSemanticControlIntent {
+  action: VoiceSemanticControlAction;
+  kind: "semantic-control";
+  offsetSeconds: number | null;
+  positionSeconds: number | null;
+}
+
 export type VoiceIntent =
   | VoiceAppIntent
   | VoiceConfirmationIntent
@@ -127,6 +153,7 @@ export type VoiceIntent =
   | VoiceCurrentMediaIntent
   | VoiceMediaIntent
   | VoiceMediaReferenceIntent
+  | VoiceSemanticControlIntent
   | VoiceUnknownIntent;
 
 export const VOICE_INTENT_JSON_SCHEMA = {
@@ -140,6 +167,7 @@ export const VOICE_INTENT_JSON_SCHEMA = {
         "current-media",
         "media",
         "media-reference",
+        "semantic-control",
         "unknown"
       ],
       type: "string"
@@ -161,6 +189,18 @@ export const VOICE_INTENT_JSON_SCHEMA = {
         { enum: VOICE_CONTROL_ACTIONS, type: "string" },
         { type: "null" }
       ]
+    },
+    semanticControlAction: {
+      anyOf: [
+        { enum: VOICE_SEMANTIC_CONTROL_ACTIONS, type: "string" },
+        { type: "null" }
+      ]
+    },
+    offsetSeconds: {
+      anyOf: [{ maximum: 3_600, minimum: -3_600, type: "integer" }, { type: "null" }]
+    },
+    positionSeconds: {
+      anyOf: [{ maximum: 86_400, minimum: 0, type: "integer" }, { type: "null" }]
     },
     mediaAction: {
       anyOf: [
@@ -236,6 +276,16 @@ function boundedInteger(value: unknown, maximum: number): number | null {
   return value as number;
 }
 
+function boundedIntegerRange(value: unknown, minimum: number, maximum: number): number | null {
+  if (value === null) {
+    return null;
+  }
+  if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new TypeError("The voice intent contains an invalid number.");
+  }
+  return value as number;
+}
+
 function boundedText(value: unknown, maximum: number, nullable: false): string;
 function boundedText(value: unknown, maximum: number, nullable: true): string | null;
 function boundedText(value: unknown, maximum: number, nullable: boolean): string | null {
@@ -271,6 +321,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "confirmationAction",
       "currentMediaAction",
       "controlAction",
+      "semanticControlAction",
+      "offsetSeconds",
+      "positionSeconds",
       "mediaAction",
       "reference",
       "ordinal",
@@ -304,6 +357,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       !allNull(value, [
         "confirmationAction",
         "currentMediaAction",
+        "semanticControlAction",
+        "offsetSeconds",
+        "positionSeconds",
         "mediaAction",
         "reference",
         "ordinal",
@@ -327,6 +383,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       !allNull(value, [
         "confirmationAction",
         "controlAction",
+        "semanticControlAction",
+        "offsetSeconds",
+        "positionSeconds",
         "mediaAction",
         "reference",
         "ordinal",
@@ -356,6 +415,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "confirmationAction",
       "currentMediaAction",
       "controlAction",
+      "semanticControlAction",
+      "offsetSeconds",
+      "positionSeconds",
       "mediaType",
       "title",
       "creator",
@@ -385,11 +447,57 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     };
   }
 
+  if (value.kind === "semantic-control") {
+    if (!allNull(value, [
+      "confirmationAction",
+      "currentMediaAction",
+      "controlAction",
+      "mediaAction",
+      "reference",
+      "ordinal",
+      "mediaType",
+      "title",
+      "creator",
+      "season",
+      "episode",
+      "providerHint",
+      "recency"
+    ])) {
+      throw new TypeError("The semantic-control voice intent is inconsistent.");
+    }
+
+    if (!isOneOf(value.semanticControlAction, VOICE_SEMANTIC_CONTROL_ACTIONS)) {
+      throw new TypeError("The semantic-control voice intent is incomplete.");
+    }
+    const offsetSeconds = boundedIntegerRange(value.offsetSeconds, -3_600, 3_600);
+    const positionSeconds = boundedIntegerRange(value.positionSeconds, 0, 86_400);
+    if (value.semanticControlAction === "seek-relative") {
+      if (offsetSeconds === null || offsetSeconds === 0 || positionSeconds !== null) {
+        throw new TypeError("Relative seeks require only a nonzero offset.");
+      }
+    } else if (value.semanticControlAction === "seek-absolute") {
+      if (positionSeconds === null || offsetSeconds !== null) {
+        throw new TypeError("Absolute seeks require only a playback position.");
+      }
+    } else if (offsetSeconds !== null || positionSeconds !== null) {
+      throw new TypeError("Simple semantic controls cannot contain seek parameters.");
+    }
+    return {
+      action: value.semanticControlAction,
+      kind: "semantic-control",
+      offsetSeconds,
+      positionSeconds
+    };
+  }
+
   if (
     value.kind !== "media" ||
     value.confirmationAction !== null ||
     value.currentMediaAction !== null ||
     value.controlAction !== null ||
+    value.semanticControlAction !== null ||
+    value.offsetSeconds !== null ||
+    value.positionSeconds !== null ||
     value.reference !== null ||
     value.ordinal !== null
   ) {

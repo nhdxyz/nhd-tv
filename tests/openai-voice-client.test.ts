@@ -23,6 +23,9 @@ function outputIntent(overrides: Record<string, unknown> = {}) {
     confirmationAction: null,
     currentMediaAction: null,
     controlAction: null,
+    semanticControlAction: null,
+    offsetSeconds: null,
+    positionSeconds: null,
     mediaAction: "play",
     reference: null,
     ordinal: null,
@@ -84,6 +87,9 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain(
         "Never reinterpret a media title, playback control, or longer request"
       );
+      expect(body.instructions).toContain("Use kind=semantic-control");
+      expect(body.instructions).toContain("A relative seek requires only offsetSeconds");
+      expect(body.instructions).toContain("A bare fast-forward or rewind with no amount remains");
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       expect(body.instructions).toContain("Use kind=app");
       expect(body.instructions).toContain("Use kind=current-media");
@@ -144,6 +150,28 @@ describe("OpenAI voice client", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["Rewind thirty seconds", "seek-relative", -30, null],
+    ["Skip ahead two minutes", "seek-relative", 120, null],
+    ["Go to 12:34", "seek-absolute", null, 754],
+    ["Start over", "restart", null, null],
+    ["Next episode", "next", null, null],
+    ["Turn captions on", "captions-on", null, null],
+    ["Exit fullscreen", "fullscreen-exit", null, null]
+  ] as const)(
+    "routes the semantic playback request %s locally",
+    async (phrase, action, offsetSeconds, positionSeconds) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+        action,
+        kind: "semantic-control",
+        offsetSeconds,
+        positionSeconds
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     ["Play it", "play", "last-media", null, null],

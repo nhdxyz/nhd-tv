@@ -10,6 +10,9 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     confirmationAction: null,
     currentMediaAction: null,
     controlAction: null,
+    semanticControlAction: null,
+    offsetSeconds: null,
+    positionSeconds: null,
     mediaAction: "play",
     reference: null,
     ordinal: null,
@@ -32,6 +35,9 @@ describe("voice intent boundary", () => {
       "confirmationAction",
       "currentMediaAction",
       "controlAction",
+      "semanticControlAction",
+      "offsetSeconds",
+      "positionSeconds",
       "mediaAction",
       "reference",
       "ordinal",
@@ -76,6 +82,102 @@ describe("voice intent boundary", () => {
       mediaAction: null,
       mediaType: null
     }))).toThrow("confirmation intent is inconsistent");
+  });
+
+  it("parses bounded relative and absolute semantic seeks", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      offsetSeconds: -30,
+      semanticControlAction: "seek-relative",
+      title: null
+    }))).toEqual({
+      action: "seek-relative",
+      kind: "semantic-control",
+      offsetSeconds: -30,
+      positionSeconds: null
+    });
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      positionSeconds: 754,
+      semanticControlAction: "seek-absolute",
+      title: null
+    }))).toEqual({
+      action: "seek-absolute",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: 754
+    });
+  });
+
+  it.each([
+    "restart",
+    "next",
+    "previous",
+    "skip-intro",
+    "skip-recap",
+    "skip-ad",
+    "captions-on",
+    "captions-off",
+    "fullscreen-enter",
+    "fullscreen-exit"
+  ] as const)("parses the parameter-free semantic control %s", (semanticControlAction) => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      semanticControlAction,
+      title: null
+    }))).toEqual({
+      action: semanticControlAction,
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: null
+    });
+  });
+
+  it("strictly isolates and bounds semantic control parameters", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      offsetSeconds: 0,
+      semanticControlAction: "seek-relative",
+      title: null
+    }))).toThrow("nonzero offset");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      offsetSeconds: 3_601,
+      semanticControlAction: "seek-relative",
+      title: null
+    }))).toThrow("invalid number");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      positionSeconds: 86_401,
+      semanticControlAction: "seek-absolute",
+      title: null
+    }))).toThrow("invalid number");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      offsetSeconds: 30,
+      semanticControlAction: "restart",
+      title: null
+    }))).toThrow("cannot contain seek parameters");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      semanticControlAction: "restart"
+    }))).toThrow("semantic-control voice intent is inconsistent");
   });
 
   it("parses a generic title request without choosing a provider", () => {
@@ -244,6 +346,9 @@ describe("voice intent boundary", () => {
       confirmationAction: null,
       currentMediaAction: null,
       controlAction: "pause",
+      semanticControlAction: null,
+      offsetSeconds: null,
+      positionSeconds: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -260,6 +365,9 @@ describe("voice intent boundary", () => {
       confirmationAction: null,
       currentMediaAction: null,
       controlAction: "close-app",
+      semanticControlAction: null,
+      offsetSeconds: null,
+      positionSeconds: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -276,6 +384,9 @@ describe("voice intent boundary", () => {
       confirmationAction: null,
       currentMediaAction: null,
       controlAction: "next-track",
+      semanticControlAction: null,
+      offsetSeconds: null,
+      positionSeconds: null,
       mediaAction: null,
       reference: null,
       ordinal: null,
@@ -328,6 +439,9 @@ describe("voice intent boundary", () => {
       confirmationAction: null,
       currentMediaAction: null,
       controlAction: null,
+      semanticControlAction: null,
+      offsetSeconds: null,
+      positionSeconds: null,
       mediaAction: null,
       reference: null,
       ordinal: null,

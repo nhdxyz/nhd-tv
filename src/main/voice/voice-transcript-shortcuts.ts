@@ -5,7 +5,8 @@ import type {
   VoiceIntent,
   VoiceMediaAction,
   VoiceMediaReference,
-  VoiceProviderHint
+  VoiceProviderHint,
+  VoiceSemanticControlAction
 } from "./voice-intent";
 import {
   isKnownVoiceAppName,
@@ -145,12 +146,225 @@ const REFERENCE_PROVIDER_HINTS: Readonly<Record<string, VoiceProviderHint>> = {
   youtube: "youtube"
 };
 
+const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<Record<string, VoiceSemanticControlAction>> = {
+  "captions off": "captions-off",
+  "captions on": "captions-on",
+  "enter full screen": "fullscreen-enter",
+  "enter fullscreen": "fullscreen-enter",
+  "exit full screen": "fullscreen-exit",
+  "exit fullscreen": "fullscreen-exit",
+  "go full screen": "fullscreen-enter",
+  "go fullscreen": "fullscreen-enter",
+  "leave full screen": "fullscreen-exit",
+  "leave fullscreen": "fullscreen-exit",
+  "make it full screen": "fullscreen-enter",
+  "make it fullscreen": "fullscreen-enter",
+  "make this full screen": "fullscreen-enter",
+  "make this fullscreen": "fullscreen-enter",
+  "next episode": "next",
+  "next video": "next",
+  "play next episode": "next",
+  "play next video": "next",
+  "play previous episode": "previous",
+  "play previous video": "previous",
+  "previous episode": "previous",
+  "previous video": "previous",
+  restart: "restart",
+  "restart playback": "restart",
+  "restart this": "restart",
+  "skip ad": "skip-ad",
+  "skip intro": "skip-intro",
+  "skip recap": "skip-recap",
+  "skip the ad": "skip-ad",
+  "skip the intro": "skip-intro",
+  "skip the recap": "skip-recap",
+  "start over": "restart",
+  "start this over": "restart",
+  "subtitles off": "captions-off",
+  "subtitles on": "captions-on",
+  "turn captions off": "captions-off",
+  "turn captions on": "captions-on",
+  "turn off captions": "captions-off",
+  "turn off subtitles": "captions-off",
+  "turn on captions": "captions-on",
+  "turn on subtitles": "captions-on",
+  "turn subtitles off": "captions-off",
+  "turn subtitles on": "captions-on"
+};
+
+const SMALL_NUMBER_WORDS: Readonly<Record<string, number>> = {
+  a: 1,
+  an: 1,
+  eight: 8,
+  eighteen: 18,
+  eleven: 11,
+  fifteen: 15,
+  five: 5,
+  four: 4,
+  fourteen: 14,
+  nine: 9,
+  nineteen: 19,
+  one: 1,
+  seven: 7,
+  seventeen: 17,
+  six: 6,
+  sixteen: 16,
+  ten: 10,
+  thirteen: 13,
+  three: 3,
+  twelve: 12,
+  twenty: 20,
+  two: 2,
+  zero: 0
+};
+
+const TENS_NUMBER_WORDS: Readonly<Record<string, number>> = {
+  eighty: 80,
+  fifty: 50,
+  forty: 40,
+  ninety: 90,
+  seventy: 70,
+  sixty: 60,
+  thirty: 30
+};
+
+function englishInteger(value: string): number | null {
+  if (/^\d+$/.test(value)) {
+    const numeric = Number(value);
+    return Number.isSafeInteger(numeric) ? numeric : null;
+  }
+
+  const tokens = value.split(" ").filter((token) => token !== "and");
+  if (tokens.length === 0) return null;
+  let current = 0;
+  let total = 0;
+  let sawNumber = false;
+  for (const token of tokens) {
+    const small = SMALL_NUMBER_WORDS[token];
+    if (small !== undefined) {
+      current += small;
+      sawNumber = true;
+      continue;
+    }
+    const tens = TENS_NUMBER_WORDS[token];
+    if (tens !== undefined) {
+      current += tens;
+      sawNumber = true;
+      continue;
+    }
+    if (token === "hundred" && current > 0 && current < 10) {
+      current *= 100;
+      sawNumber = true;
+      continue;
+    }
+    if (token === "thousand" && current > 0) {
+      total += current * 1_000;
+      current = 0;
+      sawNumber = true;
+      continue;
+    }
+    return null;
+  }
+  return sawNumber ? total + current : null;
+}
+
+function durationSeconds(value: string): number | null {
+  const tokens = value.trim().split(" ");
+  const factors: Readonly<Record<string, number>> = {
+    hour: 3_600,
+    hours: 3_600,
+    minute: 60,
+    minutes: 60,
+    second: 1,
+    seconds: 1
+  };
+  let segmentStart = 0;
+  let previousFactor = Number.POSITIVE_INFINITY;
+  let total = 0;
+  let sawUnit = false;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const factor = factors[tokens[index] ?? ""];
+    if (factor === undefined) continue;
+    const amount = englishInteger(tokens.slice(segmentStart, index).join(" "));
+    if (amount === null || amount < 0 || factor >= previousFactor) return null;
+    total += amount * factor;
+    previousFactor = factor;
+    segmentStart = index + 1;
+    sawUnit = true;
+  }
+  return sawUnit && segmentStart === tokens.length ? total : null;
+}
+
+function absolutePositionSeconds(value: string): number | null {
+  const clock = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (clock !== null) {
+    const first = Number(clock[1]);
+    const second = Number(clock[2]);
+    const third = clock[3] === undefined ? null : Number(clock[3]);
+    if (second >= 60 || (third !== null && third >= 60)) return null;
+    const total = third === null
+      ? first * 60 + second
+      : first * 3_600 + second * 60 + third;
+    return total <= 86_400 ? total : null;
+  }
+  const total = durationSeconds(value.replace(/ (?:in|mark)$/, ""));
+  return total !== null && total <= 86_400 ? total : null;
+}
+
+function semanticControlShortcut(phrase: string): VoiceIntent | null {
+  const simpleAction = SIMPLE_SEMANTIC_CONTROL_PHRASES[phrase];
+  if (simpleAction !== undefined) {
+    return {
+      action: simpleAction,
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: null
+    };
+  }
+
+  const forward = /^(?:fast forward|go forward|jump ahead|move forward|skip ahead|skip forward) (?:by )?(.+)$/.exec(
+    phrase
+  );
+  const backward = /^(?:go back|jump back|move back|rewind|skip back) (?:by )?(.+)$/.exec(
+    phrase
+  );
+  const relative = forward ?? backward;
+  if (relative !== null) {
+    const seconds = durationSeconds(relative[1] ?? "");
+    if (seconds !== null && seconds > 0 && seconds <= 3_600) {
+      return {
+        action: "seek-relative",
+        kind: "semantic-control",
+        offsetSeconds: forward === null ? -seconds : seconds,
+        positionSeconds: null
+      };
+    }
+  }
+
+  const absolute = /^(?:go|jump|seek|skip) to (?:the )?(?:(?:position|time|timestamp) )?(.+)$/.exec(
+    phrase
+  );
+  if (absolute !== null) {
+    const positionSeconds = absolutePositionSeconds(absolute[1] ?? "");
+    if (positionSeconds !== null) {
+      return {
+        action: "seek-absolute",
+        kind: "semantic-control",
+        offsetSeconds: null,
+        positionSeconds
+      };
+    }
+  }
+  return null;
+}
+
 function normalizedPhrase(value: string): string {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("en-US")
-    .replace(/[^a-z0-9+]+/g, " ")
+    .replace(/[^a-z0-9+:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -191,6 +405,8 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   }
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };
+  const semanticControl = semanticControlShortcut(phrase);
+  if (semanticControl !== null) return semanticControl;
   const confirmation = CONFIRMATION_PHRASES[phrase];
   if (confirmation !== undefined) {
     return { action: confirmation, kind: "confirmation" };

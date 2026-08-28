@@ -56,10 +56,77 @@ describe("common voice utterance contract", () => {
     expect(voiceTranscriptShortcut("Home")).toBeNull();
     expect(voiceTranscriptShortcut("Play Up")).toBeNull();
     expect(voiceTranscriptShortcut("Go to Outdoor Boys channel")).toBeNull();
-    expect(voiceTranscriptShortcut("Rewind thirty seconds")).toBeNull();
     expect(voiceTranscriptShortcut("Skip")).toBeNull();
-    expect(voiceTranscriptShortcut("Next episode")).toBeNull();
     expect(voiceTranscriptShortcut("Set volume to twenty percent")).toBeNull();
+  });
+
+  it.each([
+    ["Rewind thirty seconds", -30],
+    ["skip ahead 2 minutes", 120],
+    ["go back one minute and thirty seconds", -90],
+    ["fast-forward one hour", 3_600]
+  ] as const)("normalizes the relative seek %s", (phrase, offsetSeconds) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "seek-relative",
+      kind: "semantic-control",
+      offsetSeconds,
+      positionSeconds: null
+    });
+  });
+
+  it.each([
+    ["go to 12:34", 754],
+    ["jump to one hour two minutes and three seconds", 3_723],
+    ["seek to timestamp 0:05", 5],
+    ["go to zero seconds", 0]
+  ] as const)("normalizes the absolute seek %s", (phrase, positionSeconds) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "seek-absolute",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds
+    });
+  });
+
+  it.each([
+    ["restart", "restart"],
+    ["start over", "restart"],
+    ["next episode", "next"],
+    ["previous video", "previous"],
+    ["skip the intro", "skip-intro"],
+    ["skip recap", "skip-recap"],
+    ["skip ad", "skip-ad"],
+    ["turn captions on", "captions-on"],
+    ["subtitles off", "captions-off"],
+    ["go fullscreen", "fullscreen-enter"],
+    ["exit full-screen", "fullscreen-exit"]
+  ] as const)("represents the semantic playback phrase %s", (phrase, action) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action,
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: null
+    });
+  });
+
+  it("preserves legacy controls and titles around semantic-control words", () => {
+    expect(voiceTranscriptShortcut("Back")).toBeNull();
+    expect(voiceTranscriptShortcut("fast forward")).toEqual({
+      action: "fast-forward",
+      kind: "control"
+    });
+    expect(voiceTranscriptShortcut("rewind")).toEqual({ action: "rewind", kind: "control" });
+    expect(voiceTranscriptShortcut("next track")).toEqual({
+      action: "next-track",
+      kind: "control"
+    });
+    expect(voiceTranscriptShortcut("previous track")).toEqual({
+      action: "previous-track",
+      kind: "control"
+    });
+    expect(voiceTranscriptShortcut("Play Next Friday")).toBeNull();
+    expect(voiceTranscriptShortcut("Play Restart the Earth")).toBeNull();
+    expect(voiceTranscriptShortcut("Go to Back to the Future")).toBeNull();
   });
 
   it.each([

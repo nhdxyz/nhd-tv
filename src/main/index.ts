@@ -116,6 +116,7 @@ import { applyYouTubeLatestSort } from "./voice/voice-provider-automation";
 import {
   createVoicePresentationState
 } from "./voice/voice-presentation";
+import { ProviderVoiceOverlay } from "./voice/provider-voice-overlay";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
@@ -160,6 +161,8 @@ let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
+let currentVoicePresentation = createVoicePresentationState("hidden");
+let providerVoiceOverlay: ProviderVoiceOverlay | null = null;
 let voicePresentationTimer: NodeJS.Timeout | null = null;
 let voicePresentationVersion = 0;
 let serviceHost: ServiceHost | null = null;
@@ -263,6 +266,7 @@ function presentAmbientDisplay(preview = false): boolean {
 
   ambientDisplayVisible = true;
   ambientDisplayPreview = preview;
+  syncProviderVoicePresentation();
   try {
     ambientLastSystemIdleSeconds = powerMonitor.getSystemIdleTime();
   } catch {
@@ -336,6 +340,7 @@ function handleServiceStateChanged(): void {
     markAmbientActivity();
   }
   lastServicePlaybackActive = playbackActive;
+  syncProviderVoicePresentation();
   publishHostStatus();
 }
 
@@ -483,9 +488,24 @@ function publishRemoteStatus(status: RemoteStatus): void {
 }
 
 function publishVoicePresentation(presentation: VoicePresentationState): void {
+  currentVoicePresentation = presentation;
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.voicePresentationChanged, presentation);
   }
+  syncProviderVoicePresentation();
+}
+
+function syncProviderVoicePresentation(): void {
+  const providerVisible = serviceHost !== null &&
+    serviceHost.activeServiceId !== null &&
+    !serviceHost.isBackgrounded &&
+    !serviceHost.isQuitPromptVisible &&
+    !ambientDisplayVisible;
+  if (!providerVisible || currentVoicePresentation.phase === "hidden") {
+    providerVoiceOverlay?.hide();
+    return;
+  }
+  providerVoiceOverlay?.show(currentVoicePresentation);
 }
 
 function clearVoicePresentationTimer(): void {
@@ -1115,6 +1135,12 @@ function activeVoiceRegion(): string {
   }
 }
 
+function activeVoiceProfileName(): string | null {
+  const state = localStateStore?.snapshot();
+  if (state === undefined) return null;
+  return state.profiles.find((profile) => profile.id === state.activeProfileId)?.name ?? null;
+}
+
 function usesGoogleWatchDiscovery(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
 ): boolean {
@@ -1162,8 +1188,14 @@ async function executeGoogleWatchPlan(
   if (playbackUrl === null) return null;
 
   await openTrackedService(definition, playbackUrl);
+  const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+    intendedUrl: playbackUrl,
+    profileNameHint: activeVoiceProfileName()
+  }) ?? false;
   return {
-    detail: `Opening ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`,
+    detail: automated && plan.intent.action === "play"
+      ? `Playing ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`
+      : `Opened ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`,
     handled: true
   };
 }
@@ -1228,7 +1260,12 @@ async function executeVoiceCommandPlan(
     ? applyYouTubeLatestSort(baseSearchUrl, plan.intent)
     : baseSearchUrl;
   await openTrackedService(definition, searchUrl);
-  const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent) ?? false;
+  const automated = isVoiceDiscoveryIntent(plan.intent)
+    ? false
+    : await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+      intendedUrl: searchUrl,
+      profileNameHint: activeVoiceProfileName()
+    }) ?? false;
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
@@ -1830,6 +1867,8 @@ async function createMainWindow(): Promise<void> {
     }
   });
 
+  providerVoiceOverlay = new ProviderVoiceOverlay(mainWindow);
+
   serviceHost = new ServiceHost(
     mainWindow,
     handleServiceStateChanged,
@@ -1899,6 +1938,9 @@ async function createMainWindow(): Promise<void> {
     stopAmbientDisplayMonitor();
     clearVoicePresentationTimer();
     voicePresentationVersion += 1;
+    providerVoiceOverlay?.hide();
+    providerVoiceOverlay = null;
+    currentVoicePresentation = createVoicePresentationState("hidden");
     googleWatchCache = null;
     googleWatchResolver = null;
     phoneRemote = null;

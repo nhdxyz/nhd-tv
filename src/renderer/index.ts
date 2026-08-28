@@ -191,7 +191,6 @@ const elements = {
   spotifyNowPlaying: requireElement<HTMLElement>("#spotify-now-playing", "spotify-now-playing"),
   spotifyNowPlayingArt: requireElement<HTMLDivElement>("#spotify-now-playing-art", "spotify-now-playing-art"),
   spotifyNowPlayingArtist: requireElement<HTMLParagraphElement>("#spotify-now-playing-artist", "spotify-now-playing-artist"),
-  spotifyNowPlayingClose: requireElement<HTMLButtonElement>("#spotify-now-playing-close", "spotify-now-playing-close"),
   spotifyNowPlayingNext: requireElement<HTMLButtonElement>("#spotify-now-playing-next", "spotify-now-playing-next"),
   spotifyNowPlayingPlay: requireElement<HTMLButtonElement>("#spotify-now-playing-play", "spotify-now-playing-play"),
   spotifyNowPlayingPosition: requireElement<HTMLTimeElement>("#spotify-now-playing-position", "spotify-now-playing-position"),
@@ -307,10 +306,7 @@ function renderSpotifyHomePlayer(): void {
     ? currentSpotifyPlayback.title ?? "Keep the music going."
     : "Keep the music going.";
   elements.spotifyHomeStatus.textContent = trackReady
-    ? [
-      currentSpotifyPlayback.artist,
-      playing ? "Playing in the background" : "Paused · press Play to resume"
-    ].filter((part) => part !== null).join(" · ")
+    ? currentSpotifyPlayback.artist ?? currentSpotifyPlayback.album ?? "Spotify"
     : backgrounded
       ? currentSpotifyPlayback.signedIn
         ? "Spotify is connected. Choose a track once, then control it here."
@@ -619,7 +615,7 @@ function updateAmbientClock(): void {
   elements.ambientDisplay.setAttribute(
     "aria-label",
     spotifyNowPlayingOpen
-      ? `Spotify Now Playing. ${formattedTime}, ${formattedDate}. Use the remote controls or Back to close.`
+      ? `Spotify Big Screen. ${formattedTime}, ${formattedDate}. Select outside the playback controls or press Back to close.`
       : `Ambient display. ${formattedTime}, ${formattedDate}. Move or press any control to return.`
   );
 }
@@ -901,7 +897,16 @@ elements.spotifyNowPlayingPlay.addEventListener("click", () => {
 elements.spotifyNowPlayingNext.addEventListener("click", () => {
   void sendSpotifyHomeAction("fast-forward", "Next track sent to Spotify.");
 });
-elements.spotifyNowPlayingClose.addEventListener("click", closeSpotifyNowPlaying);
+elements.ambientDisplay.addEventListener("click", (event) => {
+  if (!spotifyNowPlayingOpen) return;
+  if (
+    event.target instanceof Element &&
+    event.target.closest(".spotify-now-playing-transport button") !== null
+  ) {
+    return;
+  }
+  closeSpotifyNowPlaying();
+});
 
 function serviceTile(service: ServiceSummary): HTMLButtonElement {
   const button = document.createElement("button");

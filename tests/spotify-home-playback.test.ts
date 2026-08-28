@@ -55,6 +55,13 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(html).toContain('id="spotify-home-fullscreen"');
     expect(html).toContain('id="spotify-now-playing"');
     expect(html).toContain('id="spotify-now-playing-progress"');
+    expect(html).toContain("Spotify · Big Screen");
+    expect(html).toContain("Big Screen");
+    expect(html).not.toContain('id="spotify-now-playing-close"');
+    expect(renderer).not.toContain("Playing in the background");
+    expect(renderer).not.toContain("press Play to resume");
+    expect(renderer).toContain('elements.ambientDisplay.addEventListener("click"');
+    expect(renderer).toContain('.closest(".spotify-now-playing-transport button")');
     expect(renderer).toContain('sendSpotifyHomeAction("rewind"');
     expect(renderer).toContain('sendSpotifyHomeAction("play-pause"');
     expect(renderer).toContain('sendSpotifyHomeAction("fast-forward"');
@@ -63,5 +70,6 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(css).toContain(".spotify-home-transport .spotify-home-play");
     expect(css).toContain('.ambient-display[data-mode="spotify"]');
     expect(css).toContain(".spotify-now-playing");
+    expect(css).not.toContain(".spotify-now-playing-close");
   });
 });

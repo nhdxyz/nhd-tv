@@ -82,9 +82,15 @@ export function buildSpotifyPlaybackSnapshotScript(
       if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
       return parts.reduce((seconds, part) => seconds * 60 + part, 0);
     };
+    const artworkSize = (item) => {
+      const match = typeof item?.sizes === "string" ? /^(\d+)x(\d+)$/.exec(item.sizes) : null;
+      return match === null ? 0 : Math.max(Number(match[1]), Number(match[2]));
+    };
     const mediaMetadata = navigator.mediaSession?.metadata ?? null;
     const artworkCandidates = [
-      ...(Array.isArray(mediaMetadata?.artwork) ? [...mediaMetadata.artwork].reverse().map((item) => item?.src) : []),
+      ...(Array.isArray(mediaMetadata?.artwork)
+        ? [...mediaMetadata.artwork].sort((left, right) => artworkSize(right) - artworkSize(left)).map((item) => item?.src)
+        : []),
       document.querySelector('[data-testid="now-playing-bar"] [data-testid="cover-art-image"]')?.getAttribute("src")
     ];
     const artworkUrl = artworkCandidates.find((candidate) => {

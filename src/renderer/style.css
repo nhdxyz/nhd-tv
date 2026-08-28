@@ -437,26 +437,6 @@ body[data-ambient-display="true"] {
   transform: translateY(-48%);
 }
 
-.spotify-now-playing-close {
-  position: fixed;
-  top: 2.2rem;
-  right: var(--safe-x);
-  display: grid;
-  width: 3.5rem;
-  height: 3.5rem;
-  padding: 0;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 15%);
-  border-radius: 50%;
-  background: rgb(255 255 255 / 8%);
-  color: #fff;
-}
-
-.spotify-now-playing-close svg {
-  width: 1.35rem;
-  fill: currentColor;
-}
-
 .spotify-now-playing-art {
   display: grid;
   width: 100%;

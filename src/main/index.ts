@@ -476,13 +476,13 @@ async function fetchSpotifyArtworkDataUrl(artworkUrl: string): Promise<string | 
     const source = nativeImage.createFromBuffer(buffer);
     if (source.isEmpty()) return null;
     const size = source.getSize();
-    const resized = Math.max(size.width, size.height) > 800
+    const resized = Math.max(size.width, size.height) > 1_200
       ? source.resize({
         quality: "good",
-        width: Math.max(1, Math.round(size.width * 800 / Math.max(size.width, size.height)))
+        width: Math.max(1, Math.round(size.width * 1_200 / Math.max(size.width, size.height)))
       })
       : source;
-    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(88).toString("base64")}`;
+    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(92).toString("base64")}`;
     spotifyArtworkCache.set(artworkUrl, dataUrl);
     if (spotifyArtworkCache.size > 12) {
       spotifyArtworkCache.delete(spotifyArtworkCache.keys().next().value ?? artworkUrl);

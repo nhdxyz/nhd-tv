@@ -42,6 +42,7 @@ describe("Spotify playback bridge", () => {
     expect(script).toContain('[data-testid="playback-position"]');
     expect(script).toContain('[data-testid="playback-duration"]');
     expect(script).toContain('document.querySelector(\'[data-testid="login-button"]\')');
+    expect(script).toContain("artworkSize(right) - artworkSize(left)");
     expect(script).toContain('"i.scdn.co"');
   });
 

@@ -2064,14 +2064,19 @@ export class ServiceHost {
     const script = buildVoiceSemanticControlScript(definition.id, request);
     if (script === null) return "unsupported";
     try {
-      const rawResult = await waitWithSignal(
-        view.webContents.executeJavaScript(script, true),
-        signal
-      );
-      this.#operationOwner.throwIfSuperseded(operation);
-      signal?.throwIfAborted();
-      if (this.#view !== view || view.webContents.isDestroyed()) return "unavailable";
-      return parseVoiceSemanticControlResult(rawResult);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const rawResult = await waitWithSignal(
+          view.webContents.executeJavaScript(script, true),
+          signal
+        );
+        this.#operationOwner.throwIfSuperseded(operation);
+        signal?.throwIfAborted();
+        if (this.#view !== view || view.webContents.isDestroyed()) return "unavailable";
+        const result = parseVoiceSemanticControlResult(rawResult);
+        if (result !== "needs-follow-up") return result;
+        await delay(250, signal);
+      }
+      return "unavailable";
     } catch {
       signal?.throwIfAborted();
       this.#operationOwner.throwIfSuperseded(operation);

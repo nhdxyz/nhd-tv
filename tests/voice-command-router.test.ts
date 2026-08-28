@@ -108,6 +108,36 @@ describe("voice command planning", () => {
     });
   });
 
+  it("routes bounded semantic playback controls without provider discovery", () => {
+    expect(planVoiceCommand({
+      action: "seek-relative",
+      kind: "semantic-control",
+      offsetSeconds: -120,
+      positionSeconds: null
+    }, context)).toEqual({
+      kind: "semantic-control",
+      request: { action: "seek-relative", offsetSeconds: -120 }
+    });
+    expect(planVoiceCommand({
+      action: "seek-absolute",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: 90
+    }, context)).toEqual({
+      kind: "semantic-control",
+      request: { action: "seek-absolute", positionSeconds: 90 }
+    });
+    expect(planVoiceCommand({
+      action: "skip-intro",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: null
+    }, context)).toEqual({
+      kind: "semantic-control",
+      request: { action: "skip-intro" }
+    });
+  });
+
   it("routes track skipping only through Spotify's semantic controls", () => {
     expect(planVoiceCommand({ action: "next-track", kind: "control" }, {
       ...context,

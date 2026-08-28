@@ -18,6 +18,7 @@ export type VoiceSemanticControlRequest =
 export type VoiceSemanticControlResult =
   | "complete"
   | "acted"
+  | "needs-follow-up"
   | "unavailable"
   | "unsupported";
 
@@ -38,6 +39,7 @@ const SIMPLE_ACTIONS = new Set<VoiceSemanticControlRequest["action"]>([
 const RESULT_VALUES: readonly VoiceSemanticControlResult[] = [
   "complete",
   "acted",
+  "needs-follow-up",
   "unavailable",
   "unsupported"
 ];
@@ -284,7 +286,7 @@ export function buildVoiceSemanticControlScript(
       const menu = firstControl(providerControls.captionsMenu);
       if (menu === null || menu.getAttribute("aria-expanded") === "true") return "unavailable";
       menu.click();
-      return "acted";
+      return "needs-follow-up";
     }
     if (request.action === "fullscreen-enter") {
       if (provider === "spotify") return "unsupported";

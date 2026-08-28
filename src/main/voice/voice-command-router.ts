@@ -5,8 +5,10 @@ import type {
   VoiceCurrentMediaIntent,
   VoiceIntent,
   VoiceMediaIntent,
-  VoiceProviderHint
+  VoiceProviderHint,
+  VoiceSemanticControlIntent
 } from "./voice-intent";
+import type { VoiceSemanticControlRequest } from "./voice-semantic-control";
 import {
   matchVoiceAppService,
   type VoiceAppService
@@ -29,6 +31,7 @@ export interface VoiceCommandContext {
 export type VoiceCommandPlan =
   | { action: RemoteAction; kind: "remote-action" }
   | { action: VoiceCurrentMediaIntent["action"]; kind: "query-current-media" }
+  | { kind: "semantic-control"; request: VoiceSemanticControlRequest }
   | { detail: string; handled?: boolean; kind: "no-op" }
   | { kind: "close-service" }
   | { kind: "launch-service"; serviceId: string; serviceName: string }
@@ -206,6 +209,30 @@ function mediaPlan(
   };
 }
 
+function semanticControlPlan(
+  intent: VoiceSemanticControlIntent
+): VoiceCommandPlan {
+  if (intent.action === "seek-relative") {
+    if (intent.offsetSeconds === null || intent.offsetSeconds === 0) {
+      return { detail: "Please say how far to skip.", handled: false, kind: "no-op" };
+    }
+    return {
+      kind: "semantic-control",
+      request: { action: intent.action, offsetSeconds: intent.offsetSeconds }
+    };
+  }
+  if (intent.action === "seek-absolute") {
+    if (intent.positionSeconds === null) {
+      return { detail: "Please say where to move playback.", handled: false, kind: "no-op" };
+    }
+    return {
+      kind: "semantic-control",
+      request: { action: intent.action, positionSeconds: intent.positionSeconds }
+    };
+  }
+  return { kind: "semantic-control", request: { action: intent.action } };
+}
+
 export function planVoiceCommand(
   intent: VoiceIntent,
   context: VoiceCommandContext
@@ -228,6 +255,7 @@ export function planVoiceCommand(
       kind: "no-op"
     };
   }
+  if (intent.kind === "semantic-control") return semanticControlPlan(intent);
   if (intent.kind === "media-reference") {
     return {
       detail: "I lost track of what that referred to. Please name it again.",

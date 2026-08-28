@@ -275,6 +275,18 @@ describe("voice semantic controls", () => {
     expect(unknownState.clicked).toBe(false);
   });
 
+  it("asks the host for one bounded follow-up after opening Netflix captions", () => {
+    const menu = new FakeElement({ attributes: {
+      "aria-expanded": "false",
+      "aria-label": "Audio & Subtitles"
+    } });
+    expect(execute("netflix", { action: "captions-on" }, {
+      controls: { "control-audio-subtitle": [menu] }
+    })).toBe("needs-follow-up");
+    expect(menu.clicked).toBe(true);
+    expect(parseVoiceSemanticControlResult("needs-follow-up")).toBe("needs-follow-up");
+  });
+
   it("makes fullscreen entry and exit idempotent before using controls", () => {
     const video = new FakeVideo();
     const fullscreen = new FakeElement();

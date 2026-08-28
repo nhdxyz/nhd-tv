@@ -124,6 +124,10 @@ import {
   voiceDiscoveryOpenedDetail
 } from "./voice/voice-media-destination";
 import { buildVoiceWatchClarification } from "./voice/voice-watch-clarification";
+import {
+  verifiedActionForSemanticControl,
+  voiceSemanticControlOutcome
+} from "./voice/voice-semantic-control-result";
 import { GoogleWatchCache } from "./voice/google-watch-cache";
 import {
   GoogleWatchResolver,
@@ -1552,6 +1556,37 @@ async function executeVoiceCommandPlanCore(
     );
   }
   const operation = serviceHost?.beginOperation();
+  if (plan.kind === "semantic-control") {
+    const activeServiceId = serviceHost?.activeServiceId ?? null;
+    const definition = activeServiceId === null
+      ? null
+      : getServiceDefinition(activeServiceId);
+    if (serviceHost === null || definition === null) {
+      return {
+        detail: "Open something before using that playback control.",
+        handled: false
+      };
+    }
+    presentPhoneVoiceProgress(`Controlling ${definition.name}…`);
+    const result = await serviceHost.executeVoiceSemanticControl(
+      plan.request,
+      signal,
+      operation
+    );
+    signal?.throwIfAborted();
+    const outcome = voiceSemanticControlOutcome(plan.request, result, definition.name);
+    if (outcome.handled && voiceContextStore !== null) {
+      syncVoiceContextFromServiceHost();
+      const snapshot = voiceContextStore.snapshot();
+      voiceContextStore.recordVerifiedAction({
+        kind: verifiedActionForSemanticControl(plan.request),
+        positionSeconds: plan.request.action === "seek-absolute"
+          ? plan.request.positionSeconds
+          : snapshot.liveMedia?.positionSeconds ?? null
+      }, snapshot.revisions);
+    }
+    return outcome;
+  }
   if (plan.kind === "remote-action") {
     presentPhoneVoiceProgress("Sending that control…");
     const result = await handleRemoteAction(plan.action, signal, operation);

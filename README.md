@@ -24,6 +24,8 @@ The first spike uses Castlabs Electron for Content Security (ECS) to run a trust
 
 YouTube also has a local, build-free [Manifest V3 TV Mode extension](extensions/youtube-tv/README.md). NHD-TV loads it into the isolated YouTube session, applies the persisted TV Mode/scale/safe-area settings, and bridges the existing keyboard, gamepad, and paired-phone action router into its richer 10-foot navigator. NHD-TV remains the sole controller-input owner, preventing duplicate actions. The same directory can be loaded unpacked in Chrome-family browsers, where its toolbar popup enables or completely disables TV Mode, adjusts presentation scale, and reports selector health without reloading the page.
 
+Spotify has its own local [TV Mode extension](extensions/spotify-tv/README.md). It presents a remote-first sign-in screen, replaces the desktop sidebar with TV-scale Home/Search/Your Library navigation, enlarges provider-owned shelves and playback controls, and routes one normalized D-pad action at a time through visible cards, tracks, and controls. Spotify still owns authentication, recommendations, playback, ads, and account state. NHD-TV removes the Electron token from Spotify's user agent so the supported Web Player loads, keeps Spotify-owned playback and account navigation in the active service view, and retains qualifying secure Spotify session cookies locally for up to 30 days so a normal app restart does not become a mandatory login.
+
 ## Development setup
 
 Prerequisites:
@@ -79,6 +81,7 @@ Run signup yourself in a private terminal; do not share the account password or 
 - [Search design and research](docs/search-design.md)
 - [YouTube authentication decision](docs/youtube-auth.md)
 - [YouTube TV Mode extension, research, controls, and selector repair](docs/youtube-tv-extension.md)
+- [Spotify TV Mode extension, authentication, playback, and remote controls](docs/spotify-tv-extension.md)
 
 Streaming-service credentials and cookies stay in per-service persistent Electron session partitions and must never be committed.
 

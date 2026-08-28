@@ -66,6 +66,7 @@ import {
   serviceUserAgent,
   serviceWindowDisposition
 } from "./service-browser-policy";
+import { persistentSpotifyCookieDetails } from "./service-session-persistence";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -604,6 +605,17 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
   serviceSession.on("will-download", (event) => {
     event.preventDefault();
   });
+
+  if (definition.id === "spotify") {
+    serviceSession.cookies.on("changed", (_event, cookie, _cause, removed) => {
+      if (removed) return;
+      const persistentCookie = persistentSpotifyCookieDetails(cookie);
+      if (persistentCookie === null) return;
+      void serviceSession.cookies.set(persistentCookie)
+        .then(() => serviceSession.cookies.flushStore())
+        .catch(() => undefined);
+    });
+  }
 
   configuredSessions.add(serviceSession);
 }

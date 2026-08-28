@@ -102,11 +102,24 @@ export const REMOTE_HTML = `<!doctype html>
           <button class="remote-icon-button" data-action="back" type="button" disabled aria-label="Back. Hold to force return Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <span class="remote-top-caption" aria-hidden="true">Control</span>
+          <button class="voice-button" id="voice-button" type="button" disabled aria-label="Hold to speak a voice command" aria-describedby="voice-help">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
+            <span>Hold</span>
+          </button>
           <button class="remote-icon-button" data-action="home" type="button" disabled aria-label="NHD Home">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10.5 8-6.5 8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" /><path d="M9.5 20v-6h5v6" /></svg>
           </button>
         </div>
+
+        <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
+        <section class="voice-confirm" id="voice-confirm" aria-live="polite" hidden>
+          <small>Confirm voice command</small>
+          <strong id="voice-confirm-copy">Play this title?</strong>
+          <div>
+            <button id="voice-confirm-cancel" type="button">Cancel</button>
+            <button id="voice-confirm-play" type="button">Play</button>
+          </div>
+        </section>
 
         <div class="control-surface">
           <div class="dpad" aria-label="Directional pad">
@@ -328,6 +341,7 @@ input {
 #connection-state.error { color: #fda4af; }
 
 .remote-card {
+  position: relative;
   display: flex;
   min-height: 0;
   margin-top: 0.45rem;
@@ -396,13 +410,6 @@ input {
   min-height: 3.55rem;
   justify-content: space-between;
 }
-.remote-top-caption {
-  color: #666660;
-  font-size: 0.52rem;
-  font-weight: 750;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
 .remote-icon-button {
   display: grid;
   width: 2.8rem;
@@ -413,6 +420,80 @@ input {
   background: #1e1e1c;
   color: #c9c9c4;
 }
+
+.voice-button {
+  display: grid;
+  width: 3.15rem;
+  height: 3.15rem;
+  padding: 0.35rem 0 0.28rem;
+  place-items: center;
+  gap: 0.05rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 0 0 0.18rem color-mix(in srgb, var(--accent) 13%, transparent);
+}
+.voice-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+.voice-button span { font-size: 0.47rem; font-weight: 950; letter-spacing: 0.06em; text-transform: uppercase; }
+.voice-button:not(:disabled):active,
+.voice-button.is-recording { transform: scale(0.94); }
+.voice-button.is-recording {
+  background: #ff465f;
+  color: #fff;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+.voice-button.is-processing { animation: voice-pulse 0.7s ease-in-out infinite; }
+.voice-button:disabled { background: #2a2a27; color: #777771; box-shadow: none; }
+.voice-help {
+  min-height: 0.8rem;
+  margin: -0.16rem 0 0.14rem;
+  overflow: hidden;
+  color: #74746e;
+  font-size: 0.55rem;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-confirm {
+  position: absolute;
+  z-index: 5;
+  right: 0.8rem;
+  left: 0.8rem;
+  top: 7.6rem;
+  display: grid;
+  padding: 1rem;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, #30302d);
+  border-radius: 1rem;
+  background: rgb(25 25 23 / 98%);
+  box-shadow: 0 1.2rem 2.5rem rgb(0 0 0 / 62%);
+}
+.voice-confirm[hidden] { display: none; }
+.voice-confirm small { color: var(--accent); font-size: 0.55rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
+.voice-confirm strong { font-size: 0.9rem; line-height: 1.35; }
+.voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.voice-confirm button {
+  min-height: 2.7rem;
+  border: 1px solid #3b3b37;
+  border-radius: 0.7rem;
+  background: #242422;
+  color: #eee;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+#voice-confirm-play { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 0 0.48rem rgb(255 70 95 / 13%); } }
 .remote-icon-button svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -843,6 +924,12 @@ export const REMOTE_JS = `(() => {
   const activeServiceLabel = document.querySelector("#active-service-label");
   const controlModeCopy = document.querySelector("#control-mode-copy");
   const searchToggleCopy = document.querySelector("#search-toggle-copy");
+  const voiceButton = document.querySelector("#voice-button");
+  const voiceHelp = document.querySelector("#voice-help");
+  const voiceConfirm = document.querySelector("#voice-confirm");
+  const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
+  const voiceConfirmCancel = document.querySelector("#voice-confirm-cancel");
+  const voiceConfirmPlay = document.querySelector("#voice-confirm-play");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
   let requestId = null;
   let pointerGesture = null;
@@ -859,6 +946,18 @@ export const REMOTE_JS = `(() => {
   let backHoldTimer = null;
   let backHoldTriggered = false;
   let currentSearchLabel = "Search NHD-TV";
+  let remoteEnabled = false;
+  let voiceAvailable = false;
+  let voiceAvailabilityDetail = "Voice control is still checking.";
+  let voiceRecorder = null;
+  let voiceStream = null;
+  let voiceChunks = [];
+  let voiceStartedAt = 0;
+  let voiceStopTimer = null;
+  let voiceStarting = false;
+  let voiceReleaseRequested = false;
+  let voiceProcessing = false;
+  let pendingVoiceConfirmation = null;
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const DIRECTION_REPEAT_DELAY_MS = 380;
@@ -868,6 +967,13 @@ export const REMOTE_JS = `(() => {
   const edgeScroll = (${precisionEdgeScroll.toString()});
   const horizontalScroll = (${precisionHorizontalScroll.toString()});
   const createTextPump = (${createLatestRemoteTextPump.toString()});
+  const supportedVoiceMimeType = (() => {
+    if (typeof MediaRecorder === "undefined") return null;
+    for (const mimeType of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"]) {
+      if (MediaRecorder.isTypeSupported(mimeType)) return mimeType;
+    }
+    return null;
+  })();
 
   for (const gestureEvent of ["gesturestart", "gesturechange"]) {
     document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
@@ -886,6 +992,29 @@ export const REMOTE_JS = `(() => {
     dot.setAttribute("aria-hidden", "true");
     state.replaceChildren(dot, document.createTextNode(message));
     state.className = kind || "";
+  }
+
+  function updateVoiceButton() {
+    const browserReady = window.isSecureContext &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function" &&
+      supportedVoiceMimeType !== null;
+    const ready = remoteEnabled && voiceAvailable && browserReady;
+    voiceButton.disabled = !ready || voiceProcessing;
+    voiceButton.classList.toggle("is-processing", voiceProcessing);
+    voiceHelp.textContent = !window.isSecureContext
+      ? "Voice requires the secure Tailscale QR code."
+      : supportedVoiceMimeType === null
+        ? "This browser cannot record a supported voice format."
+        : voiceAvailabilityDetail;
+  }
+
+  function renderVoiceStatus(status) {
+    voiceAvailable = Boolean(status && status.available === true);
+    voiceAvailabilityDetail = status && typeof status.detail === "string"
+      ? status.detail.replace(/\s+/g, " ").trim().slice(0, 160)
+      : "Voice control is unavailable.";
+    updateVoiceButton();
   }
 
   function renderContext(context) {
@@ -909,12 +1038,14 @@ export const REMOTE_JS = `(() => {
   }
 
   function setEnabled(enabled) {
+    remoteEnabled = enabled;
     document.body.classList.toggle("is-connected", enabled);
     buttons.forEach((button) => { button.disabled = !enabled; });
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
     controlMode.disabled = !enabled;
     quickLaunchToggle.disabled = !enabled;
+    updateVoiceButton();
     if (!enabled) {
       resetTextEntry();
       closeQuickLaunch();
@@ -933,11 +1064,186 @@ export const REMOTE_JS = `(() => {
     const response = await fetch(path, options);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(body.error || "Remote request failed");
+      const error = new Error(body.error || body.detail || "Remote request failed");
       error.status = response.status;
       throw error;
     }
     return body;
+  }
+
+  function closeVoiceConfirmation() {
+    pendingVoiceConfirmation = null;
+    voiceConfirm.hidden = true;
+  }
+
+  function stopVoiceStream() {
+    if (voiceStream !== null) {
+      voiceStream.getTracks().forEach((track) => track.stop());
+      voiceStream = null;
+    }
+  }
+
+  function clearVoiceStopTimer() {
+    if (voiceStopTimer !== null) {
+      clearTimeout(voiceStopTimer);
+      voiceStopTimer = null;
+    }
+  }
+
+  async function uploadVoiceRecording(blob, durationMs) {
+    if (!controllerToken) return;
+    voiceProcessing = true;
+    updateVoiceButton();
+    setState("Understanding voice command…");
+    try {
+      const result = await jsonRequest("/api/voice", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": blob.type,
+          "X-NHD-TV-Audio-Duration-Ms": String(durationMs)
+        },
+        body: blob
+      });
+      if (
+        result.outcome === "confirmation-required" &&
+        typeof result.confirmationId === "string"
+      ) {
+        pendingVoiceConfirmation = result.confirmationId;
+        voiceConfirmCopy.textContent = typeof result.detail === "string"
+          ? result.detail.slice(0, 200)
+          : "Play this title?";
+        voiceConfirm.hidden = false;
+        setState("Confirm on your phone", "connected");
+        if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+      } else {
+        closeVoiceConfirmation();
+        setState(
+          typeof result.detail === "string" ? result.detail : "Voice command sent",
+          result.outcome === "failed" ? "error" : "connected"
+        );
+        if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
+      }
+    } catch (error) {
+      setState(error instanceof Error ? error.message : "Voice command failed", "error");
+    } finally {
+      voiceProcessing = false;
+      updateVoiceButton();
+    }
+  }
+
+  function finishVoiceRecording() {
+    const recorder = voiceRecorder;
+    if (recorder === null || recorder.state === "inactive") return;
+    recorder.stop();
+  }
+
+  async function startVoiceRecording() {
+    if (
+      voiceButton.disabled ||
+      voiceStarting ||
+      voiceRecorder !== null ||
+      voiceProcessing ||
+      supportedVoiceMimeType === null
+    ) return;
+
+    closeVoiceConfirmation();
+    voiceStarting = true;
+    voiceReleaseRequested = false;
+    setState("Starting microphone…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true
+        },
+        video: false
+      });
+      if (voiceReleaseRequested) {
+        stream.getTracks().forEach((track) => track.stop());
+        setState("Microphone ready — hold again to speak", "connected");
+        return;
+      }
+
+      voiceStream = stream;
+      const recorder = new MediaRecorder(stream, {
+        audioBitsPerSecond: 64_000,
+        mimeType: supportedVoiceMimeType
+      });
+      voiceRecorder = recorder;
+      voiceChunks = [];
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) voiceChunks.push(event.data);
+      });
+      recorder.addEventListener("stop", () => {
+        const recordedChunks = voiceChunks;
+        voiceChunks = [];
+        const durationMs = Math.max(0, Math.round(performance.now() - voiceStartedAt));
+        const mimeType = recorder.mimeType.split(";", 1)[0] ||
+          supportedVoiceMimeType.split(";", 1)[0];
+        voiceRecorder = null;
+        clearVoiceStopTimer();
+        stopVoiceStream();
+        voiceButton.classList.remove("is-recording");
+        voiceButton.querySelector("span").textContent = "Hold";
+        if (durationMs < 150 || recordedChunks.length === 0) {
+          recordedChunks.length = 0;
+          setState("Hold the microphone a little longer", "error");
+          updateVoiceButton();
+          return;
+        }
+        const blob = new Blob(recordedChunks, { type: mimeType });
+        recordedChunks.length = 0;
+        void uploadVoiceRecording(blob, durationMs);
+      }, { once: true });
+      recorder.start(250);
+      voiceStartedAt = performance.now();
+      voiceButton.classList.add("is-recording");
+      voiceButton.querySelector("span").textContent = "Speak";
+      setState("Listening…", "connected");
+      if (navigator.vibrate) navigator.vibrate(12);
+      voiceStopTimer = setTimeout(() => {
+        finishVoiceRecording();
+        if (navigator.vibrate) navigator.vibrate(24);
+      }, 20_000);
+    } catch (error) {
+      stopVoiceStream();
+      const denied = error && typeof error === "object" && error.name === "NotAllowedError";
+      setState(
+        denied ? "Allow microphone access in Safari to use voice" : "The microphone is unavailable",
+        "error"
+      );
+    } finally {
+      voiceStarting = false;
+      updateVoiceButton();
+    }
+  }
+
+  async function confirmVoiceCommand() {
+    if (!controllerToken || pendingVoiceConfirmation === null || voiceProcessing) return;
+    const confirmationId = pendingVoiceConfirmation;
+    closeVoiceConfirmation();
+    voiceProcessing = true;
+    updateVoiceButton();
+    setState("Starting playback…");
+    try {
+      const result = await jsonRequest("/api/voice/confirm", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ confirmationId })
+      });
+      setState(result.detail || "Voice command confirmed", "connected");
+      if (navigator.vibrate) navigator.vibrate(18);
+    } catch (error) {
+      setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
+    } finally {
+      voiceProcessing = false;
+      updateVoiceButton();
+    }
   }
 
   async function pollDecision() {
@@ -1076,6 +1382,7 @@ export const REMOTE_JS = `(() => {
         headers: { "Authorization": "Bearer " + controllerToken }
       });
       renderContext(result.context);
+      renderVoiceStatus(result.voice);
       quickLaunchEmpty.textContent = "Open an app on NHD-TV and it will appear here.";
       renderRecentApps(result.services);
     } catch (error) {
@@ -1163,6 +1470,7 @@ export const REMOTE_JS = `(() => {
         body: "{}"
       });
       renderContext(result.context);
+      renderVoiceStatus(result.voice);
     } catch (error) {
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
@@ -1476,6 +1784,37 @@ export const REMOTE_JS = `(() => {
     void openQuickLaunch();
   });
   quickLaunchClose.addEventListener("click", closeQuickLaunch);
+
+  voiceButton.addEventListener("pointerdown", (event) => {
+    if (event.isPrimary === false || voiceButton.disabled) return;
+    event.preventDefault();
+    voiceButton.setPointerCapture(event.pointerId);
+    void startVoiceRecording();
+  });
+  const releaseVoiceButton = () => {
+    voiceReleaseRequested = true;
+    finishVoiceRecording();
+  };
+  voiceButton.addEventListener("pointerup", releaseVoiceButton);
+  voiceButton.addEventListener("pointercancel", releaseVoiceButton);
+  voiceButton.addEventListener("keydown", (event) => {
+    if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+      event.preventDefault();
+      void startVoiceRecording();
+    }
+  });
+  voiceButton.addEventListener("keyup", (event) => {
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      releaseVoiceButton();
+    }
+  });
+  voiceButton.addEventListener("click", (event) => event.preventDefault());
+  voiceConfirmCancel.addEventListener("click", () => {
+    closeVoiceConfirmation();
+    setState("Voice command cancelled", "connected");
+  });
+  voiceConfirmPlay.addEventListener("click", () => void confirmVoiceCommand());
 
   searchPanel.addEventListener("submit", (event) => {
     event.preventDefault();

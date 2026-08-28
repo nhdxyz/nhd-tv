@@ -113,6 +113,20 @@ describe("phone remote boundary", () => {
     expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
   });
 
+  it("records voice only while the secure push-to-talk control is held", () => {
+    expect(REMOTE_HTML).toContain('id="voice-button"');
+    expect(REMOTE_HTML).toContain('id="voice-confirm"');
+    expect(REMOTE_HTML).toContain('id="voice-confirm-play"');
+    expect(REMOTE_JS).toContain("navigator.mediaDevices.getUserMedia");
+    expect(REMOTE_JS).toContain("new MediaRecorder(stream");
+    expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
+    expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
+    expect(REMOTE_JS).toContain("finishVoiceRecording");
+    expect(REMOTE_JS).toContain("stopVoiceStream");
+    expect(REMOTE_JS).not.toContain("localStorage");
+    expect(REMOTE_JS).not.toMatch(/sessionStorage\.(?:setItem|getItem)\([^)]*(?:audio|voice|transcript)/i);
+  });
+
   it("uses a minimalist circular directional surface without selectable arrow copy", () => {
     expect(REMOTE_HTML).toContain('class="up" data-action="up"');
     expect(REMOTE_HTML).toContain('class="left" data-action="left"');
@@ -136,7 +150,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('class="remote-top-actions"');
     expect(REMOTE_HTML).toContain('data-action="back" type="button" disabled aria-label="Back. Hold to force return Home"');
     expect(REMOTE_HTML).toContain('data-action="home" type="button" disabled aria-label="NHD Home"');
-    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(10);
+    expect(REMOTE_HTML.match(/<svg\b/g)).toHaveLength(11);
     expect(REMOTE_HTML).not.toContain(">Back<");
     expect(REMOTE_HTML).toContain('id="active-service-label">NHD Home<');
     expect(REMOTE_HTML).toContain('class="remote-context" aria-live="polite"');

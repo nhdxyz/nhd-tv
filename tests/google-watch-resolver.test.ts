@@ -22,6 +22,20 @@ function intent(overrides: Partial<VoiceMediaIntent> = {}): VoiceMediaIntent {
 }
 
 describe("Google watch resolver boundary", () => {
+  it("destroys timed-out hidden windows without blocking the next lookup", async () => {
+    const source = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../src/main/voice/google-watch-resolver.ts", import.meta.url), "utf8")
+    );
+    const cancelActive = source.slice(
+      source.indexOf("cancelActive(): void"),
+      source.indexOf("#createWindow", source.indexOf("cancelActive(): void"))
+    );
+
+    expect(cancelActive).toContain("this.destroy()");
+    expect(cancelActive).toContain("this.#sequence = Promise.resolve()");
+    expect(cancelActive).not.toContain("webContents.stop()");
+  });
+
   it("builds a regional, non-personalized Google query", () => {
     const url = new URL(googleWatchSearchUrl("Apollo 13 movie", "US"));
     expect(url.origin + url.pathname).toBe("https://www.google.com/search");

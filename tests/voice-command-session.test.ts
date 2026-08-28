@@ -86,6 +86,33 @@ describe("voice command session", () => {
     expect(onTranscript).toHaveBeenCalledWith("play something");
   });
 
+  it("propagates cancellation into command execution", async () => {
+    const controller = new AbortController();
+    let startedExecution: (() => void) | null = null;
+    const executionStarted = new Promise<void>((resolve) => {
+      startedExecution = resolve;
+    });
+    const session = new VoiceCommandSession({
+      execute: (_plan, signal) => new Promise((_resolve, reject) => {
+        expect(signal).toBe(controller.signal);
+        startedExecution?.();
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+      getContext: () => context("automatic"),
+      understand: async () => ({
+        intent: { action: "volume-up", kind: "control" },
+        transcript: "turn it up"
+      })
+    });
+
+    const operation = session.process(clip, controller.signal);
+    await executionStarted;
+    const timeout = new Error("voice deadline reached");
+    controller.abort(timeout);
+
+    await expect(operation).rejects.toBe(timeout);
+  });
+
   it("executes control commands without confirmation", async () => {
     const execute = vi.fn(async () => ({ detail: "Volume sent", handled: true }));
     const session = new VoiceCommandSession({

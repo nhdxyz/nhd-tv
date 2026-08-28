@@ -23,7 +23,7 @@ export interface VoiceCommandSessionResult {
 }
 
 export interface VoiceCommandSessionOptions {
-  execute: (plan: VoiceCommandPlan) =>
+  execute: (plan: VoiceCommandPlan, signal?: AbortSignal) =>
     VoiceCommandExecutionResult |
     Promise<VoiceCommandExecutionResult>;
   getContext: () => VoiceCommandContext | Promise<VoiceCommandContext>;
@@ -97,8 +97,10 @@ export class VoiceCommandSession {
       this.#onTranscript(transcript);
     };
     const { intent, transcript } = await this.#understand(clip, signal, reportTranscript);
+    signal?.throwIfAborted();
     reportTranscript(transcript);
     const plan = planVoiceCommand(intent, await this.#getContext());
+    signal?.throwIfAborted();
 
     if (plan.kind === "resolve-media" && plan.confirmationRequired) {
       const confirmationId = this.#randomToken();
@@ -122,10 +124,13 @@ export class VoiceCommandSession {
       };
     }
 
-    return this.#executePlan(plan, transcript);
+    return this.#executePlan(plan, transcript, signal);
   }
 
-  async confirm(value: unknown): Promise<VoiceCommandSessionResult> {
+  async confirm(
+    value: unknown,
+    signal?: AbortSignal
+  ): Promise<VoiceCommandSessionResult> {
     this.#removeExpired();
     const confirmationId = normalizedConfirmationId(value);
     const pending = confirmationId === null ? undefined : this.#pending.get(confirmationId);
@@ -138,10 +143,13 @@ export class VoiceCommandSession {
 
     this.#pending.delete(confirmationId);
     const freshPlan = planVoiceCommand(pending.intent, await this.#getContext());
+    signal?.throwIfAborted();
     return this.#executePlan(
       freshPlan.kind === "resolve-media"
         ? { ...freshPlan, confirmationRequired: false }
-        : freshPlan
+        : freshPlan,
+      undefined,
+      signal
     );
   }
 
@@ -153,9 +161,14 @@ export class VoiceCommandSession {
 
   async #executePlan(
     plan: VoiceCommandPlan,
-    transcript?: string
+    transcript?: string,
+    signal?: AbortSignal
   ): Promise<VoiceCommandSessionResult> {
-    const result = await this.#execute(plan);
+    signal?.throwIfAborted();
+    const result = signal === undefined
+      ? await this.#execute(plan)
+      : await this.#execute(plan, signal);
+    signal?.throwIfAborted();
     return {
       detail: result.detail,
       outcome: result.handled ? "completed" : "failed",

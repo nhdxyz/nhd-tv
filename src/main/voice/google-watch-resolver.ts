@@ -47,8 +47,19 @@ export interface GoogleWatchResolverOptions {
   partition?: string;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(finish, milliseconds);
+    const abort = () => finish(signal?.reason, true);
+    function finish(reason?: unknown, aborted = false): void {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+      if (aborted) reject(reason);
+      else resolve();
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 function normalizedCountry(value: string): string {
@@ -185,12 +196,31 @@ function parsedExtraction(value: unknown): ExtractedWatchPanel | null {
   };
 }
 
-async function loadUrl(window: BrowserWindow, url: string): Promise<void> {
+async function loadUrl(
+  window: BrowserWindow,
+  url: string,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted();
+  const stop = () => {
+    try {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+        window.webContents.stop();
+      }
+    } catch {
+      // The resolver owner may already have destroyed this hidden window.
+    }
+  };
+  signal?.addEventListener("abort", stop, { once: true });
   try {
     await window.loadURL(url);
   } catch (error) {
+    signal?.throwIfAborted();
     if (!(error instanceof Error) || !error.message.includes("ERR_ABORTED")) throw error;
+  } finally {
+    signal?.removeEventListener("abort", stop);
   }
+  signal?.throwIfAborted();
 }
 
 export class GoogleWatchResolver {
@@ -207,7 +237,8 @@ export class GoogleWatchResolver {
     this.#partition = options.partition ?? "persist:google-watch-discovery";
   }
 
-  async warm(): Promise<void> {
+  async warm(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
     if (this.#searchWindow !== null && !this.#searchWindow.isDestroyed()) return;
     const probeSession = session.fromPartition(this.#partition, { cache: true });
     this.#probeSession = probeSession;
@@ -217,28 +248,33 @@ export class GoogleWatchResolver {
     probeSession.preconnect({ numSockets: 1, url: "https://www.google.com" });
     const response = await probeSession.fetch("https://www.google.com/?hl=en&pws=0", {
       credentials: "include",
-      redirect: "follow"
+      redirect: "follow",
+      signal
     });
     await response.arrayBuffer();
+    signal?.throwIfAborted();
     this.#warmMs = Date.now() - startedAt;
   }
 
   async resolve(
     lookup: GoogleWatchLookup,
-    options: { completeOffers?: boolean } = {}
+    options: { completeOffers?: boolean; signal?: AbortSignal } = {}
   ): Promise<GoogleWatchResult> {
+    const signal = options.signal;
+    signal?.throwIfAborted();
     const countryCode = normalizedCountry(lookup.countryCode);
     const completeOffers = options.completeOffers === true;
     const fresh = this.#cache.getFresh(lookup.queryText, countryCode);
     if (fresh !== null && (!completeOffers || fresh.offersComplete)) return fresh;
 
     const task = this.#sequence.catch(() => undefined).then(async () => {
+      signal?.throwIfAborted();
       const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
       if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
         return secondFresh;
       }
-      await this.warm();
-      return this.#resolveUncached({ ...lookup, countryCode }, completeOffers);
+      await this.warm(signal);
+      return this.#resolveUncached({ ...lookup, countryCode }, completeOffers, signal);
     });
     this.#sequence = task.then(() => undefined, () => undefined);
     return task;
@@ -251,6 +287,11 @@ export class GoogleWatchResolver {
     this.#searchWindow = null;
     this.#resolverWindow = null;
     this.#probeSession = null;
+  }
+
+  cancelActive(): void {
+    this.destroy();
+    this.#sequence = Promise.resolve();
   }
 
   #createWindow(probeSession: Session, width: number, height: number): BrowserWindow {
@@ -272,7 +313,11 @@ export class GoogleWatchResolver {
     return window;
   }
 
-  async #sessionRequest(url: string): Promise<{ body: string; hasData: boolean }> {
+  async #sessionRequest(
+    url: string,
+    signal?: AbortSignal
+  ): Promise<{ body: string; hasData: boolean }> {
+    signal?.throwIfAborted();
     const probeSession = this.#probeSession;
     if (probeSession === null) throw new Error("The Google discovery session is unavailable.");
     const response = await probeSession.fetch(url, {
@@ -282,13 +327,15 @@ export class GoogleWatchResolver {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9"
       },
-      redirect: "follow"
+      redirect: "follow",
+      signal
     });
     const contentLength = Number(response.headers.get("content-length") ?? 0);
     if (!response.ok || contentLength > MAX_GOOGLE_RESPONSE_BYTES) {
       return { body: "", hasData: false };
     }
     const bytes = new Uint8Array(await response.arrayBuffer());
+    signal?.throwIfAborted();
     if (bytes.byteLength > MAX_GOOGLE_RESPONSE_BYTES) return { body: "", hasData: false };
     const body = new TextDecoder().decode(bytes);
     return { body, hasData: responseContainsProviderData(body) };
@@ -312,11 +359,12 @@ export class GoogleWatchResolver {
     );
   }
 
-  async #waitForPanel(): Promise<void> {
+  async #waitForPanel(signal?: AbortSignal): Promise<void> {
     const window = this.#searchWindow;
     if (window === null || window.isDestroyed()) throw new Error("Google discovery stopped.");
     const deadline = Date.now() + PANEL_TIMEOUT_MS;
     while (Date.now() < deadline) {
+      signal?.throwIfAborted();
       const state = await window.webContents.executeJavaScript(`(() => {
         const text = String(document.body?.innerText ?? "").replace(/\\s+/g, " ").trim();
         return {
@@ -327,12 +375,13 @@ export class GoogleWatchResolver {
       })()`, true) as { captcha: boolean; watch: boolean };
       if (state.captcha) throw new Error("Google discovery needs a cooldown before retrying.");
       if (state.watch) return;
-      await delay(100);
+      await delay(100, signal);
     }
     throw new Error("Google did not return a Where to watch panel for that title.");
   }
 
-  async #expandPanel(): Promise<boolean> {
+  async #expandPanel(signal?: AbortSignal): Promise<boolean> {
+    signal?.throwIfAborted();
     const window = this.#searchWindow;
     if (window === null || window.isDestroyed()) return false;
     const expanded = await window.webContents.executeJavaScript(`(() => {
@@ -345,11 +394,15 @@ export class GoogleWatchResolver {
       button.click();
       return true;
     })()`, true);
-    if (expanded === true) await delay(350);
+    if (expanded === true) await delay(350, signal);
     return expanded === true;
   }
 
-  async #resolveCandidate(candidateUrl: string): Promise<string | null> {
+  async #resolveCandidate(
+    candidateUrl: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
+    signal?.throwIfAborted();
     let candidate: URL;
     try {
       candidate = new URL(candidateUrl);
@@ -369,26 +422,33 @@ export class GoogleWatchResolver {
         const response = await probeSession.fetch(candidate.href, {
           credentials: "include",
           redirect: "manual",
-          signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS)
+          signal: signal === undefined
+            ? AbortSignal.timeout(REDIRECT_TIMEOUT_MS)
+            : AbortSignal.any([signal, AbortSignal.timeout(REDIRECT_TIMEOUT_MS)])
         });
         const location = response.headers.get("location");
         if (location !== null && googleWatchOfferFromUrl(location, "") !== null) return location;
       } catch {
+        signal?.throwIfAborted();
         // Some /goto links require a hidden navigation rather than a raw redirect.
       }
     }
 
     const resolverWindow = this.#resolverWindow;
     if (resolverWindow === null || resolverWindow.isDestroyed()) return null;
+    const resolverContents = resolverWindow.webContents;
     return new Promise<string | null>((resolve) => {
       let settled = false;
       const finish = (value: string | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
-        resolverWindow.webContents.removeListener("will-navigate", handleNavigation);
-        resolverWindow.webContents.removeListener("will-redirect", handleNavigation);
-        resolverWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+        if (!resolverContents.isDestroyed()) {
+          resolverContents.removeListener("will-navigate", handleNavigation);
+          resolverContents.removeListener("will-redirect", handleNavigation);
+          resolverContents.setWindowOpenHandler(() => ({ action: "deny" }));
+        }
+        signal?.removeEventListener("abort", handleAbort);
         resolve(value);
       };
       const handleNavigation = (event: Electron.Event, url: string) => {
@@ -397,24 +457,37 @@ export class GoogleWatchResolver {
           finish(url);
         }
       };
+      const handleAbort = () => {
+        try {
+          if (!resolverContents.isDestroyed()) resolverContents.stop();
+        } finally {
+          finish(null);
+        }
+      };
       const timeout = setTimeout(() => finish(null), REDIRECT_TIMEOUT_MS);
-      resolverWindow.webContents.on("will-navigate", handleNavigation);
-      resolverWindow.webContents.on("will-redirect", handleNavigation);
-      resolverWindow.webContents.setWindowOpenHandler(({ url }) => {
+      resolverContents.on("will-navigate", handleNavigation);
+      resolverContents.on("will-redirect", handleNavigation);
+      signal?.addEventListener("abort", handleAbort, { once: true });
+      resolverContents.setWindowOpenHandler(({ url }) => {
         if (googleWatchOfferFromUrl(url, "") !== null) finish(url);
         return { action: "deny" };
       });
-      void loadUrl(resolverWindow, candidate.href).catch(() => finish(null));
+      void loadUrl(resolverWindow, candidate.href, signal).catch(() => finish(null));
     });
   }
 
-  async #offers(panel: ExtractedWatchPanel): Promise<GoogleWatchOffer[]> {
+  async #offers(
+    panel: ExtractedWatchPanel,
+    signal?: AbortSignal
+  ): Promise<GoogleWatchOffer[]> {
     const offers: GoogleWatchOffer[] = [];
     const seen = new Set<string>();
     for (const candidate of panel.candidateLinks) {
+      signal?.throwIfAborted();
       if (seen.has(candidate.href)) continue;
       seen.add(candidate.href);
-      const resolvedUrl = await this.#resolveCandidate(candidate.href);
+      const resolvedUrl = await this.#resolveCandidate(candidate.href, signal);
+      signal?.throwIfAborted();
       if (resolvedUrl === null) continue;
       const offer = googleWatchOfferFromUrl(resolvedUrl, candidate.label);
       if (offer !== null && !offers.some((existing) => existing.watchUrl === offer.watchUrl)) {
@@ -426,12 +499,14 @@ export class GoogleWatchResolver {
 
   async #resolveUncached(
     lookup: GoogleWatchLookup,
-    requireCompleteOffers: boolean
+    requireCompleteOffers: boolean,
+    signal?: AbortSignal
   ): Promise<GoogleWatchResult> {
     const sourceUrl = googleWatchSearchUrl(lookup.queryText, lookup.countryCode);
-    const before = await this.#sessionRequest(sourceUrl);
+    const before = await this.#sessionRequest(sourceUrl, signal);
     let panel = before.hasData ? await this.#extractRequestBody(before.body) : null;
-    let offers = panel === null ? [] : await this.#offers(panel);
+    signal?.throwIfAborted();
+    let offers = panel === null ? [] : await this.#offers(panel, signal);
     let renderMs: number | null = null;
     let requestAfterRenderHasData = false;
     let offersComplete = false;
@@ -441,14 +516,15 @@ export class GoogleWatchResolver {
       const window = this.#searchWindow;
       if (window === null || window.isDestroyed()) throw new Error("Google discovery stopped.");
       const renderStartedAt = Date.now();
-      await loadUrl(window, sourceUrl);
-      await this.#waitForPanel();
-      await this.#expandPanel();
+      await loadUrl(window, sourceUrl, signal);
+      await this.#waitForPanel(signal);
+      await this.#expandPanel(signal);
       panel = await this.#extractRendered();
+      signal?.throwIfAborted();
       renderMs = Date.now() - renderStartedAt;
-      offers = panel === null ? [] : await this.#offers(panel);
+      offers = panel === null ? [] : await this.#offers(panel, signal);
       offersComplete = true;
-      const after = await this.#sessionRequest(sourceUrl);
+      const after = await this.#sessionRequest(sourceUrl, signal);
       requestAfterRenderHasData = after.hasData;
       retrievalMode = after.hasData
         ? "hidden-render-with-warmed-request"

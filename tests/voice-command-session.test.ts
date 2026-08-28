@@ -9,6 +9,8 @@ const clip: VoiceAudioClip = {
   mimeType: "audio/webm"
 };
 
+const stableAuthority = () => "profile-a:7:netflix";
+
 function mediaIntent(): VoiceIntent {
   return {
     action: "play",
@@ -198,6 +200,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Opening episode", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       now: () => now,
       randomToken: () => "confirmation_token_1234",
@@ -231,6 +234,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Playing Breaking Bad", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       randomToken: () => "confirmation_spoken_yes",
       understand: async () => ({
@@ -279,6 +283,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       randomToken: () => "confirmation_spoken_no",
       understand: async () => ({
@@ -308,6 +313,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Volume sent", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       randomToken: () => "confirmation_superseded",
       understand: async () => ({
@@ -333,6 +339,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Checked current profile", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => currentContext,
       randomToken: () => "confirmation_token_profile",
       understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
@@ -365,6 +372,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Playing episode", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       randomToken: () => confirmationIds.shift() ?? "confirmation_token_fallback",
       understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
@@ -393,6 +401,7 @@ describe("voice command session", () => {
     const execute = vi.fn(async () => ({ detail: "Opening episode", handled: true }));
     const session = new VoiceCommandSession({
       execute,
+      getAuthorityKey: stableAuthority,
       getContext: () => context("confirm"),
       now: () => now,
       randomToken: () => "confirmation_token_5678",
@@ -410,5 +419,88 @@ describe("voice command session", () => {
       understand: async () => ({ intent: mediaIntent(), transcript: "play it" })
     });
     await expect(automatic.process(clip)).resolves.toMatchObject({ outcome: "completed" });
+  });
+
+  it("rejects a profile A confirmation after the TV switches to profile B", async () => {
+    let authorityKey = "profile-a:7:netflix";
+    const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getAuthorityKey: () => authorityKey,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_profile_switch",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({
+      confirmationId: "confirmation_profile_switch",
+      outcome: "confirmation-required"
+    });
+    authorityKey = "profile-b:8:netflix";
+
+    await expect(session.confirm("confirmation_profile_switch")).resolves.toEqual({
+      detail: "The TV profile or service access changed. Ask again before starting playback.",
+      outcome: "failed"
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await expect(session.confirm("confirmation_profile_switch")).resolves.toMatchObject({
+      outcome: "failed"
+    });
+  });
+
+  it("executes a confirmation when the profile authority revision is unchanged", async () => {
+    const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getAuthorityKey: stableAuthority,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_same_revision",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await session.process(clip);
+    await expect(session.confirm("confirmation_same_revision")).resolves.toMatchObject({
+      detail: "Playing",
+      outcome: "completed"
+    });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("allows a stale confirmation to be cancelled without executing it", async () => {
+    let authorityKey = "profile-a:7:netflix";
+    const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getAuthorityKey: () => authorityKey,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_cancel_stale",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await session.process(clip);
+    authorityKey = "profile-b:8:netflix";
+
+    expect(session.cancel("confirmation_cancel_stale")).toBe(true);
+    expect(execute).not.toHaveBeenCalled();
+    await expect(session.confirm("confirmation_cancel_stale")).resolves.toMatchObject({
+      outcome: "failed"
+    });
+  });
+
+  it("fails closed when no confirmation authority source is configured", async () => {
+    const execute = vi.fn(async () => ({ detail: "Playing", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      randomToken: () => "confirmation_without_authority",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await expect(session.process(clip)).resolves.toEqual({
+      detail: "The TV profile or service access changed. Ask again before starting playback.",
+      outcome: "failed",
+      transcript: "play breaking bad"
+    });
+    expect(execute).not.toHaveBeenCalled();
   });
 });

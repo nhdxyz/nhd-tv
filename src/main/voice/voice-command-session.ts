@@ -25,10 +25,21 @@ export interface VoiceCommandSessionResult {
   transcript?: string;
 }
 
+export type VoiceConfirmationAuthorityKey = string | number;
+
 export interface VoiceCommandSessionOptions {
   execute: (plan: VoiceCommandPlan, signal?: AbortSignal) =>
     VoiceCommandExecutionResult |
     Promise<VoiceCommandExecutionResult>;
+  /**
+   * Returns a stable key for the active profile and its current service
+   * authority. A confirmation is valid only while this key remains unchanged.
+   * Returning null (or omitting the callback) disables confirmations safely.
+   */
+  getAuthorityKey?: () =>
+    VoiceConfirmationAuthorityKey |
+    null |
+    Promise<VoiceConfirmationAuthorityKey | null>;
   getContext: () => VoiceCommandContext | Promise<VoiceCommandContext>;
   now?: () => number;
   onTranscript?: (transcript: string) => void;
@@ -43,6 +54,7 @@ export interface VoiceCommandSessionOptions {
 }
 
 interface PendingConfirmation {
+  authorityKey: VoiceConfirmationAuthorityKey;
   expiresAt: number;
   intent: VoiceMediaIntent;
 }
@@ -72,6 +84,7 @@ export function voiceConfirmationDetail(intent: VoiceMediaIntent): string {
 
 export class VoiceCommandSession {
   readonly #execute: VoiceCommandSessionOptions["execute"];
+  readonly #getAuthorityKey: VoiceCommandSessionOptions["getAuthorityKey"];
   readonly #getContext: VoiceCommandSessionOptions["getContext"];
   readonly #now: () => number;
   readonly #onTranscript: NonNullable<VoiceCommandSessionOptions["onTranscript"]>;
@@ -81,6 +94,7 @@ export class VoiceCommandSession {
 
   constructor(options: VoiceCommandSessionOptions) {
     this.#execute = options.execute;
+    this.#getAuthorityKey = options.getAuthorityKey;
     this.#getContext = options.getContext;
     this.#now = options.now ?? Date.now;
     this.#onTranscript = options.onTranscript ?? (() => undefined);
@@ -125,6 +139,10 @@ export class VoiceCommandSession {
     signal?.throwIfAborted();
 
     if (plan.kind === "resolve-media" && plan.confirmationRequired) {
+      const authorityKey = await this.#readAuthorityKey(signal);
+      if (authorityKey === null) {
+        return this.#authorityChangedResult(transcript);
+      }
       const confirmationId = this.#randomToken();
       if (normalizedConfirmationId(confirmationId) === null) {
         throw new Error("The voice confirmation token generator failed.");
@@ -135,6 +153,7 @@ export class VoiceCommandSession {
         this.#pending.delete(oldest);
       }
       this.#pending.set(confirmationId, {
+        authorityKey,
         expiresAt: this.#now() + CONFIRMATION_TTL_MS,
         intent: plan.intent
       });
@@ -164,8 +183,22 @@ export class VoiceCommandSession {
     }
 
     this.#pending.delete(confirmationId);
+    const authorityBeforeContext = await this.#readAuthorityKey(signal);
+    if (
+      authorityBeforeContext === null ||
+      !Object.is(pending.authorityKey, authorityBeforeContext)
+    ) {
+      return this.#authorityChangedResult();
+    }
     const freshPlan = planVoiceCommand(pending.intent, await this.#getContext());
     signal?.throwIfAborted();
+    const authorityAfterContext = await this.#readAuthorityKey(signal);
+    if (
+      authorityAfterContext === null ||
+      !Object.is(pending.authorityKey, authorityAfterContext)
+    ) {
+      return this.#authorityChangedResult();
+    }
     return this.#executePlan(
       freshPlan.kind === "resolve-media"
         ? { ...freshPlan, confirmationRequired: false }
@@ -179,6 +212,14 @@ export class VoiceCommandSession {
     this.#removeExpired();
     const confirmationId = normalizedConfirmationId(value);
     return confirmationId !== null && this.#pending.delete(confirmationId);
+  }
+
+  #authorityChangedResult(transcript?: string): VoiceCommandSessionResult {
+    return {
+      detail: "The TV profile or service access changed. Ask again before starting playback.",
+      outcome: "failed",
+      ...(transcript === undefined ? {} : { transcript })
+    };
   }
 
   async #executePlan(
@@ -206,5 +247,16 @@ export class VoiceCommandSession {
         this.#pending.delete(confirmationId);
       }
     }
+  }
+
+  async #readAuthorityKey(
+    signal?: AbortSignal
+  ): Promise<VoiceConfirmationAuthorityKey | null> {
+    signal?.throwIfAborted();
+    if (this.#getAuthorityKey === undefined) return null;
+    const value = await this.#getAuthorityKey();
+    signal?.throwIfAborted();
+    if (typeof value === "string") return value;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 }

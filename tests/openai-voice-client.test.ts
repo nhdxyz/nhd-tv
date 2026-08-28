@@ -73,6 +73,9 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("mediaType=similar-title");
       expect(body.instructions).toContain('"play it" is unknown');
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
+      expect(body.instructions).toContain("Use kind=app");
+      expect(body.instructions).toContain("Use mediaAction=search");
+      expect(body.instructions).toContain("Use controlAction=close-app");
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 
@@ -84,6 +87,21 @@ describe("OpenAI voice client", () => {
       "https://api.openai.com/v1/responses",
       expect.any(Object)
     );
+  });
+
+  it("routes closed common controls and app launches without a second AI request", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const voiceClient = client(fetchMock);
+
+    await expect(voiceClient.interpret("Pause the movie")).resolves.toEqual({
+      action: "pause",
+      kind: "control"
+    });
+    await expect(voiceClient.interpret("Open Netflix")).resolves.toEqual({
+      kind: "app",
+      title: "netflix"
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("defines a bare exact title as a playback request", async () => {
@@ -197,7 +215,7 @@ describe("OpenAI voice client", () => {
       controller.abort();
       throw new Error("aborted");
     });
-    await expect(client(fetchMock).interpret("pause", controller.signal)).rejects.toEqual(
+    await expect(client(fetchMock).interpret("pause after this scene", controller.signal)).rejects.toEqual(
       expect.objectContaining<Partial<OpenAiVoiceError>>({ code: "cancelled" })
     );
   });

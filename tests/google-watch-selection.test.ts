@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
-  watchAvailabilityDetail
+  watchAvailabilityDetail,
+  watchOffersShouldBeComplete
 } from "../src/main/voice/google-watch-selection";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
 import type { GoogleWatchResult } from "../src/main/voice/google-watch-cache";
@@ -75,6 +76,25 @@ describe("Google watch selection", () => {
       .toContain("Netflix (subscribed)");
   });
 
+  it("marks enabled display-only subscription apps without making them launchable", () => {
+    const huluResult: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "subscription",
+        priceText: null,
+        providerContentId: "hulu-id",
+        providerHost: "www.hulu.com",
+        providerName: "Hulu",
+        rawLabel: "Hulu Subscription",
+        watchUrl: "https://www.hulu.com/movie/hulu-id"
+      }]
+    };
+    expect(watchAvailabilityDetail(huluResult, ["hulu"]))
+      .toBe("Apollo 13 is available on Hulu (subscribed).");
+    expect(selectEnabledWatchOffer(huluResult, ["netflix", "youtube"]))
+      .toBeNull();
+  });
+
   it("never launches a rent-or-buy offer just because its app is enabled", () => {
     const youtubeFirst: GoogleWatchResult = {
       ...result,
@@ -114,6 +134,19 @@ describe("Google watch selection", () => {
     expect(selectEnabledWatchOffer(multiSubscription, ["netflix", "youtube"])).toMatchObject({
       serviceId: "netflix"
     });
+  });
+
+  it("expands generic multi-provider playback before applying lineup order", () => {
+    expect(watchOffersShouldBeComplete(intent(), ["netflix", "disney-plus"]))
+      .toBe(true);
+    expect(watchOffersShouldBeComplete(intent(), ["netflix", "spotify"]))
+      .toBe(false);
+    expect(watchOffersShouldBeComplete(intent({ providerHint: "netflix" }), [
+      "netflix",
+      "disney-plus"
+    ])).toBe(false);
+    expect(watchOffersShouldBeComplete(intent({ action: "lookup" }), ["netflix"]))
+      .toBe(true);
   });
 
   it("maps a subscribed Disney Plus offer into the app-owned service", () => {

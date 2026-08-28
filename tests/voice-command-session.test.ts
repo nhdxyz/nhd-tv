@@ -30,6 +30,7 @@ function context(playbackMode: "automatic" | "confirm" = "confirm") {
     muted: null,
     playbackMode,
     playing: null,
+    services: [{ id: "netflix", name: "Netflix" }],
     serviceOrder: ["netflix"]
   } as const;
 }
@@ -130,6 +131,45 @@ describe("voice command session", () => {
       transcript: "turn it up"
     });
     expect(execute).toHaveBeenCalledWith({ action: "volume-up", kind: "remote-action" });
+  });
+
+  it("opens an enabled app without playback confirmation", async () => {
+    const execute = vi.fn(async () => ({ detail: "Opened Netflix", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      understand: async () => ({
+        intent: { kind: "app", title: "Netflix" },
+        transcript: "open netflix"
+      })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({
+      outcome: "completed",
+      transcript: "open netflix"
+    });
+    expect(execute).toHaveBeenCalledWith({
+      kind: "launch-service",
+      serviceId: "netflix",
+      serviceName: "Netflix"
+    });
+  });
+
+  it("never asks for confirmation when no eligible playback app is enabled", async () => {
+    const execute = vi.fn(async () => ({ detail: "Unavailable", handled: false }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => ({
+        ...context("confirm"),
+        enabledServiceIds: [],
+        serviceOrder: []
+      }),
+      randomToken: () => "confirmation_should_not_exist",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({ outcome: "failed" });
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it("requires and consumes a short-lived playback confirmation", async () => {

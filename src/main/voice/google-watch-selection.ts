@@ -7,6 +7,36 @@ export interface SelectedWatchOffer {
   serviceId: VoiceServiceId;
 }
 
+const WATCH_SERVICE_HOSTS: Readonly<Record<string, string>> = {
+  "amazon.com": "prime-video",
+  "app.plex.tv": "plex",
+  "disneyplus.com": "disney-plus",
+  "hulu.com": "hulu",
+  "max.com": "hbo-max",
+  "netflix.com": "netflix",
+  "paramountplus.com": "paramount-plus",
+  "peacocktv.com": "peacock",
+  "play.max.com": "hbo-max",
+  "primevideo.com": "prime-video",
+  "tv.apple.com": "apple-tv",
+  "www.disneyplus.com": "disney-plus",
+  "www.amazon.com": "prime-video",
+  "www.hulu.com": "hulu",
+  "www.max.com": "hbo-max",
+  "www.netflix.com": "netflix",
+  "www.paramountplus.com": "paramount-plus",
+  "www.peacocktv.com": "peacock",
+  "www.primevideo.com": "prime-video",
+  "www.youtube.com": "youtube",
+  "youtube.com": "youtube"
+};
+
+const LAUNCHABLE_WATCH_SERVICES = new Set<VoiceServiceId>([
+  "disney-plus",
+  "netflix",
+  "youtube"
+]);
+
 export function isLaunchableWatchOffer(offer: GoogleWatchOffer): boolean {
   if (offer.monetizationType === "subscription" || offer.monetizationType === "free") {
     return true;
@@ -66,20 +96,20 @@ export function googleWatchResultMatchesIntent(
     episodeCoordinatesMatch(result.resolvedSubtitle, intent.season, intent.episode);
 }
 
-export function watchOfferServiceId(offer: GoogleWatchOffer): VoiceServiceId | null {
-  if (
-    offer.providerHost === "disneyplus.com" ||
-    offer.providerHost === "www.disneyplus.com"
-  ) {
-    return "disney-plus";
-  }
-  if (offer.providerHost === "netflix.com" || offer.providerHost === "www.netflix.com") {
-    return "netflix";
-  }
-  if (offer.providerHost === "youtube.com" || offer.providerHost === "www.youtube.com") {
-    return "youtube";
-  }
-  return null;
+export function watchOfferServiceId(offer: GoogleWatchOffer): string | null {
+  return WATCH_SERVICE_HOSTS[offer.providerHost.toLocaleLowerCase("en-US")] ?? null;
+}
+
+export function watchOffersShouldBeComplete(
+  intent: VoiceMediaIntent,
+  enabledServiceIds: readonly VoiceServiceId[]
+): boolean {
+  if (intent.action === "lookup") return true;
+  if (intent.action !== "play" || intent.providerHint !== null) return false;
+  const mapped = new Set(enabledServiceIds.filter((serviceId) =>
+    LAUNCHABLE_WATCH_SERVICES.has(serviceId)
+  ));
+  return mapped.size > 1;
 }
 
 export function selectEnabledWatchOffer(
@@ -88,7 +118,9 @@ export function selectEnabledWatchOffer(
 ): SelectedWatchOffer | null {
   for (const serviceId of enabledServiceIds) {
     const offer = result.offers.find((candidate) =>
-      watchOfferServiceId(candidate) === serviceId && isLaunchableWatchOffer(candidate)
+      LAUNCHABLE_WATCH_SERVICES.has(serviceId) &&
+      watchOfferServiceId(candidate) === serviceId &&
+      isLaunchableWatchOffer(candidate)
     );
     if (offer !== undefined) return { offer, serviceId };
   }
@@ -97,7 +129,7 @@ export function selectEnabledWatchOffer(
 
 function offerDescription(
   offer: GoogleWatchOffer,
-  enabledServiceIds: readonly VoiceServiceId[]
+  enabledServiceIds: readonly string[]
 ): string {
   const serviceId = watchOfferServiceId(offer);
   const subscribed = serviceId !== null &&
@@ -109,7 +141,7 @@ function offerDescription(
 
 export function watchAvailabilityDetail(
   result: GoogleWatchResult,
-  enabledServiceIds: readonly VoiceServiceId[]
+  enabledServiceIds: readonly string[]
 ): string {
   const title = result.resolvedTitle ?? result.queryText;
   const providers = result.offers

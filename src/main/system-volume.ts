@@ -31,6 +31,29 @@ export class SystemVolumeController {
     this.#backend = backend;
   }
 
+  async getMuted(): Promise<boolean | null> {
+    try {
+      return await this.#backend.getMuted();
+    } catch {
+      return null;
+    }
+  }
+
+  async setMuted(muted: boolean): Promise<SystemVolumeResult> {
+    try {
+      await this.#backend.setMuted(muted);
+      return {
+        detail: muted ? "System audio muted" : "System audio unmuted",
+        handled: true
+      };
+    } catch {
+      return {
+        detail: "System volume is unavailable here — use the TV volume controls",
+        handled: false
+      };
+    }
+  }
+
   async apply(action: SystemVolumeAction): Promise<SystemVolumeResult> {
     try {
       if (action === "mute") {

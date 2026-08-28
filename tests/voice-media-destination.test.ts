@@ -26,6 +26,8 @@ describe("voice media destination", () => {
   it("prefers Netflix for general video when it is enabled", () => {
     expect(resolveVoiceMediaDestination(intent(), ["spotify", "youtube", "netflix"]))
       .toEqual({ query: "Apollo 13", serviceId: "netflix" });
+    expect(resolveVoiceMediaDestination(intent(), ["spotify", "youtube"]))
+      .toBeNull();
   });
 
   it("routes audio and YouTube shapes without model-provided URLs", () => {
@@ -68,7 +70,7 @@ describe("voice media destination", () => {
     });
     expect(isVoiceDiscoveryIntent(recommendation)).toBe(true);
     expect(voiceDiscoveryOpenedDetail(recommendation, "Netflix"))
-      .toBe("Opened Netflix recommendations for tense action movies with a clever lead.");
+      .toBe("Searched Netflix for tense action movies with a clever lead.");
     const similar = intent({
       action: "open",
       mediaType: "similar-title",
@@ -77,7 +79,7 @@ describe("voice media destination", () => {
     expect(resolveVoiceMediaDestination(similar, ["netflix"]))
       .toEqual({ query: "Inception", serviceId: "netflix" });
     expect(voiceDiscoveryOpenedDetail(similar, "Netflix"))
-      .toBe("Opened Netflix results related to Inception.");
+      .toBe("Searched Netflix for titles related to Inception.");
   });
 
   it("keeps an explicit Disney Plus exact-title request on Disney Plus", () => {
@@ -89,5 +91,17 @@ describe("voice media destination", () => {
       query: "Moana",
       serviceId: "disney-plus"
     });
+  });
+
+  it("allows search-only requests to use a safe active-provider candidate", () => {
+    expect(resolveVoiceMediaDestination(intent({
+      action: "search",
+      title: "Dune"
+    }), ["youtube"])).toEqual({ query: "Dune", serviceId: "youtube" });
+    expect(resolveVoiceMediaDestination(intent({
+      action: "search",
+      providerHint: "spotify",
+      title: "Kanye West"
+    }), ["spotify"])).toEqual({ query: "Kanye West", serviceId: "spotify" });
   });
 });

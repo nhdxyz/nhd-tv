@@ -51,6 +51,20 @@ describe("voice intent boundary", () => {
     });
   });
 
+  it("parses an app launch without letting the model choose a URL or service id", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "app",
+      mediaAction: null,
+      mediaType: null,
+      title: "Prime Video"
+    }))).toEqual({ kind: "app", title: "Prime Video" });
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "app",
+      mediaType: null,
+      title: "Netflix"
+    }))).toThrow("app intent is inconsistent");
+  });
+
   it("parses an exact Netflix episode", () => {
     expect(parseVoiceIntent(mediaIntent({
       mediaType: "episode",
@@ -79,6 +93,13 @@ describe("voice intent boundary", () => {
       title: "Outdoor Boys",
       providerHint: "youtube"
     }))).toMatchObject({ mediaType: "channel", providerHint: "youtube" });
+  });
+
+  it("distinguishes search-only media from lookup and playback", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      mediaAction: "search",
+      title: "Dune"
+    }))).toMatchObject({ action: "search", kind: "media", title: "Dune" });
   });
 
   it("preserves an explicit Disney Plus destination for exact media", () => {
@@ -119,6 +140,18 @@ describe("voice intent boundary", () => {
       providerHint: null,
       recency: null
     })).toEqual({ action: "pause", kind: "control" });
+    expect(parseVoiceIntent({
+      kind: "control",
+      controlAction: "close-app",
+      mediaAction: null,
+      mediaType: null,
+      title: null,
+      creator: null,
+      season: null,
+      episode: null,
+      providerHint: null,
+      recency: null
+    })).toEqual({ action: "close-app", kind: "control" });
   });
 
   it("accepts only an entirely empty unknown intent", () => {

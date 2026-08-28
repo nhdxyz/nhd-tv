@@ -80,6 +80,29 @@ describe("system volume controller", () => {
     });
   });
 
+  it("sets voice mute state idempotently while keeping remote mute as a toggle", async () => {
+    const backend = new FakeVolumeBackend();
+    const controller = new SystemVolumeController(backend);
+
+    await expect(controller.setMuted(true)).resolves.toEqual({
+      detail: "System audio muted",
+      handled: true
+    });
+    await controller.setMuted(true);
+    expect(backend.muted).toBe(true);
+    await expect(controller.getMuted()).resolves.toBe(true);
+
+    await expect(controller.setMuted(false)).resolves.toEqual({
+      detail: "System audio unmuted",
+      handled: true
+    });
+    await controller.setMuted(false);
+    expect(backend.muted).toBe(false);
+
+    await controller.apply("mute");
+    expect(backend.muted).toBe(true);
+  });
+
   it("degrades with clear TV-volume guidance", async () => {
     const backend = new FakeVolumeBackend();
     backend.getVolume = async () => { throw new Error("unsupported"); };
@@ -89,5 +112,9 @@ describe("system volume controller", () => {
       detail: "System volume is unavailable here — use the TV volume controls",
       handled: false
     });
+    backend.getMuted = async () => { throw new Error("unsupported"); };
+    backend.setMuted = async () => { throw new Error("unsupported"); };
+    await expect(controller.getMuted()).resolves.toBeNull();
+    await expect(controller.setMuted(true)).resolves.toMatchObject({ handled: false });
   });
 });

@@ -1,19 +1,25 @@
 const VOICE_CONTROL_ACTIONS = [
   "back",
+  "close-app",
+  "down",
   "fast-forward",
   "home",
+  "left",
   "mute",
   "pause",
   "play-pause",
+  "right",
   "resume",
   "rewind",
+  "select",
   "stop",
   "unmute",
+  "up",
   "volume-down",
   "volume-up"
 ] as const;
 
-const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play"] as const;
+const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
 const VOICE_MEDIA_TYPES = [
   "album",
   "artist",
@@ -54,6 +60,11 @@ export interface VoiceControlIntent {
   kind: "control";
 }
 
+export interface VoiceAppIntent {
+  kind: "app";
+  title: string;
+}
+
 export interface VoiceUnknownIntent {
   kind: "unknown";
 }
@@ -70,12 +81,12 @@ export interface VoiceMediaIntent {
   title: string;
 }
 
-export type VoiceIntent = VoiceControlIntent | VoiceMediaIntent | VoiceUnknownIntent;
+export type VoiceIntent = VoiceAppIntent | VoiceControlIntent | VoiceMediaIntent | VoiceUnknownIntent;
 
 export const VOICE_INTENT_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
-    kind: { enum: ["control", "media", "unknown"], type: "string" },
+    kind: { enum: ["app", "control", "media", "unknown"], type: "string" },
     controlAction: {
       anyOf: [
         { enum: VOICE_CONTROL_ACTIONS, type: "string" },
@@ -177,6 +188,22 @@ function allNull(value: Record<string, unknown>, keys: readonly string[]): boole
 export function parseVoiceIntent(value: unknown): VoiceIntent {
   if (!isObject(value) || !hasExactKeys(value)) {
     throw new TypeError("The voice intent must contain exactly the allowlisted fields.");
+  }
+
+  if (value.kind === "app") {
+    if (!allNull(value, [
+      "controlAction",
+      "mediaAction",
+      "mediaType",
+      "creator",
+      "season",
+      "episode",
+      "providerHint",
+      "recency"
+    ])) {
+      throw new TypeError("The voice app intent is inconsistent.");
+    }
+    return { kind: "app", title: boundedText(value.title, 160, false) };
   }
 
   if (value.kind === "control") {

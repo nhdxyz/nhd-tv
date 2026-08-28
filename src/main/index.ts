@@ -111,7 +111,8 @@ import {
 import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
-  watchAvailabilityDetail
+  watchAvailabilityDetail,
+  watchOffersShouldBeComplete
 } from "./voice/google-watch-selection";
 import {
   applyYouTubeLatestSort,
@@ -1181,18 +1182,19 @@ function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
   return { available: true, detail: "Hold the microphone button and speak." };
 }
 
-function voiceCommandContext(): VoiceCommandContext {
+async function voiceCommandContext(): Promise<VoiceCommandContext> {
   const state = localStateStore?.snapshot();
   const enabledServiceIds = state?.preferences.enabledServiceIds ?? [];
   const serviceOrder = state?.preferences.serviceOrder ?? enabledServiceIds;
   return {
     activeServiceId: serviceHost?.activeServiceId ?? null,
     enabledServiceIds,
-    muted: null,
+    muted: await systemVolumeController.getMuted(),
     playbackMode: state?.preferences.voicePlaybackMode ?? "confirm",
     playing: serviceHost?.activeServiceId === null || serviceHost === null
       ? false
       : serviceHost.isPlaybackActive,
+    services: getServiceDefinitions().map(({ id, name }) => ({ id, name })),
     serviceOrder
   };
 }
@@ -1217,7 +1219,7 @@ function activeVoiceProfileName(): string | null {
 function usesGoogleWatchDiscovery(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
 ): boolean {
-  return plan.intent.action !== "open" &&
+  return (plan.intent.action === "lookup" || plan.intent.action === "play") &&
     ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
 }
 
@@ -1232,7 +1234,7 @@ async function executeGoogleWatchPlan(
   const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
   signal?.throwIfAborted();
   let result = await resolver.resolve(lookup, {
-    completeOffers: plan.intent.action === "lookup",
+    completeOffers: watchOffersShouldBeComplete(plan.intent, plan.candidateServiceIds),
     signal
   });
   signal?.throwIfAborted();
@@ -1240,8 +1242,9 @@ async function executeGoogleWatchPlan(
     throw new Error("Google watch discovery returned a different title or episode.");
   }
   if (plan.intent.action === "lookup") {
+    const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
     return {
-      detail: watchAvailabilityDetail(result, plan.candidateServiceIds),
+      detail: watchAvailabilityDetail(result, enabledServiceIds),
       handled: true
     };
   }
@@ -1256,8 +1259,9 @@ async function executeGoogleWatchPlan(
     selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
   }
   if (selected === null) {
+    const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
     return {
-      detail: watchAvailabilityDetail(result, plan.candidateServiceIds),
+      detail: watchAvailabilityDetail(result, enabledServiceIds),
       handled: false
     };
   }
@@ -1290,7 +1294,12 @@ async function executeVoiceCommandPlanCore(
 ): Promise<RemoteActionOutcome & { detail: string }> {
   signal?.throwIfAborted();
   if (plan.kind === "no-op") {
-    return { detail: plan.detail, handled: true };
+    return { detail: plan.detail, handled: plan.handled ?? true };
+  }
+  if (plan.kind === "set-system-muted") {
+    const result = await systemVolumeController.setMuted(plan.muted);
+    signal?.throwIfAborted();
+    return result;
   }
   const operation = serviceHost?.beginOperation();
   if (plan.kind === "remote-action") {
@@ -1312,14 +1321,41 @@ async function executeVoiceCommandPlanCore(
     }
     return { detail: "Closed the current app.", handled: true };
   }
+  if (plan.kind === "launch-service") {
+    const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
+    if (!enabledServiceIds.includes(plan.serviceId)) {
+      return { detail: `${plan.serviceName} is not enabled in this profile.`, handled: false };
+    }
+    const definition = getServiceDefinition(plan.serviceId);
+    if (definition === null) {
+      return { detail: `${plan.serviceName} is no longer available.`, handled: false };
+    }
+    if (serviceHost?.activeServiceId === definition.id && !serviceHost.isBackgrounded) {
+      return { detail: `${definition.name} is already open.`, handled: true };
+    }
+    await openTrackedService(definition, definition.startUrl, signal, operation);
+    signal?.throwIfAborted();
+    return { detail: `Opened ${definition.name}.`, handled: true };
+  }
 
+  const expectedWatchDiscovery = usesGoogleWatchDiscovery(plan);
+  let watchDiscoveryUnavailable = false;
   try {
     const googleResult = await executeGoogleWatchPlan(plan, signal, operation);
     if (googleResult !== null) return googleResult;
+    watchDiscoveryUnavailable = expectedWatchDiscovery;
   } catch {
     signal?.throwIfAborted();
+    watchDiscoveryUnavailable = expectedWatchDiscovery;
     // Google discovery is a best-effort private-project adapter. A provider's
     // own search page remains available if its markup, network, or rate limit changes.
+  }
+
+  if (plan.intent.action === "lookup" && watchDiscoveryUnavailable) {
+    return {
+      detail: `I couldn't verify where ${plan.intent.title} is available right now.`,
+      handled: false
+    };
   }
 
   const destination = resolveVoiceMediaDestination(plan.intent, plan.candidateServiceIds);
@@ -1327,7 +1363,9 @@ async function executeVoiceCommandPlanCore(
     return {
       detail: isVoiceDiscoveryIntent(plan.intent)
         ? "Netflix is not enabled in this profile, so recommendations cannot be opened yet."
-        : "That title is not on a service enabled in this profile.",
+        : watchDiscoveryUnavailable
+          ? `I couldn't verify where ${plan.intent.title} is available, and no safe provider fallback is enabled.`
+          : "That title is not on a service enabled in this profile.",
       handled: false
     };
   }
@@ -1350,7 +1388,7 @@ async function executeVoiceCommandPlanCore(
     ? applyYouTubeLatestSort(baseSearchUrl, plan.intent)
     : baseSearchUrl;
   await openTrackedService(definition, searchUrl, signal, operation);
-  const automated = isVoiceDiscoveryIntent(plan.intent)
+  const automated = isVoiceDiscoveryIntent(plan.intent) || plan.intent.action === "search"
     ? false
     : await serviceHost?.executeVoiceMediaIntent(plan.intent, {
       intendedUrl: searchUrl,
@@ -1361,14 +1399,23 @@ async function executeVoiceCommandPlanCore(
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
   const discoveryDetail = voiceDiscoveryOpenedDetail(plan.intent, definition.name);
+  const providerAppliedQuery = definition.search !== null &&
+    (definition.search.queryParameter !== null || definition.search.queryPathSegment === true);
   const handled = isVoiceDiscoveryIntent(plan.intent) ||
+    plan.intent.action === "search" ||
     voiceProviderCommandHandled(plan.intent, automated);
   return {
-    detail: discoveryDetail ?? (automated
+    detail: plan.intent.action === "search"
+      ? providerAppliedQuery
+        ? `Searched ${definition.name} for ${destination.query}.`
+        : `Opened ${definition.name} search.`
+      : discoveryDetail ?? (automated
       ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
       : plan.intent.action === "play"
         ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}, but could not start playback automatically.`
-        : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`),
+        : providerAppliedQuery
+          ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`
+          : `Opened ${definition.name} search.`),
     handled
   };
 }

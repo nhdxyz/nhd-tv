@@ -15,10 +15,10 @@ export function voiceDiscoveryOpenedDetail(
   serviceName: string
 ): string | null {
   if (intent.mediaType === "recommendation") {
-    return `Opened ${serviceName} recommendations for ${intent.title}.`;
+    return `Searched ${serviceName} for ${intent.title}.`;
   }
   if (intent.mediaType === "similar-title") {
-    return `Opened ${serviceName} results related to ${intent.title}.`;
+    return `Searched ${serviceName} for titles related to ${intent.title}.`;
   }
   return null;
 }
@@ -63,7 +63,9 @@ export function resolveVoiceMediaDestination(
   const preferred = preferredService(intent);
   const serviceId = candidateServiceIds.includes(preferred)
     ? preferred
-    : candidateServiceIds[0];
+    : intent.action === "search"
+      ? candidateServiceIds[0]
+      : undefined;
   if (serviceId === undefined) {
     return null;
   }

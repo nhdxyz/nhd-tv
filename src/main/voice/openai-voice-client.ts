@@ -3,6 +3,7 @@ import {
   type VoiceIntent,
   VOICE_INTENT_JSON_SCHEMA
 } from "./voice-intent";
+import { voiceTranscriptShortcut } from "./voice-transcript-shortcuts";
 
 const TRANSCRIPTION_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
 const RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
@@ -24,6 +25,7 @@ const AUDIO_TYPES: ReadonlyMap<string, string> = new Map([
 const VOICE_INTENT_INSTRUCTIONS = `You extract one command for a television interface.
 Return only the supplied JSON schema. Never output a URL, selector, service ID, code, or explanation.
 Use kind=control for direct television controls.
+Use kind=app only when the user explicitly names an application or streaming service to open, launch, or switch to. Put the spoken app name in title and use null for every other field. App intents never name a URL or service ID.
 Use kind=media for searches, navigation, and playback.
 Use kind=unknown with every other field null when the request is incomplete, only refers to "it" or "that" without naming media, is unrelated to the TV, or is not confidently actionable. Never guess a missing title or creator.
 Use mediaType=episode only when both season and episode are explicit.
@@ -34,6 +36,9 @@ Preserve a spoken release year, edition, language, country, or remake qualifier 
 Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
 Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
 Use providerHint only when the user names Disney Plus, Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube. Use disney-plus for Disney Plus.
+Use mediaAction=search when the user asks to search or show search results without opening or playing a particular result. Use lookup only for availability questions such as "where can I watch" or "what service has" a title.
+Use controlAction=stop to stop or pause current playback without closing the app. Use controlAction=close-app only for an explicit request to close or exit the current app.
+Directional requests such as "move left", "go down", and "select this" use the matching left, down, or select control action.
 A bare exact movie, show, or title name such as "Apollo 13" is a play request: use mediaAction=play. Do not reinterpret a bare named title as open or lookup.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
@@ -179,6 +184,8 @@ export class OpenAiVoiceClient {
     if (transcript.length === 0 || transcript.length > MAX_TRANSCRIPT_LENGTH) {
       throw new OpenAiVoiceError("invalid-response", "The voice transcript is invalid.");
     }
+    const shortcut = voiceTranscriptShortcut(transcript);
+    if (shortcut !== null) return shortcut;
 
     const response = await this.#request(RESPONSES_ENDPOINT, {
       body: JSON.stringify({

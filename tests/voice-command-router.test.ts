@@ -11,6 +11,13 @@ const context: VoiceCommandContext = {
   muted: null,
   playbackMode: "confirm",
   playing: true,
+  services: [
+    { id: "netflix", name: "Netflix" },
+    { id: "spotify", name: "Spotify" },
+    { id: "youtube", name: "YouTube" },
+    { id: "hbo-max", name: "HBO Max" },
+    { id: "movie-club", name: "Movie Club" }
+  ],
   serviceOrder: ["youtube", "netflix"]
 };
 
@@ -33,6 +40,7 @@ describe("voice command planning", () => {
   it("does nothing for an underspecified command instead of guessing", () => {
     expect(planVoiceCommand({ kind: "unknown" }, context)).toEqual({
       detail: "Please name what you want to watch, play, open, or control.",
+      handled: false,
       kind: "no-op"
     });
   });
@@ -44,6 +52,10 @@ describe("voice command planning", () => {
     });
     expect(planVoiceCommand({ action: "back", kind: "control" }, context)).toEqual({
       action: "back",
+      kind: "remote-action"
+    });
+    expect(planVoiceCommand({ action: "down", kind: "control" }, context)).toEqual({
+      action: "down",
       kind: "remote-action"
     });
   });
@@ -63,13 +75,57 @@ describe("voice command planning", () => {
     });
   });
 
-  it("routes stop through the host-owned close operation", () => {
+  it("stops playback without closing the app and reserves closing for explicit exit", () => {
     expect(planVoiceCommand({ action: "stop", kind: "control" }, context)).toEqual({
-      kind: "close-service"
+      action: "play-pause",
+      kind: "remote-action"
     });
     expect(planVoiceCommand({ action: "stop", kind: "control" }, {
       ...context,
-      activeServiceId: null
+      playing: false
+    })).toMatchObject({ kind: "no-op" });
+    expect(planVoiceCommand({ action: "close-app", kind: "control" }, context)).toEqual({
+      kind: "close-service"
+    });
+  });
+
+  it("sets voice mute state explicitly instead of toggling it", () => {
+    expect(planVoiceCommand({ action: "mute", kind: "control" }, {
+      ...context,
+      muted: null
+    })).toEqual({ kind: "set-system-muted", muted: true });
+    expect(planVoiceCommand({ action: "unmute", kind: "control" }, {
+      ...context,
+      muted: true
+    })).toEqual({ kind: "set-system-muted", muted: false });
+    expect(planVoiceCommand({ action: "mute", kind: "control" }, {
+      ...context,
+      muted: true
+    })).toMatchObject({ kind: "no-op" });
+    expect(planVoiceCommand({ action: "unmute", kind: "control" }, {
+      ...context,
+      muted: false
+    })).toMatchObject({ kind: "no-op" });
+  });
+
+  it("launches only one exact enabled app and reports disabled or ambiguous names", () => {
+    expect(planVoiceCommand({ kind: "app", title: "Netflix" }, context)).toEqual({
+      kind: "launch-service",
+      serviceId: "netflix",
+      serviceName: "Netflix"
+    });
+    expect(planVoiceCommand({ kind: "app", title: "Max" }, context)).toEqual({
+      detail: "HBO Max is not enabled in this profile.",
+      handled: false,
+      kind: "no-op"
+    });
+    expect(planVoiceCommand({ kind: "app", title: "Movie Club" }, {
+      ...context,
+      enabledServiceIds: [...context.enabledServiceIds, "movie-club"]
+    })).toMatchObject({ kind: "launch-service", serviceId: "movie-club" });
+    expect(planVoiceCommand({ kind: "app", title: "Netflix" }, {
+      ...context,
+      services: [...context.services, { id: "custom-netflix", name: "Netflix" }]
     })).toMatchObject({ kind: "no-op" });
   });
 
@@ -87,6 +143,8 @@ describe("voice command planning", () => {
       ...context,
       playbackMode: "automatic"
     })).toMatchObject({ confirmationRequired: false });
+    expect(planVoiceCommand(mediaIntent({ providerHint: "spotify" }), context))
+      .toMatchObject({ confirmationRequired: false, launchAllowed: false });
   });
 
   it("uses enabled lineup services as the subscription boundary", () => {
@@ -153,5 +211,17 @@ describe("voice command planning", () => {
       confirmationRequired: false,
       launchAllowed: false
     });
+  });
+
+  it("searches the active supported app without requesting playback confirmation", () => {
+    expect(planVoiceCommand(mediaIntent({ action: "search" }), context)).toMatchObject({
+      candidateServiceIds: ["netflix"],
+      confirmationRequired: false,
+      launchAllowed: true
+    });
+    expect(planVoiceCommand(mediaIntent({
+      action: "search",
+      providerHint: "youtube"
+    }), context)).toMatchObject({ candidateServiceIds: ["youtube"] });
   });
 });

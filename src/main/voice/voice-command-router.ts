@@ -1,10 +1,15 @@
 import type { RemoteAction, VoicePlaybackMode } from "../contracts";
 import type {
+  VoiceAppIntent,
   VoiceControlAction,
   VoiceIntent,
   VoiceMediaIntent,
   VoiceProviderHint
 } from "./voice-intent";
+import {
+  matchVoiceAppService,
+  type VoiceAppService
+} from "./voice-app-matcher";
 
 const VOICE_SERVICE_IDS = ["disney-plus", "netflix", "spotify", "youtube"] as const;
 
@@ -16,13 +21,16 @@ export interface VoiceCommandContext {
   muted: boolean | null;
   playbackMode: VoicePlaybackMode;
   playing: boolean | null;
+  services: readonly VoiceAppService[];
   serviceOrder: readonly string[];
 }
 
 export type VoiceCommandPlan =
   | { action: RemoteAction; kind: "remote-action" }
-  | { detail: string; kind: "no-op" }
+  | { detail: string; handled?: boolean; kind: "no-op" }
   | { kind: "close-service" }
+  | { kind: "launch-service"; serviceId: string; serviceName: string }
+  | { kind: "set-system-muted"; muted: boolean }
   | {
     candidateServiceIds: VoiceServiceId[];
     confirmationRequired: boolean;
@@ -67,14 +75,22 @@ function controlPlan(
 ): VoiceCommandPlan {
   switch (action) {
     case "back":
+    case "down":
     case "fast-forward":
     case "home":
-    case "mute":
+    case "left":
     case "play-pause":
+    case "right":
     case "rewind":
+    case "select":
+    case "up":
     case "volume-down":
     case "volume-up":
       return remoteActionPlan(action);
+    case "mute":
+      return context.muted === true
+        ? { detail: "Audio is already muted.", kind: "no-op" }
+        : { kind: "set-system-muted", muted: true };
     case "pause":
       if (context.activeServiceId === null || context.playing === false) {
         return { detail: "Playback is already paused.", kind: "no-op" };
@@ -92,12 +108,49 @@ function controlPlan(
       if (context.muted === false) {
         return { detail: "Audio is already unmuted.", kind: "no-op" };
       }
-      return remoteActionPlan("mute");
+      return { kind: "set-system-muted", muted: false };
     case "stop":
+      return context.activeServiceId === null || context.playing !== true
+        ? { detail: "Nothing is currently playing.", kind: "no-op" }
+        : remoteActionPlan("play-pause");
+    case "close-app":
       return context.activeServiceId === null
         ? { detail: "Nothing is currently open.", kind: "no-op" }
         : { kind: "close-service" };
   }
+}
+
+function appPlan(
+  intent: VoiceAppIntent,
+  context: VoiceCommandContext
+): VoiceCommandPlan {
+  const match = matchVoiceAppService(intent.title, context.services);
+  if (match.kind === "none") {
+    return {
+      detail: `I couldn't find an app named ${intent.title}.`,
+      handled: false,
+      kind: "no-op"
+    };
+  }
+  if (match.kind === "ambiguous") {
+    return {
+      detail: `More than one app matches ${intent.title}.`,
+      handled: false,
+      kind: "no-op"
+    };
+  }
+  if (!context.enabledServiceIds.includes(match.service.id)) {
+    return {
+      detail: `${match.service.name} is not enabled in this profile.`,
+      handled: false,
+      kind: "no-op"
+    };
+  }
+  return {
+    kind: "launch-service",
+    serviceId: match.service.id,
+    serviceName: match.service.name
+  };
 }
 
 function mediaPlan(
@@ -111,14 +164,22 @@ function mediaPlan(
     : enabled.includes(provider)
       ? [provider]
       : [];
+  const activeSearchService = intent.action === "search" && provider === null
+    ? enabled.find((serviceId) => serviceId === context.activeServiceId)
+    : undefined;
+  const searchCandidates = activeSearchService === undefined
+    ? candidateServiceIds
+    : [activeSearchService];
   const isPlayback = intent.action === "play";
 
   return {
-    candidateServiceIds,
-    confirmationRequired: isPlayback && context.playbackMode === "confirm",
+    candidateServiceIds: searchCandidates,
+    confirmationRequired: isPlayback &&
+      candidateServiceIds.length > 0 &&
+      context.playbackMode === "confirm",
     intent,
     kind: "resolve-media",
-    launchAllowed: intent.action !== "lookup" && candidateServiceIds.length > 0
+    launchAllowed: intent.action !== "lookup" && searchCandidates.length > 0
   };
 }
 
@@ -129,9 +190,11 @@ export function planVoiceCommand(
   if (intent.kind === "unknown") {
     return {
       detail: "Please name what you want to watch, play, open, or control.",
+      handled: false,
       kind: "no-op"
     };
   }
+  if (intent.kind === "app") return appPlan(intent, context);
   return intent.kind === "control"
     ? controlPlan(intent.action, context)
     : mediaPlan(intent, context);

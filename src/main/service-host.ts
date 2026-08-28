@@ -873,6 +873,13 @@ export class ServiceHost {
     return this.#activeDefinition?.id ?? null;
   }
 
+  get activeUrl(): string | null {
+    const view = this.#view;
+    return view === null || view.webContents.isDestroyed()
+      ? null
+      : view.webContents.getURL();
+  }
+
   beginOperation(): ServiceOperationToken {
     return this.#operationOwner.begin();
   }

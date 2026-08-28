@@ -4,7 +4,10 @@ import {
 } from "../security/navigation-policy";
 import type { ServiceOperationToken } from "../service-operation-owner";
 import type { VoiceCommandPlan } from "./voice-command-router";
-import { voiceProviderDestinationRoute } from "./voice-provider-destination";
+import {
+  voiceProviderDestinationRoute,
+  voiceProviderDestinationUrlMatches
+} from "./voice-provider-destination";
 
 export type VoiceProviderDestinationPlan = Extract<
   VoiceCommandPlan,
@@ -13,6 +16,7 @@ export type VoiceProviderDestinationPlan = Extract<
 
 export interface VoiceProviderDestinationExecutionHost {
   readonly activeServiceId: string | null;
+  readonly activeUrl: string | null;
   readonly isBackgrounded: boolean;
   navigate(
     url: string,
@@ -95,6 +99,15 @@ export async function executeVoiceProviderDestination(
     );
   }
   options.signal?.throwIfAborted();
+  if (
+    options.host.activeServiceId !== route.serviceId ||
+    !voiceProviderDestinationUrlMatches(options.host.activeUrl, route)
+  ) {
+    return {
+      detail: `${definition.name} opened, but I couldn't verify the ${route.destination} destination.`,
+      handled: false
+    };
+  }
   return {
     detail: `Opened your ${route.destination} on ${definition.name}.`,
     handled: true

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isVoiceProviderDestinationServiceId,
-  voiceProviderDestinationRoute
+  voiceProviderDestinationRoute,
+  voiceProviderDestinationUrlMatches
 } from "../src/main/voice/voice-provider-destination";
 
 describe("voice provider destination map", () => {
@@ -34,5 +35,26 @@ describe("voice provider destination map", () => {
     expect(isVoiceProviderDestinationServiceId("spotify")).toBe(true);
     expect(isVoiceProviderDestinationServiceId("youtube")).toBe(true);
     expect(isVoiceProviderDestinationServiceId("netflix")).toBe(false);
+  });
+
+  it("requires the final origin and canonical path while allowing provider query state", () => {
+    const route = voiceProviderDestinationRoute("youtube", "subscriptions");
+    if (route === null) throw new Error("Expected YouTube subscriptions route");
+    expect(voiceProviderDestinationUrlMatches(
+      "https://www.youtube.com/feed/subscriptions?flow=2#section",
+      route
+    )).toBe(true);
+    expect(voiceProviderDestinationUrlMatches(
+      "https://www.youtube.com/feed/subscriptions/",
+      route
+    )).toBe(true);
+    expect(voiceProviderDestinationUrlMatches("https://www.youtube.com/", route)).toBe(false);
+    expect(voiceProviderDestinationUrlMatches("https://accounts.google.com/login", route))
+      .toBe(false);
+    expect(voiceProviderDestinationUrlMatches(
+      "https://user@www.youtube.com/feed/subscriptions",
+      route
+    )).toBe(false);
+    expect(voiceProviderDestinationUrlMatches(null, route)).toBe(false);
   });
 });

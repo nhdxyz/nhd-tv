@@ -21,13 +21,17 @@ function plan(
 }
 
 function host(overrides: Partial<VoiceProviderDestinationExecutionHost> = {}) {
-  return {
+  const providerHost = {
     activeServiceId: null,
+    activeUrl: null,
     isBackgrounded: false,
-    navigate: vi.fn(async () => undefined),
+    navigate: vi.fn(async (url: string) => {
+      providerHost.activeUrl = url;
+    }),
     restoreFromHome: vi.fn(() => true),
     ...overrides
-  } satisfies VoiceProviderDestinationExecutionHost;
+  };
+  return providerHost satisfies VoiceProviderDestinationExecutionHost;
 }
 
 function options(
@@ -38,7 +42,12 @@ function options(
     enabledServiceIds: ["spotify", "youtube"],
     getServiceDefinition,
     host: providerHost,
-    openService: vi.fn(async () => undefined),
+    openService: vi.fn(async (definition, initialUrl) => {
+      if (providerHost !== null) {
+        providerHost.activeServiceId = definition.id;
+        providerHost.activeUrl = initialUrl;
+      }
+    }),
     operationToken,
     ...overrides
   };
@@ -64,6 +73,49 @@ describe("voice provider destination execution", () => {
     );
     expect(providerHost.navigate).not.toHaveBeenCalled();
     expect(onProgress).toHaveBeenCalledWith("Opening YouTube subscriptions…");
+  });
+
+  it("does not claim an exact destination after a provider-owned redirect", async () => {
+    const providerHost = host({ activeServiceId: "youtube" });
+    const execution = options(providerHost, {
+      openService: vi.fn(async () => undefined)
+    });
+    providerHost.navigate = vi.fn(async () => {
+      providerHost.activeUrl = "https://accounts.google.com/login";
+    });
+
+    await expect(executeVoiceProviderDestination(plan(), execution)).resolves.toEqual({
+      detail: "YouTube opened, but I couldn't verify the library destination.",
+      handled: false
+    });
+    expect(execution.openService).not.toHaveBeenCalled();
+  });
+
+  it("requires an inactive open to finish on both the requested provider and route", async () => {
+    const providerHost = host({ activeServiceId: "netflix" });
+    const wrongRoute = options(providerHost, {
+      openService: vi.fn(async () => {
+        providerHost.activeServiceId = "youtube";
+        providerHost.activeUrl = "https://www.youtube.com/";
+      })
+    });
+    await expect(executeVoiceProviderDestination(plan(), wrongRoute)).resolves.toEqual({
+      detail: "YouTube opened, but I couldn't verify the library destination.",
+      handled: false
+    });
+
+    providerHost.activeServiceId = "netflix";
+    providerHost.activeUrl = "https://www.netflix.com/browse";
+    const wrongProvider = options(providerHost, {
+      openService: vi.fn(async () => {
+        providerHost.activeServiceId = "netflix";
+        providerHost.activeUrl = "https://www.youtube.com/feed/you";
+      })
+    });
+    await expect(executeVoiceProviderDestination(plan(), wrongProvider)).resolves.toEqual({
+      detail: "YouTube opened, but I couldn't verify the library destination.",
+      handled: false
+    });
   });
 
   it("navigates an active provider in place with the same signal and operation", async () => {

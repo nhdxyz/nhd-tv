@@ -27,6 +27,8 @@ describe("voice provider destination navigation wiring", () => {
     expect(navigation).toContain('removeEventListener("abort", cancelNavigation)');
     expect(navigation).not.toContain("#closeVoiceOperationView");
     expect(navigation).not.toContain("this.close()");
+    expect(hostSource).toContain("get activeUrl(): string | null");
+    expect(hostSource).toContain("view.webContents.getURL()");
   });
 
   it("executes destination plans through the bounded executor with the active operation", () => {

@@ -6,6 +6,10 @@ const execution = source.slice(
   source.indexOf("async function executeVoiceCommandPlanCore("),
   source.indexOf("async function executeVoiceCommandPlan(")
 );
+const contextualUnderstanding = source.slice(
+  source.indexOf("async function understandVoiceCommandWithContext("),
+  source.indexOf("function usesGoogleWatchDiscovery(")
+);
 
 describe("voice use-case execution wiring", () => {
   it("sets mute explicitly without superseding provider navigation", () => {
@@ -36,5 +40,17 @@ describe("voice use-case execution wiring", () => {
     expect(execution).toContain("syncVoiceContextFromServiceHost()");
     expect(execution).toContain("answerCurrentMediaQuestion(");
     expect(query).toBeLessThan(operation);
+  });
+
+  it("resolves follow-up references from fresh TV-wide context before recording the target", () => {
+    const sync = contextualUnderstanding.indexOf("syncVoiceContextFromServiceHost()");
+    const resolve = contextualUnderstanding.indexOf("resolveVoiceContextIntent(");
+    const record = contextualUnderstanding.indexOf("recordVoiceMediaIntentContext(");
+    expect(sync).toBeGreaterThan(-1);
+    expect(resolve).toBeGreaterThan(sync);
+    expect(record).toBeGreaterThan(resolve);
+    expect(source).toContain(
+      "understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)"
+    );
   });
 });

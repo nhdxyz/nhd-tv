@@ -110,6 +110,10 @@ import {
   type VoiceMediaType as VoiceContextMediaType
 } from "./voice/voice-context-store";
 import {
+  recordVoiceMediaIntentContext,
+  resolveVoiceContextIntent
+} from "./voice/voice-context-resolver";
+import {
   answerCurrentMediaQuestion,
   type VoiceCurrentMediaSnapshot
 } from "./voice/voice-current-media";
@@ -1380,6 +1384,24 @@ function activeVoiceProfileName(): string | null {
   return state.profiles.find((profile) => profile.id === state.activeProfileId)?.name ?? null;
 }
 
+async function understandVoiceCommandWithContext(
+  client: OpenAiVoiceClient,
+  clip: VoiceAudioClip,
+  signal?: AbortSignal,
+  onTranscript?: (transcript: string) => void
+) {
+  const understood = await client.understand(clip, signal, onTranscript);
+  const store = voiceContextStore;
+  if (store === null) return understood;
+
+  syncVoiceContextFromServiceHost();
+  const intent = resolveVoiceContextIntent(understood.intent, store.snapshot());
+  if (intent.kind === "media") {
+    recordVoiceMediaIntentContext(store, intent);
+  }
+  return { ...understood, intent };
+}
+
 function usesGoogleWatchDiscovery(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
 ): boolean {
@@ -2432,7 +2454,7 @@ app.whenReady().then(async () => {
     getContext: voiceCommandContext,
     onTranscript: presentPhoneVoiceTranscript,
     understand: (clip, signal, onTranscript) =>
-      openAiVoiceClient.understand(clip, signal, onTranscript)
+      understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)
   });
   setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(

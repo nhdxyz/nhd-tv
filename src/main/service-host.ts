@@ -86,11 +86,12 @@ import {
   buildNetflixVoiceAutomationScript,
   buildSpotifyVoiceAutomationScript,
   buildYouTubeVoiceAutomationScript,
+  isVoiceProviderTerminalResult,
   netflixContentIdFromUrl,
   parseVoiceProviderAutomationResult,
   youtubeContentIdFromUrl,
   type VoiceMediaExecutionResult,
-  type VoiceProviderAutomationResult
+  type VoiceProviderAutomationState
 } from "./voice/voice-provider-automation";
 import {
   buildSpotifyRepeatControlStateScript,
@@ -1739,6 +1740,8 @@ export class ServiceHost {
       let trustedYouTubeContentId = definition.id === "youtube"
         ? youtubeContentIdFromUrl(safeSuppliedDestination)
         : null;
+      let trustedYouTubeChannelPath: string | null = null;
+      let trustedYouTubeChannelIdentity: string | null = null;
       let trustNextNetflixNavigation = false;
       const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
       while (
@@ -1776,19 +1779,28 @@ export class ServiceHost {
               : buildYouTubeVoiceAutomationScript(
                 intent,
                 fullscreenRequested,
-                trustedYouTubeContentId
+                trustedYouTubeContentId,
+                trustedYouTubeChannelPath,
+                trustedYouTubeChannelIdentity
               );
           const rawResult = await view.webContents.executeJavaScript(
             script,
             true
           ) as unknown;
           const parsedResult = parseVoiceProviderAutomationResult(rawResult);
-          let result: Exclude<VoiceProviderAutomationResult, { state: "navigated" }>;
+          let result: VoiceProviderAutomationState;
           if (typeof parsedResult === "string") {
             result = parsedResult;
-          } else if (definition.id === "youtube") {
+          } else if (definition.id === "youtube" && parsedResult.state === "navigated") {
             trustedYouTubeContentId = parsedResult.youtubeContentId;
-            result = parsedResult.state;
+            result = "navigated";
+          } else if (
+            definition.id === "youtube" &&
+            parsedResult.state === "channel-navigated"
+          ) {
+            trustedYouTubeChannelPath = parsedResult.youtubeChannelPath;
+            trustedYouTubeChannelIdentity = parsedResult.youtubeChannelIdentity;
+            result = "navigated";
           } else {
             result = "idle";
           }
@@ -1801,6 +1813,9 @@ export class ServiceHost {
           }
           if (result === "profile-required") {
             return "profile-required";
+          }
+          if (isVoiceProviderTerminalResult(result)) {
+            return result;
           }
           if (result === "navigated" || result === "play-clicked") {
             settleDelayMs = 650;

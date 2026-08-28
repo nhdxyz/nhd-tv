@@ -1,41 +1,83 @@
 import type { VoiceMediaIntent } from "./voice-intent";
 
 export type VoiceProviderAutomationState =
+  | "age-gate-required"
   | "complete"
+  | "consent-required"
+  | "content-private"
+  | "content-unavailable"
   | "fullscreen-requested"
   | "idle"
   | "navigated"
   | "play-clicked"
   | "playing"
   | "profile-required"
-  | "profile-selected";
+  | "profile-selected"
+  | "sign-in-required";
 
 export interface YouTubeVoiceNavigationResult {
   state: "navigated";
   youtubeContentId: string;
 }
 
+export interface YouTubeChannelNavigationResult {
+  state: "channel-navigated";
+  youtubeChannelIdentity: string;
+  youtubeChannelPath: string;
+}
+
 export type VoiceProviderAutomationResult =
   | VoiceProviderAutomationState
+  | YouTubeChannelNavigationResult
   | YouTubeVoiceNavigationResult;
 
+export type VoiceProviderTerminalResult =
+  | "age-gate-required"
+  | "consent-required"
+  | "content-private"
+  | "content-unavailable"
+  | "sign-in-required";
+
 export type VoiceMediaExecutionResult =
+  | VoiceProviderTerminalResult
   | "complete"
   | "failed"
   | "playing-windowed"
   | "profile-required";
 
 const VOICE_PROVIDER_AUTOMATION_STATES: readonly VoiceProviderAutomationState[] = [
+  "age-gate-required",
   "complete",
+  "consent-required",
+  "content-private",
+  "content-unavailable",
   "fullscreen-requested",
   "idle",
   "navigated",
   "play-clicked",
   "playing",
   "profile-required",
-  "profile-selected"
+  "profile-selected",
+  "sign-in-required"
+];
+const VOICE_PROVIDER_TERMINAL_RESULTS: readonly VoiceProviderTerminalResult[] = [
+  "age-gate-required",
+  "consent-required",
+  "content-private",
+  "content-unavailable",
+  "sign-in-required"
 ];
 const YOUTUBE_CONTENT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_CHANNEL_IDENTITY_PATTERN = /^[a-z0-9]{1,160}$/;
+const YOUTUBE_CHANNEL_PATH_PATTERN =
+  /^\/(?:@[A-Za-z0-9._%~-]{1,180}|channel\/[A-Za-z0-9_-]{1,128})\/?$/;
+
+export function isVoiceProviderTerminalResult(
+  value: unknown
+): value is VoiceProviderTerminalResult {
+  return typeof value === "string" &&
+    VOICE_PROVIDER_TERMINAL_RESULTS.includes(value as VoiceProviderTerminalResult);
+}
 
 export function parseVoiceProviderAutomationResult(
   value: unknown
@@ -59,6 +101,20 @@ export function parseVoiceProviderAutomationResult(
       youtubeContentId: candidate.youtubeContentId
     };
   }
+  if (
+    Object.keys(candidate).length === 3 &&
+    candidate.state === "channel-navigated" &&
+    typeof candidate.youtubeChannelIdentity === "string" &&
+    YOUTUBE_CHANNEL_IDENTITY_PATTERN.test(candidate.youtubeChannelIdentity) &&
+    typeof candidate.youtubeChannelPath === "string" &&
+    YOUTUBE_CHANNEL_PATH_PATTERN.test(candidate.youtubeChannelPath)
+  ) {
+    return {
+      state: "channel-navigated",
+      youtubeChannelIdentity: candidate.youtubeChannelIdentity,
+      youtubeChannelPath: candidate.youtubeChannelPath.replace(/\/$/, "")
+    };
+  }
   return "idle";
 }
 
@@ -66,9 +122,135 @@ export function voiceProviderCommandHandled(
   intent: VoiceMediaIntent,
   executionResult: VoiceMediaExecutionResult
 ): boolean {
+  if (isVoiceProviderTerminalResult(executionResult)) return false;
   return intent.action !== "play" ||
     executionResult === "complete" ||
     executionResult === "playing-windowed";
+}
+
+function providerTerminalPageDetectorScript(
+  providerId: "netflix" | "spotify" | "youtube"
+): string {
+  return `
+    const providerTerminalState = (() => {
+      const providerId = ${JSON.stringify(providerId)};
+      const hostname = normalize(location.hostname);
+      const pathname = normalize(location.pathname);
+      const pageText = normalize(document.body?.innerText);
+      const visibleText = (selector) => [...document.querySelectorAll(selector)]
+        .filter(visible)
+        .map((element) => normalize([
+          element.getAttribute("aria-label"),
+          element.getAttribute("title"),
+          element.textContent
+        ].filter(Boolean).join(" ")))
+        .join(" ");
+      const includesAny = (value, phrases) => phrases.some((phrase) => value.includes(phrase));
+      if (providerId === "youtube") {
+        const consentText = visibleText(
+          'form[action*="consent" i],[role="dialog"][aria-modal="true"],#consent-bump'
+        );
+        if (hostname === "consent.youtube.com" || pathname.startsWith("/consent") ||
+          includesAny(consentText, ["before you continue to youtube", "accept all", "reject all"])) {
+          return "consent-required";
+        }
+        const playerErrorText = visibleText(
+          'ytd-player-error-message-renderer,.ytp-error,.ytp-error-content-wrap,'
+          + '[class*="player-error-message"],[role="alert"]'
+        );
+        const playerTerminalText = pathname === "/watch" || pathname.startsWith("/shorts/")
+          ? playerErrorText + " " + pageText
+          : playerErrorText;
+        if (includesAny(playerTerminalText, [
+          "sign in to confirm your age", "age-restricted", "age restricted",
+          "verify your age", "confirm your age"
+        ])) return "age-gate-required";
+        if (includesAny(playerTerminalText, ["private video", "this video is private"])) {
+          return "content-private";
+        }
+        if (includesAny(playerTerminalText, [
+          "video unavailable", "this video is unavailable", "this video isn't available",
+          "this content isn't available", "this content is not available"
+        ])) return "content-unavailable";
+        const signInText = visibleText(
+          'form[action*="signin" i],form[action*="login" i],#identifierId,'
+          + 'input[type="email"],input[type="password"]'
+        );
+        if (hostname === "accounts.youtube.com" || pathname.startsWith("/signin") ||
+          (signInText && includesAny(pageText, [
+            "sign in to continue to youtube", "sign in to youtube"
+          ]))) return "sign-in-required";
+        return null;
+      }
+      if (providerId === "spotify") {
+        const gateText = visibleText(
+          '[role="dialog"][aria-modal="true"],[role="alert"],main form,main [data-testid*="error"]'
+        );
+        const spotifyContentText = [
+          "/album/", "/artist/", "/episode/", "/playlist/", "/show/", "/track/"
+        ].some((prefix) => pathname.startsWith(prefix))
+          ? gateText + " " + pageText
+          : gateText;
+        if (pathname.startsWith("/authorize") || pathname.startsWith("/consent") ||
+          includesAny(gateText, ["allow spotify to", "authorize spotify", "grant permission"])) {
+          return "consent-required";
+        }
+        if (includesAny(spotifyContentText, [
+          "verify your age", "confirm your age", "age-restricted", "age restricted"
+        ])) return "age-gate-required";
+        if (includesAny(spotifyContentText, [
+          "this playlist is private", "this content is private"
+        ])) {
+          return "content-private";
+        }
+        if (includesAny(spotifyContentText, [
+          "spotify can't play this right now", "spotify can’t play this right now",
+          "this content is not available", "this content isn't available"
+        ])) return "content-unavailable";
+        const hasSignInForm = document.querySelector(
+          'form[action*="login" i],input[type="email"],input[name="username"],input[type="password"]'
+        ) !== null;
+        if ((hostname === "accounts.spotify.com" && !pathname.startsWith("/authorize")) ||
+          pathname.startsWith("/login") || (hasSignInForm && includesAny(pageText, [
+            "log in to spotify", "sign in to spotify"
+          ]))) return "sign-in-required";
+        return null;
+      }
+      const gateText = visibleText(
+        '[role="dialog"][aria-modal="true"],[role="alert"],main form,'
+        + '[data-uia*="error"],[data-uia*="pin"],[data-uia*="consent"]'
+      );
+      const netflixContentText = ["/title/", "/watch/"].some((prefix) =>
+        pathname.startsWith(prefix)
+      ) ? gateText + " " + pageText : gateText;
+      if (pathname.startsWith("/consent") || includesAny(gateText, [
+        "privacy preferences", "review your privacy", "accept cookies to continue"
+      ])) return "consent-required";
+      if (includesAny(netflixContentText, [
+        "enter your pin", "profile lock", "verify your age", "maturity pin"
+      ])) return "age-gate-required";
+      if (includesAny(netflixContentText, [
+        "this title is private", "this content is private"
+      ])) {
+        return "content-private";
+      }
+      if (includesAny(netflixContentText, [
+        "this title is not available", "this title isn't available",
+        "this title isn’t available", "not available in your country",
+        "we're having trouble with your request"
+      ])) return "content-unavailable";
+      const hasSignInForm = document.querySelector(
+        'form[action*="login" i],[data-uia="login-form"],input[data-uia="login-field"],'
+        + 'input[data-uia="password-field"]'
+      ) !== null;
+      if (pathname.startsWith("/login") || pathname.startsWith("/signin") ||
+        (hasSignInForm && includesAny(pageText, ["sign in", "email or mobile number"]))) {
+        return "sign-in-required";
+      }
+      return null;
+    })();
+    if (providerTerminalState !== null) return providerTerminalState;
+  `;
 }
 
 function serializedIntent(intent: VoiceMediaIntent): string {
@@ -146,6 +328,7 @@ export function buildSpotifyVoiceAutomationScript(
       return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
         style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
+    ${providerTerminalPageDetectorScript("spotify")}
     const titleIdentity = identity(intent.title);
     const creatorIdentity = identity(intent.creator);
     const routePrefix = intent.mediaType === "artist" ? "/artist/"
@@ -201,14 +384,14 @@ export function buildSpotifyVoiceAutomationScript(
     const nowPlaying = document.querySelector(
       '[data-testid="now-playing-widget"],[data-testid="now-playing-bar"],[data-testid="now-playing-view"]'
     );
-    const nowPlayingTitle = identity(nowPlaying?.querySelector(
-      '[data-testid="context-item-info-title"],a[href^="/track/"]'
-    )?.textContent);
-    const nowPlayingCreator = identity(nowPlaying?.querySelector(
-      '[data-testid="context-item-info-subtitles"],a[href^="/artist/"]'
-    )?.textContent);
-    const nowPlayingMatches = intent.mediaType === "song" && nowPlayingTitle === titleIdentity &&
-      (!creatorIdentity || nowPlayingCreator === creatorIdentity);
+    const nowPlayingTrack = nowPlaying === null
+      ? null
+      : exactLink(nowPlaying, "/track/", titleIdentity);
+    const nowPlayingCreatorMatches = nowPlaying !== null && (
+      !creatorIdentity || Boolean(exactLink(nowPlaying, "/artist/", creatorIdentity))
+    );
+    const nowPlayingMatches = intent.mediaType === "song" &&
+      nowPlayingTrack instanceof HTMLElement && nowPlayingCreatorMatches;
     if (intent.action === "play" && nowPlaying && nowPlayingMatches) {
       const pause = globalPauseButton();
       if (pause instanceof HTMLElement) return "complete";
@@ -226,7 +409,7 @@ export function buildSpotifyVoiceAutomationScript(
         visible(destination)
       ) {
         destination.click();
-        return intent.action === "play" ? "navigated" : "complete";
+        return "navigated";
       }
       if (intent.action === "play") {
         if (
@@ -242,10 +425,14 @@ export function buildSpotifyVoiceAutomationScript(
       }
       if (destination instanceof HTMLElement && visible(destination)) {
         destination.click();
-        return intent.action === "play" ? "navigated" : "complete";
+        return intent.mediaType === "artist" ? "navigated"
+          : intent.action === "play" ? "navigated" : "complete";
       }
     }
-    if (routePrefix !== "/" && location.pathname.startsWith(routePrefix)) {
+    const exactEntityRoute = intent.mediaType === "artist"
+      ? /^\\/artist\\/[A-Za-z0-9]+\\/?$/.test(location.pathname)
+      : routePrefix !== "/" && location.pathname.startsWith(routePrefix);
+    if (exactEntityRoute) {
       const requestedIdentity = intent.mediaType === "artist"
         ? titleIdentity || creatorIdentity
         : titleIdentity;
@@ -286,7 +473,8 @@ export function buildSpotifyVoiceAutomationScript(
       ) ?? direct;
       if (creatorMatches(root)) {
         direct.click();
-        return intent.action === "play" ? "navigated" : "complete";
+        return intent.mediaType === "artist" ? "navigated"
+          : intent.action === "play" ? "navigated" : "complete";
       }
     }
     return "idle";
@@ -296,12 +484,25 @@ export function buildSpotifyVoiceAutomationScript(
 export function buildYouTubeVoiceAutomationScript(
   intent: VoiceMediaIntent,
   fullscreenRequested = false,
-  expectedContentId: string | null = null
+  expectedContentId: string | null = null,
+  expectedChannelPath: string | null = null,
+  expectedChannelIdentity: string | null = null
 ): string {
   return `(() => {
     const intent = ${serializedIntent(intent)};
     const fullscreenRequested = ${JSON.stringify(fullscreenRequested)};
     const expectedContentId = ${serializedYouTubeContentId(expectedContentId)};
+    const expectedChannelPath = ${JSON.stringify(
+      typeof expectedChannelPath === "string" && YOUTUBE_CHANNEL_PATH_PATTERN.test(expectedChannelPath)
+        ? expectedChannelPath.replace(/\/$/, "")
+        : null
+    )};
+    const expectedChannelIdentity = ${JSON.stringify(
+      typeof expectedChannelIdentity === "string" &&
+        YOUTUBE_CHANNEL_IDENTITY_PATTERN.test(expectedChannelIdentity)
+        ? expectedChannelIdentity
+        : null
+    )};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
     const contentIdFromUrl = (value) => {
@@ -314,6 +515,16 @@ export function buildYouTubeVoiceAutomationScript(
         return typeof contentId === "string" && /^[A-Za-z0-9_-]{11}$/.test(contentId)
           ? contentId
           : null;
+      } catch { return null; }
+    };
+    const channelPathFromUrl = (value) => {
+      try {
+        const url = new URL(value, location.href);
+        if (url.origin !== location.origin ||
+          !/^\\/(?:@[A-Za-z0-9._%~-]{1,180}|channel\\/[A-Za-z0-9_-]{1,128})\\/?$/.test(url.pathname)) {
+          return null;
+        }
+        return url.pathname.replace(/\\/$/, "");
       } catch { return null; }
     };
     const nearIdentity = (left, right) => {
@@ -331,6 +542,16 @@ export function buildYouTubeVoiceAutomationScript(
       return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
         style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
+    ${providerTerminalPageDetectorScript("youtube")}
+    if (intent.mediaType === "channel" && expectedChannelPath !== null &&
+      expectedChannelIdentity !== null && channelPathFromUrl(location.href) === expectedChannelPath) {
+      const exactChannelHeading = [...document.querySelectorAll(
+        'ytd-channel-name yt-formatted-string,#channel-name yt-formatted-string,'
+        + 'yt-page-header-renderer h1,yt-dynamic-text-view-model h1,h1'
+      )].find((heading) => visible(heading) &&
+        identity(heading.textContent) === expectedChannelIdentity);
+      if (exactChannelHeading instanceof HTMLElement) return "complete";
+    }
     if (
       intent.action === "play" &&
       (location.pathname === "/watch" || location.pathname.startsWith("/shorts/"))
@@ -381,7 +602,15 @@ export function buildYouTubeVoiceAutomationScript(
         const nameIdentity = identity(name);
         const exact = channelIdentity && (nameIdentity === channelIdentity || hrefIdentity === channelIdentity);
         const near = channelIdentity && nearIdentity(nameIdentity, channelIdentity);
-        if (exact || near) candidates.push({ anchor, score: exact ? 200 : 110 });
+        const channelPath = channelPathFromUrl(anchor.getAttribute("href"));
+        if ((exact || near) && channelPath !== null && nameIdentity) {
+          candidates.push({
+            anchor,
+            channelIdentity: nameIdentity,
+            channelPath,
+            score: exact ? 200 : 110
+          });
+        }
       }
     } else {
       const genericTitles = new Set(["video", "a video", "something", "latest video"]);
@@ -414,16 +643,25 @@ export function buildYouTubeVoiceAutomationScript(
       }
     }
     candidates.sort((left, right) => right.score - left.score);
-    const anchor = candidates[0]?.anchor;
+    const candidate = candidates[0];
+    const anchor = candidate?.anchor;
     if (anchor instanceof HTMLElement) {
+      if (intent.mediaType === "channel") {
+        if (!candidate.channelPath || !candidate.channelIdentity) return "idle";
+        anchor.click();
+        return {
+          state: "channel-navigated",
+          youtubeChannelIdentity: candidate.channelIdentity,
+          youtubeChannelPath: candidate.channelPath
+        };
+      }
       const targetContentId = contentIdFromUrl(anchor.getAttribute("href"));
       if (
         intent.action === "play" &&
-        intent.mediaType !== "channel" &&
         targetContentId === null
       ) return "idle";
       anchor.click();
-      return intent.action === "play" && intent.mediaType !== "channel"
+      return intent.action === "play"
         ? { state: "navigated", youtubeContentId: targetContentId }
         : "complete";
     }
@@ -451,6 +689,7 @@ export function buildNetflixVoiceAutomationScript(
       return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
         style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
+    ${providerTerminalPageDetectorScript("netflix")}
     const controlLabel = (element) => normalize([
       element.getAttribute("aria-label"),
       element.getAttribute("data-uia"),

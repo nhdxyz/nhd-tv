@@ -174,13 +174,70 @@ describe("voice provider automation", () => {
       text: "Outdoor Boys"
     });
 
-    expect(executeYouTubeScript(intent({
+    const channelIntent = intent({
       action: "open",
       creator: null,
       mediaType: "channel",
       title: "Outdoor Boys"
-    }), [channel])).toBe("complete");
+    });
+    const navigation = executeYouTubeScript(channelIntent, [channel]);
+    expect(navigation).toEqual({
+      state: "channel-navigated",
+      youtubeChannelIdentity: "outdoorboys",
+      youtubeChannelPath: "/@OutdoorBoys"
+    });
     expect(channel.clicked).toBe(true);
+
+    const channelHeading = new FakeElement({ text: "Outdoor Boys" });
+    const destinationDocument = {
+      body: { innerText: "Outdoor Boys" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes("yt-page-header-renderer")
+        ? [channelHeading]
+        : []
+    };
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(
+        channelIntent,
+        false,
+        null,
+        "/@OutdoorBoys",
+        "outdoorboys"
+      ),
+      destinationDocument,
+      "/@OutdoorBoys"
+    )).toBe("complete");
+
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(
+        channelIntent,
+        false,
+        null,
+        "/@DifferentChannel",
+        "outdoorboys"
+      ),
+      destinationDocument,
+      "/@OutdoorBoys"
+    )).toBe("idle");
+
+    const wrongHeadingDocument = {
+      ...destinationDocument,
+      querySelectorAll: (selector: string) => selector.includes("yt-page-header-renderer")
+        ? [new FakeElement({ text: "Outdoor Adventures" })]
+        : []
+    };
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(
+        channelIntent,
+        false,
+        null,
+        "/@OutdoorBoys",
+        "outdoorboys"
+      ),
+      wrongHeadingDocument,
+      "/@OutdoorBoys"
+    )).toBe("idle");
   });
 
   it("skips fan uploads before opening the named creator's latest video", () => {
@@ -334,6 +391,20 @@ describe("voice provider automation", () => {
     expect(parseVoiceProviderAutomationResult({
       state: "navigated",
       youtubeContentId: "short"
+    })).toBe("idle");
+    expect(parseVoiceProviderAutomationResult({
+      state: "channel-navigated",
+      youtubeChannelIdentity: "outdoorboys",
+      youtubeChannelPath: "/@OutdoorBoys/"
+    })).toEqual({
+      state: "channel-navigated",
+      youtubeChannelIdentity: "outdoorboys",
+      youtubeChannelPath: "/@OutdoorBoys"
+    });
+    expect(parseVoiceProviderAutomationResult({
+      state: "channel-navigated",
+      youtubeChannelIdentity: "outdoorboys",
+      youtubeChannelPath: "https://evil.test/@OutdoorBoys"
     })).toBe("idle");
     expect(parseVoiceProviderAutomationResult("profile-required"))
       .toBe("profile-required");
@@ -791,14 +862,23 @@ describe("voice provider automation", () => {
     expect(wrongPlay.clicked).toBe(false);
     expect(rightPlay.clicked).toBe(true);
 
-    const nowPlaying = new FakeElement({ selectors: {
-      '[data-testid="context-item-info-subtitles"],a[href^="/artist/"]': [
-        new FakeElement({ text: "Kanye West" })
-      ],
-      '[data-testid="context-item-info-title"],a[href^="/track/"]': [
-        new FakeElement({ text: "Stronger" })
-      ]
-    } });
+    const nowPlayingTrack = new FakeElement({
+      attributes: { href: "/track/stronger" },
+      text: "Stronger"
+    });
+    const featuredArtist = new FakeElement({
+      attributes: { href: "/artist/daft-punk" },
+      text: "Daft Punk"
+    });
+    const requestedArtist = new FakeElement({
+      attributes: { href: "/artist/kanye" },
+      text: "Kanye West"
+    });
+    const nowPlaying = new FakeElement({
+      selectAll: (selector) => selector === "a[href]"
+        ? [nowPlayingTrack, featuredArtist, requestedArtist]
+        : []
+    });
     const pause = new FakeElement({ attributes: { "aria-label": "Pause" } });
     const playbackDocument = {
       querySelector: (selector: string) => selector.includes("now-playing-widget")
@@ -810,6 +890,15 @@ describe("voice provider automation", () => {
     };
     expect(executeProviderScript(script, playbackDocument, "/search/Stronger"))
       .toBe("complete");
+
+    const wrongArtistScript = buildSpotifyVoiceAutomationScript(intent({
+      creator: "Jay-Z",
+      mediaType: "song",
+      providerHint: "spotify",
+      title: "Stronger"
+    }));
+    expect(executeProviderScript(wrongArtistScript, playbackDocument, "/search/Stronger"))
+      .toBe("idle");
   });
 
   it("does not call Spotify playback complete while the global control still says Play", () => {
@@ -917,6 +1006,74 @@ describe("voice provider automation", () => {
     )).toBe("navigated");
     expect(play.clicked).toBe(false);
     expect(unrelatedPause.clicked).toBe(false);
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript({ ...artistIntent, action: "open" }),
+      documentValue,
+      "/search/Kanye%20West"
+    )).toBe("navigated");
+  });
+
+  it("returns typed terminal provider states before retrying automation", () => {
+    const emptyDocument = {
+      body: { innerText: "" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: () => []
+    };
+    expect(executeProviderScript(
+      buildNetflixVoiceAutomationScript(intent({
+        mediaType: "show",
+        providerHint: "netflix",
+        title: "Breaking Bad"
+      })),
+      emptyDocument,
+      "https://www.netflix.com/login"
+    )).toBe("sign-in-required");
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      })),
+      emptyDocument,
+      "https://accounts.spotify.com/authorize"
+    )).toBe("consent-required");
+
+    const terminalDocument = (message: string) => {
+      const alert = new FakeElement({ text: message });
+      return {
+        body: { innerText: message },
+        fullscreenElement: null,
+        querySelector: () => null,
+        querySelectorAll: (selector: string) => selector.includes('[role="alert"]')
+          ? [alert]
+          : []
+      };
+    };
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(intent()),
+      terminalDocument("This video is private"),
+      "/watch?v=targetvid01"
+    )).toBe("content-private");
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(intent()),
+      terminalDocument("Sign in to confirm your age"),
+      "/watch?v=targetvid01"
+    )).toBe("age-gate-required");
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({ providerHint: "spotify" })),
+      terminalDocument("Spotify can't play this right now"),
+      "https://open.spotify.com/track/abc"
+    )).toBe("content-unavailable");
+    expect(executeProviderScript(
+      buildNetflixVoiceAutomationScript(intent({ providerHint: "netflix" })),
+      {
+        ...emptyDocument,
+        body: { innerText: "This title is not available in your country" }
+      },
+      "https://www.netflix.com/title/70143836"
+    )).toBe("content-unavailable");
   });
 
   it("starts playback only from the exact Spotify artist profile action bar", () => {
@@ -1042,6 +1199,8 @@ describe("voice provider automation", () => {
     expect(source).toContain("youtubeContentIdFromUrl(safeSuppliedDestination)");
     expect(source).toContain("trustedYouTubeContentId = parsedResult.youtubeContentId");
     expect(source).toContain("parseVoiceProviderAutomationResult(rawResult)");
+    expect(source).toContain("isVoiceProviderTerminalResult(result)");
+    expect(source).toContain("trustedYouTubeChannelPath = parsedResult.youtubeChannelPath");
     expect(source).toContain('keyCode: "F"');
     expect(source).toContain('result === "complete"');
     const profileRequired = source.indexOf('result === "profile-required"');
@@ -1055,9 +1214,12 @@ describe("voice provider automation", () => {
     const playIntent = intent({ action: "play" });
     expect(voiceProviderCommandHandled(playIntent, "failed")).toBe(false);
     expect(voiceProviderCommandHandled(playIntent, "profile-required")).toBe(false);
+    expect(voiceProviderCommandHandled(playIntent, "sign-in-required")).toBe(false);
     expect(voiceProviderCommandHandled(playIntent, "complete")).toBe(true);
     expect(voiceProviderCommandHandled(playIntent, "playing-windowed")).toBe(true);
     expect(voiceProviderCommandHandled(intent({ action: "open" }), "failed")).toBe(true);
+    expect(voiceProviderCommandHandled(intent({ action: "open" }), "content-private"))
+      .toBe(false);
   });
 
   it("extracts only bounded Netflix title and watch ids from trusted URLs", () => {

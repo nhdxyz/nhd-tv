@@ -80,6 +80,21 @@ beforeEach(() => {
 });
 
 describe("Google watch resolver cancellation", () => {
+  it("uses a cooldown after Google rate limits the warmed session", async () => {
+    electron.fetch.mockResolvedValue(new Response("", { status: 429 }));
+    const resolver = new GoogleWatchResolver({ cache: cache() });
+
+    await expect(resolver.resolve(lookup)).rejects.toThrow(
+      "Google discovery needs a cooldown before retrying."
+    );
+    const requestCount = electron.fetch.mock.calls.length;
+    await expect(resolver.resolve(lookup)).rejects.toThrow(
+      "Google discovery is cooling down before retrying."
+    );
+    expect(electron.fetch).toHaveBeenCalledTimes(requestCount);
+    expect(electron.windows.every((window) => window.destroyed)).toBe(true);
+  });
+
   it("settles immediately when an Electron renderer call ignores the deadline", async () => {
     const resolver = new GoogleWatchResolver({ cache: cache() });
     const controller = new AbortController();

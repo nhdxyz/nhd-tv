@@ -10,6 +10,7 @@ const MAX_GOOGLE_RESPONSE_BYTES = 5 * 1024 * 1024;
 const PANEL_TIMEOUT_MS = 12_000;
 const REDIRECT_TIMEOUT_MS = 4_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const GOOGLE_COOLDOWN_MS = 5 * 60 * 1_000;
 const PROVIDER_BODY_HOST_PATTERN = new RegExp([
   "(?:netflix|youtube|amazon|primevideo|hulu|disneyplus|max|hbomax|sling|peacocktv|paramountplus)",
   "(?:\\\\u002e|\\\\x2e|\\.)com",
@@ -440,6 +441,7 @@ async function loadUrl(
 export class GoogleWatchResolver {
   #activeResolution: symbol | null = null;
   readonly #cache: GoogleWatchCache;
+  #cooldownUntil = 0;
   readonly #partition: string;
   #probeSession: Session | null = null;
   #resolverWindow: BrowserWindow | null = null;
@@ -467,6 +469,9 @@ export class GoogleWatchResolver {
       signal
     });
     await response.arrayBuffer();
+    if (response.status === 429) {
+      throw new Error("Google discovery needs a cooldown before retrying.");
+    }
     signal?.throwIfAborted();
     this.#warmMs = Date.now() - startedAt;
   }
@@ -486,6 +491,7 @@ export class GoogleWatchResolver {
       }
       this.#cache.invalidate(lookup.queryText, countryCode);
     }
+    this.#throwIfCoolingDown();
 
     const resolution = Symbol("google-watch-resolution");
     const task = this.#sequence.catch(() => undefined).then(async () => {
@@ -499,13 +505,25 @@ export class GoogleWatchResolver {
           }
           this.#cache.invalidate(lookup.queryText, countryCode);
         }
-        await this.warm(signal);
-        return await this.#resolveUncached(
-          { ...lookup, countryCode },
-          completeOffers,
-          options.preferredProviderNames ?? [],
-          signal
-        );
+        this.#throwIfCoolingDown();
+        try {
+          await this.warm(signal);
+          return await this.#resolveUncached(
+            { ...lookup, countryCode },
+            completeOffers,
+            options.preferredProviderNames ?? [],
+            signal
+          );
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "Google discovery needs a cooldown before retrying."
+          ) {
+            this.#cooldownUntil = Date.now() + GOOGLE_COOLDOWN_MS;
+            this.destroy();
+          }
+          throw error;
+        }
       } finally {
         if (this.#activeResolution === resolution) this.#activeResolution = null;
       }
@@ -529,6 +547,12 @@ export class GoogleWatchResolver {
     this.destroy();
     this.#activeResolution = null;
     this.#sequence = Promise.resolve();
+  }
+
+  #throwIfCoolingDown(): void {
+    if (Date.now() < this.#cooldownUntil) {
+      throw new Error("Google discovery is cooling down before retrying.");
+    }
   }
 
   #createWindow(probeSession: Session, width: number, height: number): BrowserWindow {
@@ -567,6 +591,9 @@ export class GoogleWatchResolver {
       redirect: "follow",
       signal
     });
+    if (response.status === 429) {
+      throw new Error("Google discovery needs a cooldown before retrying.");
+    }
     const contentLength = Number(response.headers.get("content-length") ?? 0);
     if (!response.ok || contentLength > MAX_GOOGLE_RESPONSE_BYTES) {
       return { body: "", hasData: false };

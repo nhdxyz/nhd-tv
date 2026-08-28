@@ -132,6 +132,41 @@ describe("Google watch selection", () => {
     expect(selectEnabledWatchOffer(youtubeFirst, ["youtube"])).toBeNull();
   });
 
+  it("never launches a YouTube add-on offer as ordinary YouTube access", () => {
+    const addOnResult: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "add_on",
+        priceText: null,
+        providerContentId: "video-id",
+        providerHost: "www.youtube.com",
+        providerName: "YouTube",
+        rawLabel: "YouTube Primetime subscription Requires add-on",
+        watchUrl: "https://www.youtube.com/watch?v=video-id"
+      }]
+    };
+    expect(selectEnabledWatchOffer(addOnResult, ["youtube"])).toBeNull();
+    expect(watchAvailabilityDetail(addOnResult, ["youtube"]))
+      .toContain("but none are enabled in this profile");
+  });
+
+  it("recognizes Google's legacy HBO Max playback hostname", () => {
+    const maxResult: GoogleWatchResult = {
+      ...result,
+      offers: [{
+        monetizationType: "subscription",
+        priceText: null,
+        providerContentId: "show-id",
+        providerHost: "play.hbomax.com",
+        providerName: "Max",
+        rawLabel: "HBO MAX Subscription",
+        watchUrl: "https://play.hbomax.com/show/show-id"
+      }]
+    };
+    expect(watchAvailabilityDetail(maxResult, ["hbo-max"]))
+      .toBe("Apollo 13 is available on Max (subscribed).");
+  });
+
   it("uses lineup order to break ties between subscribed providers", () => {
     const multiSubscription: GoogleWatchResult = {
       ...result,

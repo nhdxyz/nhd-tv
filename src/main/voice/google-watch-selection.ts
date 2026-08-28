@@ -17,6 +17,7 @@ const WATCH_SERVICE_HOSTS: Readonly<Record<string, string>> = {
   "paramountplus.com": "paramount-plus",
   "peacocktv.com": "peacock",
   "play.max.com": "hbo-max",
+  "play.hbomax.com": "hbo-max",
   "primevideo.com": "prime-video",
   "tv.apple.com": "apple-tv",
   "www.disneyplus.com": "disney-plus",
@@ -38,6 +39,7 @@ const LAUNCHABLE_WATCH_SERVICES = new Set<VoiceServiceId>([
 ]);
 
 export function isLaunchableWatchOffer(offer: GoogleWatchOffer): boolean {
+  if (offer.monetizationType === "add_on") return false;
   if (offer.monetizationType === "subscription" || offer.monetizationType === "free") {
     return true;
   }

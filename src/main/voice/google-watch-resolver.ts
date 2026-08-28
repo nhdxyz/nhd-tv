@@ -11,7 +11,7 @@ const PANEL_TIMEOUT_MS = 12_000;
 const REDIRECT_TIMEOUT_MS = 4_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const PROVIDER_BODY_HOST_PATTERN = new RegExp([
-  "(?:netflix|youtube|amazon|primevideo|hulu|disneyplus|max|peacocktv|paramountplus)",
+  "(?:netflix|youtube|amazon|primevideo|hulu|disneyplus|max|hbomax|sling|peacocktv|paramountplus)",
   "(?:\\\\u002e|\\\\x2e|\\.)com",
   "|tv(?:\\\\u002e|\\\\x2e|\\.)apple(?:\\\\u002e|\\\\x2e|\\.)com",
   "|play(?:\\\\u002e|\\\\x2e|\\.)google(?:\\\\u002e|\\\\x2e|\\.)com",
@@ -34,6 +34,9 @@ const PROVIDER_NAMES: ReadonlyMap<string, string> = new Map([
   ["www.disneyplus.com", "Disney+"],
   ["www.max.com", "Max"],
   ["play.max.com", "Max"],
+  ["play.hbomax.com", "Max"],
+  ["watch.sling.com", "Sling TV"],
+  ["tv.youtube.com", "YouTube TV"],
   ["www.peacocktv.com", "Peacock"],
   ["www.paramountplus.com", "Paramount+"]
 ]);
@@ -237,11 +240,19 @@ export function googleWatchOfferFromUrl(
 
   const rawLabel = rawLabelValue.replace(/\s+/g, " ").trim().slice(0, 240);
   const priceText = rawLabel.match(/(?:From )?\$\d+(?:\.\d{2})?/i)?.[0] ?? null;
-  const monetizationType = /subscription/i.test(rawLabel)
-    ? "subscription"
-    : /free/i.test(rawLabel)
-      ? "free"
-      : priceText === null ? null : "purchase_or_rental";
+  let monetizationType: string | null = null;
+  if (
+    /requires?\s+(?:an?\s+)?add[ -]?on|add[ -]?on|required channel|primetime subscription/i
+      .test(rawLabel)
+  ) {
+    monetizationType = "add_on";
+  } else if (/subscription/i.test(rawLabel)) {
+    monetizationType = "subscription";
+  } else if (/free/i.test(rawLabel)) {
+    monetizationType = "free";
+  } else if (priceText !== null) {
+    monetizationType = "purchase_or_rental";
+  }
   return {
     monetizationType,
     priceText,

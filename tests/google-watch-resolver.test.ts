@@ -141,5 +141,20 @@ describe("Google watch resolver boundary", () => {
     });
     expect(googleWatchOfferFromUrl("https://play.max.com/video/watch/example-id", "Max"))
       .toMatchObject({ providerName: "Max" });
+    expect(googleWatchOfferFromUrl(
+      "https://play.hbomax.com/show/example-id",
+      "HBO MAX Subscription"
+    )).toMatchObject({
+      monetizationType: "subscription",
+      providerName: "Max"
+    });
+    expect(googleWatchOfferFromUrl(
+      "https://www.youtube.com/watch?v=example12345",
+      "YouTube Primetime subscription Requires add-on"
+    )).toMatchObject({ monetizationType: "add_on", providerName: "YouTube" });
+    expect(googleWatchOfferFromUrl(
+      "https://watch.sling.com/1/program/example-id",
+      "Sling TV Subscription"
+    )).toMatchObject({ providerName: "Sling TV" });
   });
 });

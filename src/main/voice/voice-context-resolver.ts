@@ -4,6 +4,7 @@ import {
   type VoiceContextSnapshot,
   type VoiceMediaReference as StoredVoiceMediaReference,
   type VoiceMediaReferenceInput,
+  type VoiceMediaTargetInvalidation,
   type VoiceMediaType as StoredVoiceMediaType,
   type VoiceProviderReference
 } from "./voice-context-store";
@@ -26,6 +27,7 @@ const PROVIDER_NAMES: Readonly<Record<VoiceProviderHint, string>> = Object.freez
 });
 
 const UNKNOWN_INTENT: VoiceUnknownIntent = Object.freeze({ kind: "unknown" });
+const CONTEXT_RESOLVED_MEDIA_INTENT = Symbol("context-resolved-media-intent");
 
 export type ResolvedVoiceIntent = Exclude<VoiceIntent, VoiceMediaReferenceIntent>;
 
@@ -33,6 +35,19 @@ export type ResolvedVoiceMediaReferenceIntent =
   | VoiceControlIntent
   | VoiceMediaIntent
   | VoiceUnknownIntent;
+
+export interface VoiceMediaIntentContextAttempt {
+  readonly invalidation: VoiceMediaTargetInvalidation | null;
+  readonly profileRevision: number;
+}
+
+export type VoiceMediaIntentContextSettlement =
+  | { outcome: "cancelled" | "failed" }
+  | {
+    intent: VoiceMediaIntent;
+    outcome: "succeeded";
+    preserveCandidates?: boolean;
+  };
 
 interface ResolvedReferenceSource {
   playbackConsent: boolean;
@@ -85,6 +100,22 @@ function contextReference(intent: VoiceMediaIntent): VoiceMediaReferenceInput | 
   };
 }
 
+function markContextResolvedMediaIntent(intent: VoiceMediaIntent): VoiceMediaIntent {
+  Object.defineProperty(intent, CONTEXT_RESOLVED_MEDIA_INTENT, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false
+  });
+  return intent;
+}
+
+function isContextResolvedMediaIntent(intent: VoiceMediaIntent): boolean {
+  return (intent as VoiceMediaIntent & { [CONTEXT_RESOLVED_MEDIA_INTENT]?: unknown })[
+    CONTEXT_RESOLVED_MEDIA_INTENT
+  ] === true;
+}
+
 /**
  * Replaces the previous conversational target with one explicit media intent.
  * Only structured identity and an explicitly named provider are retained.
@@ -103,6 +134,52 @@ export function recordVoiceMediaIntentContext(
     id: intent.providerHint,
     name: PROVIDER_NAMES[intent.providerHint]
   }, revisions);
+}
+
+/**
+ * Starts the context transaction for a media command that is about to run.
+ * Only a new explicit target invalidates an older, different target. Resolved
+ * follow-ups intentionally keep their source reference so a failed retry can
+ * be spoken again.
+ */
+export function beginVoiceMediaIntentContext(
+  store: VoiceContextStore,
+  intent: VoiceMediaIntent
+): VoiceMediaIntentContextAttempt {
+  const reference = contextReference(intent);
+  const revisions = store.revisions();
+  return {
+    invalidation: reference === null || isContextResolvedMediaIntent(intent)
+      ? null
+      : store.invalidateDifferentMediaTarget(reference, revisions),
+    profileRevision: revisions.profileRevision
+  };
+}
+
+/**
+ * Completes a media context transaction. Cancellation restores the previous
+ * target, ordinary failure leaves a different old target invalidated, and a
+ * verified success commits the new target.
+ */
+export function settleVoiceMediaIntentContext(
+  store: VoiceContextStore,
+  attempt: VoiceMediaIntentContextAttempt,
+  settlement: VoiceMediaIntentContextSettlement
+): boolean {
+  if (store.revisions().profileRevision !== attempt.profileRevision) return false;
+  if (
+    attempt.invalidation !== null &&
+    !store.settleMediaTargetInvalidation(
+      attempt.invalidation,
+      settlement.outcome === "cancelled" ? "restore-previous" : "retain-invalidation"
+    )
+  ) {
+    return false;
+  }
+  if (settlement.outcome !== "succeeded") return true;
+  return recordVoiceMediaIntentContext(store, settlement.intent, {
+    preserveCandidates: settlement.preserveCandidates === true
+  });
 }
 
 function providerHint(reference: VoiceProviderReference | null): VoiceProviderHint | null {
@@ -255,7 +332,7 @@ function compatibleProvider(
   return provider !== "spotify";
 }
 
-function isPausedCurrentMediaResume(
+function isCompatibleCurrentMediaPlay(
   intent: VoiceMediaReferenceIntent,
   snapshot: VoiceContextSnapshot,
   sourceProvider: VoiceProviderReference | null
@@ -263,7 +340,8 @@ function isPausedCurrentMediaResume(
   if (
     intent.reference !== "current-media" ||
     intent.action !== "play" ||
-    snapshot.liveMedia?.playbackStatus !== "paused"
+    (snapshot.liveMedia?.playbackStatus !== "paused" &&
+      snapshot.liveMedia?.playbackStatus !== "playing")
   ) {
     return false;
   }
@@ -281,10 +359,6 @@ export function resolveVoiceMediaReferenceIntent(
   const source = referenceSource(intent, snapshot);
   if (source === null) return UNKNOWN_INTENT;
 
-  if (isPausedCurrentMediaResume(intent, snapshot, source.provider)) {
-    return { action: "resume", kind: "control" };
-  }
-
   const inheritedProvider = providerHint(source.provider);
   if (
     intent.providerHint === null &&
@@ -298,14 +372,17 @@ export function resolveVoiceMediaReferenceIntent(
   if (target === null || !compatibleProvider(intent.action, target.mediaType, provider)) {
     return UNKNOWN_INTENT;
   }
+  if (isCompatibleCurrentMediaPlay(intent, snapshot, source.provider)) {
+    return { action: "resume", kind: "control" };
+  }
 
-  const resolved: VoiceMediaIntent = {
+  const resolved = markContextResolvedMediaIntent({
     action: intent.action,
     ...target,
     kind: "media",
     providerHint: provider,
     recency: null
-  };
+  });
   return source.playbackConsent && intent.action === "play"
     ? markContextualPlaybackConsent(resolved)
     : resolved;

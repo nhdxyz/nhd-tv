@@ -258,6 +258,23 @@ export interface VoiceContextStoreOptions {
   }>;
 }
 
+/**
+ * Opaque handle for one tentative replacement of the conversational media
+ * target. Callers can either retain the invalidation or roll it back when the
+ * command is cancelled.
+ */
+export interface VoiceMediaTargetInvalidation {
+  readonly attemptId: number;
+}
+
+export type VoiceMediaTargetInvalidationOutcome = "restore-previous" | "retain-invalidation";
+
+interface VoiceMediaTargetInvalidationState {
+  attemptId: number;
+  conversation: VoiceConversationContext;
+  revisions: VoiceContextRevisions;
+}
+
 const MEDIA_TYPES = new Set<VoiceMediaType>([
   "movie",
   "episode",
@@ -479,6 +496,8 @@ export class VoiceContextStore {
   #lastVerifiedAction: VoiceLastVerifiedAction | null = null;
   #liveMedia: VoiceLiveMediaSnapshot | null = null;
   #liveMediaKey: string | null = null;
+  #mediaTargetAttemptId = 0;
+  #mediaTargetInvalidation: VoiceMediaTargetInvalidationState | null = null;
   #pendingClarification: VoicePendingClarification | null = null;
   #revisions: VoiceContextRevisions = {
     mediaRevision: 0,
@@ -550,6 +569,7 @@ export class VoiceContextStore {
     this.#activeService = null;
     this.#liveMedia = null;
     this.#liveMediaKey = null;
+    this.#mediaTargetInvalidation = null;
     this.#clearConversation();
     this.#revisions.profileRevision += 1;
     this.#revisions.serviceRevision += 1;
@@ -686,6 +706,7 @@ export class VoiceContextStore {
     if (!this.#matches(expected)) return false;
     const reference = normalizeReference(input);
     if (reference === null) return false;
+    this.#mediaTargetInvalidation = null;
     const now = this.#time();
     this.#lastMediaTarget = {
       ...reference,
@@ -810,7 +831,84 @@ export class VoiceContextStore {
   clearConversation(expected?: VoiceContextRevisions): boolean {
     this.#pruneExpired();
     if (expected !== undefined && !this.#matches(expected)) return false;
+    this.#mediaTargetInvalidation = null;
     this.#clearConversation();
+    return true;
+  }
+
+  /**
+   * Clears an older, different conversational target before a newly accepted
+   * explicit target executes. The returned handle keeps just enough prior
+   * state for cancellation to restore it without letting a later attempt roll
+   * back a newer one.
+   */
+  invalidateDifferentMediaTarget(
+    input: VoiceMediaReferenceInput,
+    expected: VoiceContextRevisions
+  ): VoiceMediaTargetInvalidation | null {
+    this.#pruneExpired();
+    if (!this.#matches(expected)) return null;
+
+    // A newer accepted attempt supersedes any unfinished rollback handle.
+    this.#mediaTargetInvalidation = null;
+    const replacement = normalizeReference(input);
+    if (
+      replacement === null ||
+      this.#lastMediaTarget === null ||
+      mediaIdentityKey(replacement) === mediaIdentityKey(this.#lastMediaTarget)
+    ) {
+      return null;
+    }
+
+    const attemptId = ++this.#mediaTargetAttemptId;
+    this.#mediaTargetInvalidation = {
+      attemptId,
+      conversation: this.#copyConversation(),
+      revisions: revisionCopy(this.#revisions)
+    };
+    this.#clearConversation();
+    return { attemptId };
+  }
+
+  /** Settles a tentative media-target invalidation exactly once. */
+  settleMediaTargetInvalidation(
+    invalidation: VoiceMediaTargetInvalidation,
+    outcome: VoiceMediaTargetInvalidationOutcome
+  ): boolean {
+    this.#pruneExpired();
+    const pending = this.#mediaTargetInvalidation;
+    if (pending === null || pending.attemptId !== invalidation.attemptId) return false;
+    this.#mediaTargetInvalidation = null;
+    if (outcome === "retain-invalidation") return true;
+    if (pending.revisions.profileRevision !== this.#revisions.profileRevision) return false;
+
+    const samePlaybackScope = pending.revisions.serviceRevision === this.#revisions.serviceRevision &&
+      pending.revisions.mediaRevision === this.#revisions.mediaRevision;
+    this.#clearConversation();
+    this.#lastMediaTarget = pending.conversation.lastMediaTarget === null
+      ? null
+      : referenceCopy(pending.conversation.lastMediaTarget);
+    this.#lastProvider = pending.conversation.lastProvider === null
+      ? null
+      : { ...pending.conversation.lastProvider };
+    if (samePlaybackScope) {
+      this.#candidates = pending.conversation.candidates === null
+        ? null
+        : {
+          ...pending.conversation.candidates,
+          candidates: pending.conversation.candidates.candidates.map((candidate) => ({
+            ...referenceCopy(candidate),
+            provider: candidate.provider === null ? null : { ...candidate.provider }
+          }))
+        };
+      this.#lastVerifiedAction = pending.conversation.lastVerifiedAction === null
+        ? null
+        : { ...pending.conversation.lastVerifiedAction };
+      this.#pendingClarification = pending.conversation.pendingClarification === null
+        ? null
+        : { ...pending.conversation.pendingClarification };
+    }
+    this.#pruneExpired();
     return true;
   }
 
@@ -820,6 +918,7 @@ export class VoiceContextStore {
   ): boolean {
     this.#pruneExpired();
     if (!this.#matches(expected)) return false;
+    this.#mediaTargetInvalidation = null;
     this.#lastMediaTarget = null;
     this.#lastProvider = null;
     this.#lastVerifiedAction = null;
@@ -856,6 +955,22 @@ export class VoiceContextStore {
         ...referenceCopy(candidate),
         provider: candidate.provider === null ? null : { ...candidate.provider }
       }))
+    };
+  }
+
+  #copyConversation(): VoiceConversationContext {
+    return {
+      candidates: this.#copyCandidates(),
+      lastMediaTarget: this.#lastMediaTarget === null
+        ? null
+        : referenceCopy(this.#lastMediaTarget),
+      lastProvider: this.#lastProvider === null ? null : { ...this.#lastProvider },
+      lastVerifiedAction: this.#lastVerifiedAction === null
+        ? null
+        : { ...this.#lastVerifiedAction },
+      pendingClarification: this.#pendingClarification === null
+        ? null
+        : { ...this.#pendingClarification }
     };
   }
 

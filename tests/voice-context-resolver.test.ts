@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { VoiceContextStore } from "../src/main/voice/voice-context-store";
 import {
+  beginVoiceMediaIntentContext,
   recordVoiceMediaIntentContext,
   resolveVoiceContextIntent,
-  resolveVoiceMediaReferenceIntent
+  resolveVoiceMediaReferenceIntent,
+  settleVoiceMediaIntentContext
 } from "../src/main/voice/voice-context-resolver";
 import { hasContextualPlaybackConsent } from "../src/main/voice/voice-intent";
 import type {
@@ -89,6 +91,62 @@ describe("shared voice context resolver", () => {
       referenceIntent(),
       store.snapshot()
     )).toMatchObject({ providerHint: null, title: "Dune" });
+  });
+
+  it("does not fall back to an older title after a different explicit title fails", () => {
+    const store = new VoiceContextStore({ now: () => 2_250 });
+    const apollo = mediaIntent({ providerHint: "netflix", title: "Apollo 13" });
+    const apolloAttempt = beginVoiceMediaIntentContext(store, apollo);
+    expect(settleVoiceMediaIntentContext(store, apolloAttempt, {
+      intent: apollo,
+      outcome: "succeeded"
+    })).toBe(true);
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot())).toMatchObject({
+      providerHint: "netflix",
+      title: "Apollo 13"
+    });
+
+    const breakingBad = mediaIntent({
+      mediaType: "show",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    });
+    const failedAttempt = beginVoiceMediaIntentContext(store, breakingBad);
+    expect(store.snapshot().conversation.lastMediaTarget).toBeNull();
+    expect(settleVoiceMediaIntentContext(store, failedAttempt, { outcome: "failed" })).toBe(true);
+
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot())).toEqual({
+      kind: "unknown"
+    });
+  });
+
+  it("restores a prior target on cancellation and keeps contextual failures retryable", () => {
+    const store = new VoiceContextStore({ now: () => 2_375 });
+    const apollo = mediaIntent({ providerHint: "netflix", title: "Apollo 13" });
+    expect(recordVoiceMediaIntentContext(store, apollo)).toBe(true);
+
+    const cancelled = beginVoiceMediaIntentContext(store, mediaIntent({
+      mediaType: "show",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    }));
+    expect(store.snapshot().conversation.lastMediaTarget).toBeNull();
+    expect(settleVoiceMediaIntentContext(store, cancelled, { outcome: "cancelled" })).toBe(true);
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot())).toMatchObject({
+      title: "Apollo 13"
+    });
+
+    const contextualRetry = resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot());
+    expect(contextualRetry.kind).toBe("media");
+    if (contextualRetry.kind !== "media") throw new Error("Expected contextual media intent.");
+    const retryAttempt = beginVoiceMediaIntentContext(store, contextualRetry);
+    expect(store.snapshot().conversation.lastMediaTarget).toMatchObject({
+      identity: { title: "Apollo 13" }
+    });
+    expect(settleVoiceMediaIntentContext(store, retryAttempt, { outcome: "failed" })).toBe(true);
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot())).toMatchObject({
+      title: "Apollo 13"
+    });
   });
 
   it("can commit a target without erasing provider choices created by execution", () => {
@@ -317,7 +375,7 @@ describe("shared voice context resolver", () => {
     });
   });
 
-  it("resumes paused current playback without searching for it again", () => {
+  it("resumes compatible current playback without searching for it again", () => {
     const store = new VoiceContextStore({ now: () => 7_000 });
     const serviceScope = store.setActiveService({ id: "netflix", name: "Netflix" });
     store.observeMedia({
@@ -344,6 +402,16 @@ describe("shared voice context resolver", () => {
       providerHint: "disney-plus",
       title: "Apollo 13"
     });
+
+    expect(store.updatePlayback({ playbackStatus: "playing" }, snapshot.revisions)).toBe(true);
+    const playingSnapshot = store.snapshot();
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+      reference: "current-media"
+    }), playingSnapshot)).toEqual({ action: "resume", kind: "control" });
+    expect(resolveVoiceContextIntent(referenceIntent({
+      providerHint: "netflix",
+      reference: "current-media"
+    }), playingSnapshot)).toEqual({ action: "resume", kind: "control" });
   });
 
   it("maps playable context types conservatively and rejects unsupported ones", () => {
@@ -355,6 +423,7 @@ describe("shared voice context resolver", () => {
       playbackStatus: "playing"
     }, scope);
     expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+      action: "open",
       reference: "current-media"
     }), shortStore.snapshot())).toMatchObject({
       creator: "Outdoor Boys",
@@ -370,6 +439,7 @@ describe("shared voice context resolver", () => {
       playbackStatus: "playing"
     }, scope);
     expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+      action: "open",
       reference: "current-media"
     }), podcastStore.snapshot())).toEqual({ kind: "unknown" });
   });

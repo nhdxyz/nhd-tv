@@ -75,13 +75,17 @@ describe("phone remote boundary", () => {
       serverSource.indexOf('url.pathname === "/api/voice/cancel"')
     );
     const gateCheck = confirmation.indexOf("this.#voiceAuthorityGate.suspended");
+    const availabilityCheck = confirmation.indexOf("await this.#voiceStatus(request)");
     const operationBegin = confirmation.indexOf("this.#voiceOperations.begin(");
 
     expect(serverSource).toContain("suspendVoiceAuthority()");
     expect(serverSource).toContain("resumeVoiceAuthority(");
     expect(voiceStatus.match(/this\.#voiceAuthorityGate\.suspended/g)?.length).toBe(2);
     expect(gateCheck).toBeGreaterThan(-1);
+    expect(availabilityCheck).toBeGreaterThan(gateCheck);
     expect(operationBegin).toBeGreaterThan(gateCheck);
+    expect(operationBegin).toBeGreaterThan(availabilityCheck);
+    expect(confirmation).toContain("if (!voiceStatus.available)");
   });
 
   it("accepts only bounded audio uploads from the exact secure origin", () => {
@@ -348,6 +352,16 @@ describe("phone remote boundary", () => {
     expect(disconnect).toContain("releaseControllerCommand(controllerId)");
     expect(disconnect).toContain('phase: "cancelled"');
     expect(disconnect).toContain("}, controllerId)");
+
+    const authorityCaptureCancellation = serverSource.slice(
+      serverSource.indexOf("async cancelPendingVoiceCapture()"),
+      serverSource.indexOf("cancelPendingVoiceConfirmations()")
+    );
+    expect(authorityCaptureCancellation).toContain(
+      "this.#voiceActivityLease.revokePendingCapture()"
+    );
+    expect(authorityCaptureCancellation).toContain("acceptPending: true");
+    expect(authorityCaptureCancellation).toContain("#publishVoiceCancellation(");
   });
 
   it("uses a minimalist circular directional surface without selectable arrow copy", () => {

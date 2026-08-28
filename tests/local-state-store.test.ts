@@ -106,6 +106,42 @@ describe("local profile state", () => {
     expect(store.snapshot()).toEqual(before);
   });
 
+  it("previews normalized device preferences without mutating the TV", async () => {
+    const { store } = await testStore();
+    const before = store.snapshot();
+
+    expect(store.previewDevicePreferences({
+      voiceControlEnabled: true,
+      voiceRegion: "gb"
+    })).toMatchObject({
+      voiceControlEnabled: true,
+      voiceRegion: "GB"
+    });
+    expect(store.snapshot()).toEqual(before);
+  });
+
+  it("merges device patches into the latest TV state", async () => {
+    const { store } = await testStore();
+    await store.updateDevicePreferences({
+      ...store.snapshot().devicePreferences,
+      voiceControlEnabled: true
+    });
+
+    expect(store.previewDevicePreferencePatch({ reducedMotion: true })).toMatchObject({
+      reducedMotion: true,
+      voiceControlEnabled: true
+    });
+
+    await store.updateDevicePreferences({
+      ...store.snapshot().devicePreferences,
+      voiceControlEnabled: false
+    });
+    expect(store.previewDevicePreferencePatch({ reducedMotion: false })).toMatchObject({
+      reducedMotion: false,
+      voiceControlEnabled: false
+    });
+  });
+
   it("persists a profile-scoped recent-app list independently of viewing history", async () => {
     const { filePath, store } = await testStore();
     await store.recordServiceLaunch("netflix");

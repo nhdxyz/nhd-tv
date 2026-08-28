@@ -273,6 +273,6 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.startRemotePairing),
   updateProfilePreferences: (preferences: ProfilePreferences): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.updateProfilePreferences, preferences),
-  updateDevicePreferences: (preferences: DevicePreferences): Promise<LocalAppState> =>
+  updateDevicePreferences: (preferences: Partial<DevicePreferences>): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.updateDevicePreferences, preferences)
 });

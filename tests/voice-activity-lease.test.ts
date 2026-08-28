@@ -143,6 +143,34 @@ describe("voice activity lease", () => {
     })).toBe("accepted");
   });
 
+  it("revokes a pending capture at a TV authority boundary", () => {
+    const lease = new VoiceActivityLease();
+    reserveAndListen(lease, "phone-a", COMMAND_A);
+
+    expect(lease.revokePendingCapture()).toEqual({
+      commandId: COMMAND_A,
+      controllerId: "phone-a"
+    });
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(false);
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("ignored");
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "reserved"
+    })).toBe("accepted");
+  });
+
+  it("leaves a locked upload for the operation registry to abort", () => {
+    const lease = new VoiceActivityLease();
+    reserveAndListen(lease, "phone-a", COMMAND_A);
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(true);
+
+    expect(lease.revokePendingCapture()).toBeNull();
+    expect(lease.busy).toBe(true);
+  });
+
   it("can cancel the exact reservation while microphone startup is still pending", () => {
     const lease = new VoiceActivityLease();
     expect(lease.acceptActivity("phone-a", {

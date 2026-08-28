@@ -69,7 +69,7 @@ declare global {
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;
       updateProfilePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;
-      updateDevicePreferences: (preferences: DevicePreferences) => Promise<LocalAppState>;
+      updateDevicePreferences: (preferences: Partial<DevicePreferences>) => Promise<LocalAppState>;
     };
   }
 }

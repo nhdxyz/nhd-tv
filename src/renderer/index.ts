@@ -658,10 +658,7 @@ async function saveDevicePreferences(
     return;
   }
 
-  applyLocalAppState(await window.nhd.updateDevicePreferences({
-    ...localAppState.devicePreferences,
-    ...changes
-  }));
+  applyLocalAppState(await window.nhd.updateDevicePreferences(changes));
 }
 
 async function saveVoicePlaybackMode(

@@ -353,8 +353,24 @@ export class LocalStateStore {
     );
   }
 
+  /** Normalizes device preferences without mutating or persisting state. */
+  previewDevicePreferences(value: unknown): DevicePreferences {
+    return devicePreferences(value);
+  }
+
+  /** Merges a partial device update into the latest in-memory TV state. */
+  previewDevicePreferencePatch(value: unknown): DevicePreferences {
+    const patch = typeof value === "object" && value !== null
+      ? value as Partial<DevicePreferences>
+      : {};
+    return devicePreferences({
+      ...this.#state.devicePreferences,
+      ...patch
+    });
+  }
+
   async updateDevicePreferences(value: unknown): Promise<LocalAppState> {
-    this.#state.devicePreferences = devicePreferences(value);
+    this.#state.devicePreferences = this.previewDevicePreferences(value);
     await this.#persist();
     return this.snapshot();
   }

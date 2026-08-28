@@ -714,6 +714,16 @@ export class PhoneRemoteServer {
     return this.#voiceOperations.cancelActive() !== null;
   }
 
+  async cancelPendingVoiceCapture(): Promise<boolean> {
+    const capture = this.#voiceActivityLease.revokePendingCapture();
+    if (capture === null) return false;
+    this.#voiceOperations.cancel(capture.controllerId, capture.commandId, {
+      acceptPending: true
+    });
+    await this.#publishVoiceCancellation(capture.commandId, capture.controllerId);
+    return true;
+  }
+
   cancelPendingVoiceConfirmations(): Promise<void> {
     return this.#cancelAllVoiceConfirmations();
   }
@@ -1375,8 +1385,13 @@ export class PhoneRemoteServer {
       if (this.#voiceAuthorityGate.suspended) {
         writeJson(response, 409, {
           code: "voice_authority_suspended",
-          error: "The TV is updating its active profile or enabled services"
+          error: "The TV is updating voice settings"
         });
+        return;
+      }
+      const voiceStatus = await this.#voiceStatus(request);
+      if (!voiceStatus.available) {
+        writeJson(response, 503, { error: voiceStatus.detail });
         return;
       }
       const deferredConfirmationId = this.#deferredDisconnectConfirmationIds.get(controllerId);
@@ -1809,7 +1824,7 @@ export class PhoneRemoteServer {
       return {
         available: false,
         busy: true,
-        detail: "The TV is updating its active profile or enabled services."
+        detail: "The TV is updating voice settings."
       };
     }
     const status = await this.#onGetVoiceStatus?.() ?? {
@@ -1821,7 +1836,7 @@ export class PhoneRemoteServer {
       return {
         available: false,
         busy: true,
-        detail: "The TV is updating its active profile or enabled services."
+        detail: "The TV is updating voice settings."
       };
     }
     return {

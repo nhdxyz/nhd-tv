@@ -1,4 +1,8 @@
-import type { LocalAppState, ProfilePreferences } from "../contracts";
+import type {
+  DevicePreferences,
+  LocalAppState,
+  ProfilePreferences
+} from "../contracts";
 import type { VoiceAuthoritySuspensionToken } from "../remote/voice-authority-gate";
 import type { ServiceOperationToken } from "../service-operation-owner";
 import { removedEnabledServiceIds } from "./voice-execution-scope";
@@ -7,20 +11,25 @@ export interface VoiceProfilePreferenceCoordinatorOptions {
   beginServiceBarrier: () => ServiceOperationToken | undefined;
   cancelConfirmations: () => Promise<void>;
   cancelDiscovery: () => void;
+  cancelPendingCapture: () => Promise<void>;
   cancelVoice: () => void;
   closeActiveService: (operation: ServiceOperationToken | undefined) => Promise<void>;
   getActiveServiceId: () => string | null;
+  getCurrentDevicePreferences: () => DevicePreferences;
   getCurrentPreferences: () => ProfilePreferences;
+  previewDevicePreferencePatch: (value: unknown) => DevicePreferences;
   previewPreferences: (value: unknown) => ProfilePreferences;
   resumeVoiceAuthority: (token: VoiceAuthoritySuspensionToken) => void;
   setAuthorityUpdateInProgress: (inProgress: boolean) => void;
   suspendVoiceAuthority: () => VoiceAuthoritySuspensionToken;
+  updateDevicePreferences: (preferences: DevicePreferences) => Promise<LocalAppState>;
   updatePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;
 }
 
 /**
- * Serializes profile settings and establishes a synchronous revocation barrier
- * before removing any service authority from the shared TV.
+ * Serializes voice-affecting settings and establishes a synchronous revocation
+ * barrier before profile, service, device, or credential authority is removed
+ * from the shared TV.
  */
 export class VoiceProfilePreferenceCoordinator {
   readonly #options: VoiceProfilePreferenceCoordinatorOptions;
@@ -55,6 +64,34 @@ export class VoiceProfilePreferenceCoordinator {
     }));
   }
 
+  updateDevicePreferences(value: unknown): Promise<LocalAppState> {
+    return this.#enqueue(() => {
+      const current = this.#options.getCurrentDevicePreferences();
+      const next = this.#options.previewDevicePreferencePatch(value);
+      const commit = () => this.#options.updateDevicePreferences(next);
+      return current.voiceControlEnabled && !next.voiceControlEnabled
+        ? this.#withRevokedAuthority({
+            closeEveryService: false,
+            commit,
+            removedServiceIds: []
+          })
+        : commit();
+    });
+  }
+
+  coordinateAuthorityChange<T>(
+    shouldRevoke: () => boolean,
+    commit: () => Promise<T>
+  ): Promise<T> {
+    return this.#enqueue(() => shouldRevoke()
+      ? this.#withRevokedAuthority({
+          closeEveryService: false,
+          commit,
+          removedServiceIds: []
+        })
+      : commit());
+  }
+
   #enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const execution = this.#sequence.then(operation);
     this.#sequence = execution.then(() => undefined, () => undefined);
@@ -82,20 +119,24 @@ export class VoiceProfilePreferenceCoordinator {
     });
   }
 
-  async #withRevokedAuthority(options: {
+  async #withRevokedAuthority<T>(options: {
     closeEveryService: boolean;
-    commit: () => Promise<LocalAppState>;
+    commit: () => Promise<T>;
     prepare?: () => Promise<void>;
     removedServiceIds: readonly string[];
-  }): Promise<LocalAppState> {
+  }): Promise<T> {
     const removed = new Set(options.removedServiceIds);
     this.#options.setAuthorityUpdateInProgress(true);
     const suspension = this.#options.suspendVoiceAuthority();
     try {
+      const pendingCaptureCancellation = this.#options.cancelPendingCapture();
       let barrier = this.#options.beginServiceBarrier();
       this.#options.cancelDiscovery();
       this.#options.cancelVoice();
-      await this.#options.cancelConfirmations();
+      await Promise.all([
+        pendingCaptureCancellation,
+        this.#options.cancelConfirmations()
+      ]);
       await this.#closeForbiddenService(removed, options.closeEveryService, barrier);
 
       if (options.prepare !== undefined) {

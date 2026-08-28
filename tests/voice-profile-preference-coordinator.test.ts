@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LocalAppState, ProfilePreferences } from "../src/main/contracts";
+import type {
+  DevicePreferences,
+  LocalAppState,
+  ProfilePreferences
+} from "../src/main/contracts";
 import { ServiceOperationOwner } from "../src/main/service-operation-owner";
 import {
   VoiceProfilePreferenceCoordinator,
@@ -15,24 +19,34 @@ function preferences(enabledServiceIds: string[]): ProfilePreferences {
   };
 }
 
-function state(value: ProfilePreferences): LocalAppState {
+function devicePreferences(
+  overrides: Partial<DevicePreferences> = {}
+): DevicePreferences {
+  return {
+    ambientClockStyle: "digital",
+    ambientDisplayDelayMinutes: 10,
+    ambientDisplayEnabled: true,
+    autoApproveFirstRemote: true,
+    fullscreen: true,
+    reducedMotion: false,
+    safeArea: "standard",
+    selectedDisplayId: null,
+    voiceControlEnabled: true,
+    voiceRegion: "US",
+    youtubeTvModeEnabled: true,
+    youtubeTvScale: "standard",
+    ...overrides
+  };
+}
+
+function state(
+  value: ProfilePreferences,
+  device = devicePreferences()
+): LocalAppState {
   return {
     activeProfileId: "default",
     customServices: [],
-    devicePreferences: {
-      ambientClockStyle: "digital",
-      ambientDisplayDelayMinutes: 10,
-      ambientDisplayEnabled: true,
-      autoApproveFirstRemote: true,
-      fullscreen: true,
-      reducedMotion: false,
-      safeArea: "standard",
-      selectedDisplayId: null,
-      voiceControlEnabled: true,
-      voiceRegion: "US",
-      youtubeTvModeEnabled: true,
-      youtubeTvScale: "standard"
-    },
+    devicePreferences: device,
     preferences: value,
     profiles: [{ id: "default", name: "Living Room" }],
     recentServiceIds: []
@@ -41,18 +55,29 @@ function state(value: ProfilePreferences): LocalAppState {
 
 function coordinatorOptions(overrides: Partial<VoiceProfilePreferenceCoordinatorOptions> = {}) {
   let current = preferences(["netflix", "youtube"]);
+  let currentDevice = devicePreferences();
   const options: VoiceProfilePreferenceCoordinatorOptions = {
     beginServiceBarrier: vi.fn(() => ({ generation: 2 })),
     cancelConfirmations: vi.fn(async () => undefined),
     cancelDiscovery: vi.fn(),
+    cancelPendingCapture: vi.fn(async () => undefined),
     cancelVoice: vi.fn(),
     closeActiveService: vi.fn(async () => undefined),
     getActiveServiceId: vi.fn(() => null),
+    getCurrentDevicePreferences: vi.fn(() => currentDevice),
     getCurrentPreferences: vi.fn(() => current),
+    previewDevicePreferencePatch: vi.fn((value) => ({
+      ...currentDevice,
+      ...(value as Partial<DevicePreferences>)
+    })),
     previewPreferences: vi.fn((value) => value as ProfilePreferences),
     resumeVoiceAuthority: vi.fn(),
     setAuthorityUpdateInProgress: vi.fn(),
     suspendVoiceAuthority: vi.fn(() => ({ generation: 1 })),
+    updateDevicePreferences: vi.fn(async (next) => {
+      currentDevice = next;
+      return state(current, next);
+    }),
     updatePreferences: vi.fn(async (next) => {
       current = next;
       return state(next);
@@ -76,6 +101,9 @@ describe("voice profile preference coordinator", () => {
         events.push("cancel-confirmations");
       },
       cancelVoice: () => events.push("cancel-voice"),
+      cancelPendingCapture: async () => {
+        events.push("cancel-capture");
+      },
       closeActiveService: async () => {
         events.push("close");
         activeServiceId = null;
@@ -99,6 +127,7 @@ describe("voice profile preference coordinator", () => {
     expect(events).toEqual([
       "lock",
       "suspend",
+      "cancel-capture",
       "barrier",
       "cancel-discovery",
       "cancel-voice",
@@ -125,6 +154,7 @@ describe("voice profile preference coordinator", () => {
     expect(options.beginServiceBarrier).not.toHaveBeenCalled();
     expect(options.cancelDiscovery).not.toHaveBeenCalled();
     expect(options.cancelConfirmations).not.toHaveBeenCalled();
+    expect(options.cancelPendingCapture).not.toHaveBeenCalled();
     expect(options.cancelVoice).not.toHaveBeenCalled();
     expect(options.suspendVoiceAuthority).not.toHaveBeenCalled();
     expect(options.updatePreferences).toHaveBeenCalledWith(next);
@@ -216,6 +246,9 @@ describe("voice profile preference coordinator", () => {
         events.push("cancel-confirmations");
       },
       cancelVoice: () => events.push("cancel-voice"),
+      cancelPendingCapture: async () => {
+        events.push("cancel-capture");
+      },
       closeActiveService: async () => {
         events.push("close");
         activeServiceId = null;
@@ -237,6 +270,7 @@ describe("voice profile preference coordinator", () => {
 
     expect(events).toEqual([
       "suspend",
+      "cancel-capture",
       "barrier",
       "cancel-discovery",
       "cancel-voice",
@@ -246,6 +280,95 @@ describe("voice profile preference coordinator", () => {
       "profile",
       "resume"
     ]);
+  });
+
+  it("coordinates non-profile authority reductions through the same barrier", async () => {
+    const events: string[] = [];
+    const options = coordinatorOptions({
+      beginServiceBarrier: () => {
+        events.push("barrier");
+        return { generation: events.length };
+      },
+      cancelConfirmations: async () => {
+        events.push("cancel-confirmations");
+      },
+      cancelDiscovery: () => events.push("cancel-discovery"),
+      cancelPendingCapture: async () => {
+        events.push("cancel-capture");
+      },
+      cancelVoice: () => events.push("cancel-voice"),
+      resumeVoiceAuthority: () => events.push("resume"),
+      setAuthorityUpdateInProgress: (active) => events.push(active ? "lock" : "unlock"),
+      suspendVoiceAuthority: () => {
+        events.push("suspend");
+        return { generation: 3 };
+      }
+    });
+    const coordinator = new VoiceProfilePreferenceCoordinator(options);
+
+    await expect(coordinator.coordinateAuthorityChange(
+      () => true,
+      async () => {
+        events.push("commit");
+        return "done";
+      }
+    )).resolves.toBe("done");
+
+    expect(events).toEqual([
+      "lock",
+      "suspend",
+      "cancel-capture",
+      "barrier",
+      "cancel-discovery",
+      "cancel-voice",
+      "cancel-confirmations",
+      "barrier",
+      "commit",
+      "resume",
+      "unlock"
+    ]);
+  });
+
+  it("merges queued device patches against the latest committed voice state", async () => {
+    let currentDevice = devicePreferences({ voiceControlEnabled: true });
+    let releaseFirst!: () => void;
+    let markFirstStarted!: () => void;
+    const firstPersistence = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
+    });
+    let updateCount = 0;
+    const options = coordinatorOptions({
+      getCurrentDevicePreferences: () => currentDevice,
+      previewDevicePreferencePatch: (value) => ({
+        ...currentDevice,
+        ...(value as Partial<DevicePreferences>)
+      }),
+      updateDevicePreferences: async (next) => {
+        updateCount += 1;
+        currentDevice = next;
+        if (updateCount === 1) {
+          markFirstStarted();
+          await firstPersistence;
+        }
+        return state(preferences(["netflix", "youtube"]), currentDevice);
+      }
+    });
+    const coordinator = new VoiceProfilePreferenceCoordinator(options);
+
+    const disable = coordinator.updateDevicePreferences({ voiceControlEnabled: false });
+    await firstStarted;
+    const unrelated = coordinator.updateDevicePreferences({ reducedMotion: true });
+    releaseFirst();
+    await Promise.all([disable, unrelated]);
+
+    expect(currentDevice.voiceControlEnabled).toBe(false);
+    expect(currentDevice.reducedMotion).toBe(true);
+    expect(options.suspendVoiceAuthority).toHaveBeenCalledTimes(1);
+    expect(options.cancelPendingCapture).toHaveBeenCalledTimes(1);
+    expect(options.cancelVoice).toHaveBeenCalledTimes(1);
   });
 
   it("rechecks a custom service after asynchronous partition cleanup", async () => {

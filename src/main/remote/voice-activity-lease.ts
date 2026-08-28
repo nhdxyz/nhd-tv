@@ -15,6 +15,11 @@ interface ActiveVoiceLease {
   phase: Exclude<VoiceActivityPhase, "cancelled">;
 }
 
+export interface RevokedVoiceCapture {
+  commandId: string;
+  controllerId: string;
+}
+
 export interface VoiceActivityLeaseOptions {
   leaseMs?: number;
   maximumTombstones?: number;
@@ -149,6 +154,25 @@ export class VoiceActivityLease {
     this.#remember(commandKey(controllerId, commandId));
     this.#active = null;
     return true;
+  }
+
+  /**
+   * Revokes an unlocked capture when TV-owned authority changes. The returned
+   * identity is server-derived, so callers can safely tombstone the matching
+   * upload and release capture-only side effects such as temporary muting.
+   * Locked uploads remain owned by the operation registry until normal abort
+   * cleanup completes.
+   */
+  revokePendingCapture(): RevokedVoiceCapture | null {
+    this.#cleanup();
+    const active = this.#active;
+    if (active === null || active.locked) return null;
+    this.#remember(commandKey(active.controllerId, active.commandId));
+    this.#active = null;
+    return {
+      commandId: active.commandId,
+      controllerId: active.controllerId
+    };
   }
 
   /**

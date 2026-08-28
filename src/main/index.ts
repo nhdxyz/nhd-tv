@@ -222,6 +222,7 @@ let voiceCommandSession: VoiceCommandSession | null = null;
 let voiceContextStore: VoiceContextStore | null = null;
 let voiceProfilePreferenceCoordinator: VoiceProfilePreferenceCoordinator | null = null;
 let voiceAuthorityUpdateInProgress = false;
+let voiceAuthorityRevision = 0;
 let currentVoicePresentation = createVoicePresentationState("hidden");
 let currentVoiceCommandId: string | null = null;
 let activeVoiceProcessingCommandId: string | null = null;
@@ -1383,7 +1384,7 @@ function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
     return {
       available: false,
       busy: true,
-      detail: "Updating the enabled services on this TV."
+      detail: "Updating voice settings on this TV."
     };
   }
   const state = localStateStore?.snapshot();
@@ -2406,6 +2407,15 @@ function electronCredentialCipher(): CredentialCipher {
   };
 }
 
+async function updateDevicePreferencesWithVoiceAuthority(
+  value: unknown
+): Promise<LocalAppState> {
+  if (localStateStore === null || voiceProfilePreferenceCoordinator === null) {
+    throw new Error("Local device state is not ready.");
+  }
+  return voiceProfilePreferenceCoordinator.updateDevicePreferences(value);
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC_CHANNELS.dismissAmbientDisplay, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
@@ -2445,18 +2455,26 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC_CHANNELS.saveOpenAiApiKey, (event, apiKey: unknown) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    if (openAiCredentialStore === null) {
+    if (openAiCredentialStore === null || voiceProfilePreferenceCoordinator === null) {
       throw new Error("OpenAI credential storage is not ready.");
     }
-    return openAiCredentialStore.save(apiKey);
+    const credentialStore = openAiCredentialStore;
+    return voiceProfilePreferenceCoordinator.coordinateAuthorityChange(
+      () => false,
+      () => credentialStore.save(apiKey)
+    );
   });
 
   ipcMain.handle(IPC_CHANNELS.clearOpenAiApiKey, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    if (openAiCredentialStore === null) {
+    if (openAiCredentialStore === null || voiceProfilePreferenceCoordinator === null) {
       throw new Error("OpenAI credential storage is not ready.");
     }
-    return openAiCredentialStore.clear();
+    const credentialStore = openAiCredentialStore;
+    return voiceProfilePreferenceCoordinator.coordinateAuthorityChange(
+      () => true,
+      () => credentialStore.clear()
+    );
   });
 
   ipcMain.handle(
@@ -2529,11 +2547,7 @@ function registerIpc(): void {
     IPC_CHANNELS.updateDevicePreferences,
     async (event, preferences: unknown) => {
       validateShellSender(event.senderFrame?.url ?? "");
-      if (localStateStore === null) {
-        throw new Error("Local device state is not ready.");
-      }
-
-      const state = await localStateStore.updateDevicePreferences(preferences);
+      const state = await updateDevicePreferencesWithVoiceAuthority(preferences);
       markAmbientActivity();
       mainWindow?.setFullScreen(state.devicePreferences.fullscreen);
       serviceHost?.setYouTubeTvPreferences(youtubeTvPreferencesFor(state.devicePreferences));
@@ -2556,9 +2570,7 @@ function registerIpc(): void {
     const current = screen.getDisplayMatching(mainWindow.getBounds());
     const currentIndex = Math.max(0, displays.findIndex((display) => display.id === current.id));
     const next = displays[(currentIndex + 1) % displays.length] ?? displays[0]!;
-    const preferences = localStateStore.snapshot().devicePreferences;
-    const state = await localStateStore.updateDevicePreferences({
-      ...preferences,
+    const state = await updateDevicePreferencesWithVoiceAuthority({
       selectedDisplayId: String(next.id)
     });
 
@@ -2963,10 +2975,19 @@ app.whenReady().then(async () => {
     execute: executeVoiceCommandPlan,
     getAuthorityKey: () => {
       if (voiceAuthorityUpdateInProgress) return null;
+      const appState = localStateStore?.snapshot();
+      if (
+        appState === undefined ||
+        !appState.devicePreferences.voiceControlEnabled ||
+        openAiCredentialStore?.status().state !== "configured"
+      ) {
+        return null;
+      }
       const state = voiceExecutionProfileState();
       return state === null
         ? null
         : JSON.stringify([
+            voiceAuthorityRevision,
             state.activeProfileId,
             state.profileRevision,
             [...new Set(state.enabledServiceIds)].sort()
@@ -2982,6 +3003,9 @@ app.whenReady().then(async () => {
     cancelConfirmations: () =>
       phoneRemote?.cancelPendingVoiceConfirmations() ?? Promise.resolve(),
     cancelDiscovery: () => googleWatchResolver?.cancelActive(),
+    cancelPendingCapture: async () => {
+      await phoneRemote?.cancelPendingVoiceCapture();
+    },
     cancelVoice: () => {
       phoneRemote?.cancelActiveVoiceOperation();
     },
@@ -2989,7 +3013,10 @@ app.whenReady().then(async () => {
       await serviceHost?.closeWithCheckpoint(undefined, operation);
     },
     getActiveServiceId: () => serviceHost?.activeServiceId ?? null,
+    getCurrentDevicePreferences: () => localStateStore!.snapshot().devicePreferences,
     getCurrentPreferences: () => localStateStore!.snapshot().preferences,
+    previewDevicePreferencePatch: (preferences) =>
+      localStateStore!.previewDevicePreferencePatch(preferences),
     previewPreferences: (preferences) => localStateStore!.previewPreferences(preferences),
     resumeVoiceAuthority: (token) => {
       phoneRemote?.resumeVoiceAuthority(token);
@@ -3001,8 +3028,11 @@ app.whenReady().then(async () => {
       if (phoneRemote === null) {
         throw new Error("Phone voice authority is not ready.");
       }
+      voiceAuthorityRevision += 1;
       return phoneRemote.suspendVoiceAuthority();
     },
+    updateDevicePreferences: (preferences) =>
+      localStateStore!.updateDevicePreferences(preferences),
     updatePreferences: (preferences) => localStateStore!.updatePreferences(preferences)
   });
   setCustomServiceManifests(localStateStore.snapshot().customServices);

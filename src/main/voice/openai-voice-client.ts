@@ -36,6 +36,7 @@ Preserve a spoken release year, edition, language, country, or remake qualifier 
 Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
 Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
 Use providerHint when the user names Disney Plus, Netflix, Spotify, or YouTube, and use disney-plus for Disney Plus. For play, open, or lookup, providerHint may also reflect a media type that uniquely implies Spotify or YouTube. For search, leave providerHint null unless the user explicitly names the provider so NHD-TV can prefer the active app.
+If a media request explicitly names any other provider or app, use kind=unknown; never discard that provider or substitute a supported one. A request only to open that app may still use kind=app.
 Use mediaAction=search when the user asks to search or show search results without opening or playing a particular result. Use lookup only for availability questions such as "where can I watch" or "what service has" a title.
 Use controlAction=stop to stop or pause current playback without closing the app. Use controlAction=close-app only for an explicit request to close or exit the current app.
 Directional requests such as "move left", "go down", and "select this" use the matching left, down, or select control action.

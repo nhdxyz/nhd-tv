@@ -48,6 +48,21 @@ describe("common voice utterance contract", () => {
     expect(voiceTranscriptShortcut("Set volume to twenty percent")).toBeNull();
   });
 
+  it.each([
+    "Play Dune on Max",
+    "Open Dune on Hulu",
+    "Search Prime Video for Dune",
+    "Find Dune on Apple TV"
+  ])("safely rejects media targeted at an unsupported provider: %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({ kind: "unknown" });
+  });
+
+  it("preserves app launch and supported-provider media phrases", () => {
+    expect(voiceTranscriptShortcut("Open Max")).toEqual({ kind: "app", title: "max" });
+    expect(voiceTranscriptShortcut("Play Dune on Netflix")).toBeNull();
+    expect(voiceTranscriptShortcut("Search YouTube for Taylor Swift")).toBeNull();
+  });
+
   it("matches only one trusted service and supports exact custom app names", () => {
     const services = [
       { id: "hbo-max", name: "HBO Max" },

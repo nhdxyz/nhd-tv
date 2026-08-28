@@ -82,6 +82,9 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain(
         "For search, leave providerHint null unless the user explicitly names the provider"
       );
+      expect(body.instructions).toContain(
+        "never discard that provider or substitute a supported one"
+      );
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 

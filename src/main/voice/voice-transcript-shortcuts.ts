@@ -64,6 +64,14 @@ const CONTROL_PHRASES: Readonly<Record<string, VoiceControlAction>> = {
   "volume up": "volume-up"
 };
 
+const VOICE_MEDIA_PROVIDER_NAMES = new Set([
+  "disney",
+  "disney plus",
+  "netflix",
+  "spotify",
+  "youtube"
+]);
+
 function normalizedPhrase(value: string): string {
   return value
     .normalize("NFKD")
@@ -82,6 +90,19 @@ function appNameFromPhrase(phrase: string): string | null {
   return isKnownVoiceAppName(name) ? normalizeVoiceAppName(name) : null;
 }
 
+function namesUnsupportedMediaProvider(phrase: string): boolean {
+  const suffix = /^(?:find|open|play|search(?: for)?|show me|watch)\s+.+\s+(?:in|on|using|with)\s+(?:the\s+)?(.+)$/.exec(
+    phrase
+  );
+  const searchPrefix = /^(?:find|search)(?:\s+on)?\s+(?:the\s+)?(.+?)\s+for\s+.+$/.exec(
+    phrase
+  );
+  const candidate = (suffix?.[1] ?? searchPrefix?.[1] ?? "")
+    .replace(/\s+(?:app|application)$/, "");
+  if (!isKnownVoiceAppName(candidate)) return false;
+  return !VOICE_MEDIA_PROVIDER_NAMES.has(normalizeVoiceAppName(candidate));
+}
+
 /**
  * Resolves only closed, unambiguous phrases locally after transcription. This
  * makes common controls faster while every open-ended request still uses the
@@ -90,6 +111,7 @@ function appNameFromPhrase(phrase: string): string | null {
 export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   const phrase = normalizedPhrase(value);
   if (phrase.length === 0) return null;
+  if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };
   const appName = appNameFromPhrase(phrase);

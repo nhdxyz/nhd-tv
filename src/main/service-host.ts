@@ -148,6 +148,8 @@ const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SPOTIFY_PLAYBACK_INTERVAL_MS = 1_000;
 const VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000;
+const VOICE_FULLSCREEN_ENHANCEMENT_TIMEOUT_MS = 1_500;
+const VOICE_FULLSCREEN_ENHANCEMENT_MAX_ATTEMPTS = 5;
 const SERVICE_EXTENSION_LOAD_TIMEOUT_MS = 8_000;
 const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
 const YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS = [0, 120, 600] as const;
@@ -552,6 +554,19 @@ function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
     }
     signal?.addEventListener("abort", abort, { once: true });
   });
+}
+
+export function voiceFullscreenEnhancementFinished(
+  playbackVerifiedAtMilliseconds: number | null,
+  revealAttempts: number,
+  nowMilliseconds: number
+): boolean {
+  if (playbackVerifiedAtMilliseconds === null) return false;
+  return (
+    revealAttempts >= VOICE_FULLSCREEN_ENHANCEMENT_MAX_ATTEMPTS ||
+    nowMilliseconds - playbackVerifiedAtMilliseconds >=
+      VOICE_FULLSCREEN_ENHANCEMENT_TIMEOUT_MS
+  );
 }
 
 async function waitWithSignal<T>(
@@ -1588,6 +1603,7 @@ export class ServiceHost {
       let profileRetried = false;
       let playbackRevealAttempts = 0;
       let playbackRequested = false;
+      let playbackVerifiedAtMilliseconds: number | null = null;
       let fullscreenRequested = false;
       let trustedNetflixContentId = definition.id === "netflix"
         ? netflixContentIdFromUrl(safeSuppliedDestination)
@@ -1604,6 +1620,13 @@ export class ServiceHost {
         this.#view === view &&
         !view.webContents.isDestroyed()
       ) {
+        if (voiceFullscreenEnhancementFinished(
+          playbackVerifiedAtMilliseconds,
+          playbackRevealAttempts,
+          Date.now()
+        )) {
+          return true;
+        }
         let settleDelayMs = 250;
         try {
           if (definition.id === "netflix" && trustNextNetflixNavigation) {
@@ -1654,6 +1677,7 @@ export class ServiceHost {
             if (definition.id === "netflix") trustNextNetflixNavigation = true;
           } else if (result === "fullscreen-requested") {
             settleDelayMs = 450;
+            playbackVerifiedAtMilliseconds ??= Date.now();
             fullscreenRequested = true;
             playbackRevealAttempts = Math.max(1, playbackRevealAttempts);
           }
@@ -1665,6 +1689,7 @@ export class ServiceHost {
             result === "playing" &&
             ["netflix", "youtube"].includes(definition.id)
           ) {
+            playbackVerifiedAtMilliseconds ??= Date.now();
             this.#window.focus();
             view.webContents.focus();
             this.#replayingInput = true;
@@ -1720,6 +1745,13 @@ export class ServiceHost {
       }
       this.#operationOwner.throwIfSuperseded(operation);
       signal?.throwIfAborted();
+      if (
+        playbackVerifiedAtMilliseconds !== null &&
+        this.#view === view &&
+        !view.webContents.isDestroyed()
+      ) {
+        return true;
+      }
       return false;
     } finally {
       signal?.removeEventListener("abort", cancelOperation);

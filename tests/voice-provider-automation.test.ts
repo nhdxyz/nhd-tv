@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { voiceFullscreenEnhancementFinished } from "../src/main/service-host";
 import {
   applyYouTubeLatestSort,
   buildNetflixVoiceAutomationScript,
@@ -263,7 +264,7 @@ describe("voice provider automation", () => {
     expect(video.clicked).toBe(false);
   });
 
-  it("waits for YouTube playback and requests provider fullscreen before succeeding", () => {
+  it("accepts verified YouTube playback after a bounded fullscreen attempt", () => {
     const fullscreen = new FakeElement({ attributes: { "aria-label": "Full screen" } });
     const documentValue = {
       fullscreenElement: null as object | null,
@@ -285,8 +286,15 @@ describe("voice provider automation", () => {
     expect(fullscreen.clicked).toBe(true);
 
     const fallbackScript = buildYouTubeVoiceAutomationScript(intent(), true, "targetvid01");
-    expect(executeProviderScript(fallbackScript, documentValue, "/watch?v=targetvid01"))
-      .toBe("playing");
+    const playingWithoutFullscreen = executeProviderScript(
+      fallbackScript,
+      documentValue,
+      "/watch?v=targetvid01"
+    );
+    expect(playingWithoutFullscreen).toBe("playing");
+    expect(voiceFullscreenEnhancementFinished(10_000, 0, 11_499)).toBe(false);
+    expect(voiceFullscreenEnhancementFinished(10_000, 0, 11_500)).toBe(true);
+    expect(voiceFullscreenEnhancementFinished(10_000, 5, 10_000)).toBe(true);
 
     documentValue.fullscreenElement = { contains: () => true };
     expect(executeProviderScript(fallbackScript, documentValue, "/watch?v=targetvid01"))
@@ -380,7 +388,7 @@ describe("voice provider automation", () => {
     expect(guest.clicked).toBe(false);
   });
 
-  it("prefers Netflix Resume over Play and requires fullscreen playback to finish", () => {
+  it("prefers Netflix Resume and accepts verified playback without fullscreen", () => {
     const play = new FakeElement({ attributes: { "aria-label": "Play" } });
     const resume = new FakeElement({ attributes: { "aria-label": "Resume" } });
     const fullscreen = new FakeElement({ attributes: { "aria-label": "Full screen" } });
@@ -438,8 +446,15 @@ describe("voice provider automation", () => {
       "70143836",
       true
     );
-    expect(executeProviderScript(fallbackScript, playbackDocument, "/watch/70143836"))
-      .toBe("playing");
+    const playingWithoutFullscreen = executeProviderScript(
+      fallbackScript,
+      playbackDocument,
+      "/watch/70143836"
+    );
+    expect(playingWithoutFullscreen).toBe("playing");
+    expect(voiceFullscreenEnhancementFinished(20_000, 0, 21_499)).toBe(false);
+    expect(voiceFullscreenEnhancementFinished(20_000, 0, 21_500)).toBe(true);
+    expect(voiceFullscreenEnhancementFinished(20_000, 5, 20_000)).toBe(true);
     playbackDocument.fullscreenElement = { contains: () => true };
     expect(executeProviderScript(fallbackScript, playbackDocument, "/watch/70143836"))
       .toBe("complete");
@@ -845,6 +860,8 @@ describe("voice provider automation", () => {
     );
 
     expect(source).toContain("VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000");
+    expect(source).toContain("VOICE_FULLSCREEN_ENHANCEMENT_TIMEOUT_MS = 1_500");
+    expect(source).toContain("VOICE_FULLSCREEN_ENHANCEMENT_MAX_ATTEMPTS = 5");
     expect(source).toContain('["netflix", "spotify", "youtube"]');
     expect(source).toContain("result === \"profile-selected\"");
     expect(source).toContain("isAllowedServiceUrl(");
@@ -855,6 +872,8 @@ describe("voice provider automation", () => {
     expect(source).toContain("let fullscreenRequested = false");
     expect(source).toContain("fullscreenRequested = true");
     expect(source).toContain("playbackRevealAttempts = Math.max(1, playbackRevealAttempts)");
+    expect(source).toContain("playbackVerifiedAtMilliseconds ??= Date.now()");
+    expect(source).toContain("voiceFullscreenEnhancementFinished(");
     expect(source).toContain("trustedNetflixContentId");
     expect(source).toContain("trustedYouTubeContentId");
     expect(source).toContain("youtubeContentIdFromUrl(safeSuppliedDestination)");

@@ -11,7 +11,8 @@ import type {
   ServiceRecoveryMode,
   ServiceRecoveryRequest,
   ServiceQuitRequest,
-  ServiceSummary
+  ServiceSummary,
+  SpotifyPlaybackPresentation
 } from "./contracts";
 
 // Sandboxed preloads receive a restricted `require` implementation and must not
@@ -35,6 +36,7 @@ const IPC_CHANNELS = {
   getHostStatus: "nhd:host:status:get",
   getLocalAppState: "nhd:local-state:get",
   getRemoteStatus: "nhd:remote:status:get",
+  getSpotifyPlayback: "nhd:spotify:playback:get",
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
@@ -52,6 +54,7 @@ const IPC_CHANNELS = {
   selectProfile: "nhd:profile:select",
   serviceRecoveryRequested: "nhd:service:recovery:requested",
   serviceQuitRequested: "nhd:service:quit:requested",
+  spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update"
@@ -86,6 +89,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.getLocalAppState),
   getRemoteStatus: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.getRemoteStatus),
+  getSpotifyPlayback: (): Promise<SpotifyPlaybackPresentation> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getSpotifyPlayback),
   sendInputAction: (action: RemoteAction): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.inputAction, action),
   onHostStatusChanged: (callback: (status: HostStatus) => void): void => {
@@ -123,6 +128,14 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.on(IPC_CHANNELS.remoteStatusChanged, (_event, status: RemoteStatus) => {
       callback(status);
     });
+  },
+  onSpotifyPlaybackChanged: (
+    callback: (presentation: SpotifyPlaybackPresentation) => void
+  ): void => {
+    ipcRenderer.on(
+      IPC_CHANNELS.spotifyPlaybackChanged,
+      (_event, presentation: SpotifyPlaybackPresentation) => callback(presentation)
+    );
   },
   onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.serviceQuitRequested, (_event, request: ServiceQuitRequest) => {

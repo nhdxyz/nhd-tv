@@ -153,7 +153,7 @@ const services: readonly ServiceDefinition[] = [
       "https://accounts.spotify.com"
     ],
     allowedSubdomainHosts: ["spotify.com"],
-    artworkHosts: [],
+    artworkHosts: ["i.scdn.co"],
     authenticationNote:
       "Uses Spotify's own isolated Web Player session. Sign in on the Spotify page; playback availability follows your Spotify account and region.",
     fullscreenOrigins: [],

@@ -33,6 +33,9 @@ describe("Spotify playback on NHD-TV Home", () => {
   it("publishes renderer-safe playback state for the home controls", () => {
     expect(contracts).toContain("playback: {");
     expect(contracts).toContain("backgrounded: boolean");
+    expect(contracts).toContain("interface SpotifyPlaybackPresentation");
+    expect(contracts).toContain('getSpotifyPlayback: "nhd:spotify:playback:get"');
+    expect(contracts).toContain('spotifyPlaybackChanged: "nhd:spotify:playback:changed"');
     expect(main).toContain("backgrounded: serviceHost?.isBackgrounded ?? false");
     expect(main).toContain("active: serviceHost?.isPlaybackActive ?? false");
   });
@@ -43,11 +46,16 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(html).toContain('id="spotify-home-play"');
     expect(html).toContain('id="spotify-home-next"');
     expect(html).toContain('id="spotify-home-open"');
+    expect(html).toContain('id="spotify-home-fullscreen"');
+    expect(html).toContain('id="spotify-now-playing"');
+    expect(html).toContain('id="spotify-now-playing-progress"');
     expect(renderer).toContain('sendSpotifyHomeAction("rewind"');
     expect(renderer).toContain('sendSpotifyHomeAction("play-pause"');
     expect(renderer).toContain('sendSpotifyHomeAction("fast-forward"');
     expect(renderer).toContain('void openService("spotify", "Spotify")');
     expect(css).toContain(".spotify-home-player");
     expect(css).toContain(".spotify-home-transport .spotify-home-play");
+    expect(css).toContain('.ambient-display[data-mode="spotify"]');
+    expect(css).toContain(".spotify-now-playing");
   });
 });

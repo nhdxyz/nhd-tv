@@ -67,6 +67,12 @@ import {
   serviceWindowDisposition
 } from "./service-browser-policy";
 import { persistentSpotifyCookieDetails } from "./service-session-persistence";
+import {
+  buildSpotifyMediaActionScript,
+  buildSpotifyPlaybackSnapshotScript,
+  qualifySpotifyPlaybackSnapshot,
+  type SpotifyPlaybackSnapshot
+} from "./spotify-playback";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -84,6 +90,9 @@ export interface PlaybackObservation {
 }
 export type PlaybackListener = (observation: PlaybackObservation) => void | Promise<void>;
 export type SystemVolumeListener = (action: SystemVolumeAction) => void | Promise<void>;
+export type SpotifyPlaybackListener = (
+  snapshot: SpotifyPlaybackSnapshot | null
+) => void | Promise<void>;
 
 type ServiceSpatialAction = "down" | "left" | "right" | "select" | "up";
 type ServiceKeyAction = "back" | ServiceSpatialAction;
@@ -123,6 +132,7 @@ const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
+const SPOTIFY_PLAYBACK_INTERVAL_MS = 1_000;
 const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
 const YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS = [0, 120, 600] as const;
 const DEFAULT_YOUTUBE_TV_PREFERENCES: YouTubeTvModePreferences = {
@@ -626,6 +636,7 @@ export class ServiceHost {
   readonly #onQuitRequested: ServiceQuitListener;
   readonly #onRecoveryRequested: ServiceRecoveryListener;
   readonly #onPlayback: PlaybackListener;
+  readonly #onSpotifyPlayback: SpotifyPlaybackListener;
   readonly #onSystemVolume: SystemVolumeListener;
   #activeDefinition: ServiceDefinition | null = null;
   #ambientDisplayVisible = false;
@@ -640,6 +651,7 @@ export class ServiceHost {
   #playbackActive = false;
   #playbackQualificationTimer: NodeJS.Timeout | null = null;
   #playbackTimer: NodeJS.Timeout | null = null;
+  #spotifyPlaybackCheckpoint: Promise<void> | null = null;
   #pointerSnapKey: string | null = null;
   #view: WebContentsView | null = null;
   #windowWasFullScreenOnOpen = false;
@@ -652,13 +664,15 @@ export class ServiceHost {
     onRecoveryRequested: ServiceRecoveryListener,
     onPlayback: PlaybackListener = () => undefined,
     onSystemVolume: SystemVolumeListener = () => undefined,
-    youtubeTvPreferences: YouTubeTvModePreferences = DEFAULT_YOUTUBE_TV_PREFERENCES
+    youtubeTvPreferences: YouTubeTvModePreferences = DEFAULT_YOUTUBE_TV_PREFERENCES,
+    onSpotifyPlayback: SpotifyPlaybackListener = () => undefined
   ) {
     this.#window = window;
     this.#onStateChanged = onStateChanged;
     this.#onQuitRequested = onQuitRequested;
     this.#onRecoveryRequested = onRecoveryRequested;
     this.#onPlayback = onPlayback;
+    this.#onSpotifyPlayback = onSpotifyPlayback;
     this.#onSystemVolume = onSystemVolume;
     this.#youtubeTvPreferences = youtubeTvPreferences;
     this.#window.on("resize", () => this.#resize());
@@ -909,6 +923,8 @@ export class ServiceHost {
         event.preventDefault();
         if (isSystemVolumeAction(mediaAction)) {
           void this.#onSystemVolume(mediaAction);
+        } else if (definition.id === "spotify") {
+          void this.#sendSpotifyMediaAction(mediaAction);
         } else {
           this.#sendMediaKey(mediaAction);
         }
@@ -959,6 +975,9 @@ export class ServiceHost {
             buildPlaybackActivationTrackerScript(definition.playback.pathPrefixes),
             true
           ).catch(() => undefined);
+        }
+        if (definition.id === "spotify") {
+          void this.#captureSpotifyPlayback();
         }
         void this.#checkpointPlayback();
       }
@@ -1085,8 +1104,14 @@ export class ServiceHost {
     view.webContents.focus();
     this.#onStateChanged(definition.id);
     this.#playbackTimer = setInterval(() => {
-      void this.#checkpointPlayback();
-    }, PLAYBACK_CHECKPOINT_INTERVAL_MS);
+      if (definition.id === "spotify") {
+        void this.#captureSpotifyPlayback();
+      } else {
+        void this.#checkpointPlayback();
+      }
+    }, definition.id === "spotify"
+      ? SPOTIFY_PLAYBACK_INTERVAL_MS
+      : PLAYBACK_CHECKPOINT_INTERVAL_MS);
 
     try {
       await view.webContents.loadURL(initialUrl);
@@ -1142,9 +1167,11 @@ export class ServiceHost {
     this.#ambientDisplayVisible = false;
     this.#backgrounded = false;
     this.#playbackActive = false;
+    this.#spotifyPlaybackCheckpoint = null;
     this.#pointerSnapKey = null;
     this.#popupWindow = null;
     this.#quitPromptVisible = false;
+    void this.#onSpotifyPlayback(null);
 
     if (this.#htmlFullscreen) {
       this.#htmlFullscreen = false;
@@ -1205,6 +1232,7 @@ export class ServiceHost {
     }
     this.#window.focus();
     this.#window.webContents.focus();
+    void this.#captureSpotifyPlayback();
     this.#onStateChanged(definition.id);
     return true;
   }
@@ -1439,6 +1467,8 @@ export class ServiceHost {
     if (isMediaAction(action)) {
       if (isSystemVolumeAction(action)) {
         await this.#onSystemVolume(action);
+      } else if (definition.id === "spotify") {
+        return this.#sendSpotifyMediaAction(action);
       } else {
         this.#sendMediaKey(action);
       }
@@ -1921,6 +1951,70 @@ export class ServiceHost {
     });
 
     return this.#playbackCheckpoint;
+  }
+
+  async #captureSpotifyPlayback(): Promise<void> {
+    if (this.#spotifyPlaybackCheckpoint !== null) {
+      return this.#spotifyPlaybackCheckpoint;
+    }
+
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (view === null || definition?.id !== "spotify" || view.webContents.isDestroyed()) {
+      return;
+    }
+
+    this.#spotifyPlaybackCheckpoint = (async () => {
+      try {
+        const snapshot = qualifySpotifyPlaybackSnapshot(
+          await view.webContents.executeJavaScript(
+            buildSpotifyPlaybackSnapshotScript(definition.artworkHosts),
+            true
+          ) as unknown,
+          definition.artworkHosts
+        );
+        if (snapshot === null || this.#view !== view) return;
+
+        const playbackChanged = this.#playbackActive !== snapshot.playing;
+        this.#playbackActive = snapshot.playing;
+        await this.#onSpotifyPlayback(snapshot);
+        if (playbackChanged) this.#onStateChanged(definition.id);
+      } catch {
+        // Spotify can replace its document while navigating between TV views.
+      }
+    })().finally(() => {
+      this.#spotifyPlaybackCheckpoint = null;
+    });
+
+    return this.#spotifyPlaybackCheckpoint;
+  }
+
+  async #sendSpotifyMediaAction(action: MediaAction): Promise<boolean> {
+    const view = this.#view;
+    const script = buildSpotifyMediaActionScript(action);
+    if (
+      view === null ||
+      this.#activeDefinition?.id !== "spotify" ||
+      view.webContents.isDestroyed() ||
+      script === null
+    ) {
+      if (script === null) this.#sendMediaKey(action);
+      return script === null;
+    }
+
+    try {
+      const handled = await view.webContents.executeJavaScript(script, true) as boolean;
+      if (handled === true) {
+        await delay(120);
+        await this.#captureSpotifyPlayback();
+        return true;
+      }
+    } catch {
+      // Fall back if Spotify replaces the control between the snapshot and click.
+    }
+
+    this.#sendMediaKey(action);
+    return true;
   }
 
   #failActiveService(kind: ServiceFailureKind): void {

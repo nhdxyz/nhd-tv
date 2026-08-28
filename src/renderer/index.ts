@@ -10,7 +10,8 @@ import {
   type RemoteStatus,
   type ServiceRecoveryMode,
   type ServiceRecoveryRequest,
-  type ServiceSummary
+  type ServiceSummary,
+  type SpotifyPlaybackPresentation
 } from "../main/contracts";
 import {
   isMediaAction,
@@ -70,6 +71,7 @@ const elements = {
   ambientOrbitFace: requireElement<HTMLElement>("#ambient-orbit-face", "ambient-orbit-face"),
   ambientOrbitTime: requireElement<HTMLTimeElement>("#ambient-orbit-time", "ambient-orbit-time"),
   ambientStage: requireElement<HTMLElement>("#ambient-stage", "ambient-stage"),
+  spotifyAmbientBackdrop: requireElement<HTMLImageElement>("#spotify-ambient-backdrop", "spotify-ambient-backdrop"),
   appManageBrand: requireElement<HTMLDivElement>("#app-manage-brand", "app-manage-brand"),
   appManageClear: requireElement<HTMLButtonElement>("#app-manage-clear", "app-manage-clear"),
   appManageClose: requireElement<HTMLButtonElement>("#app-manage-close", "app-manage-close"),
@@ -178,12 +180,25 @@ const elements = {
   searchResultCount: requireElement<HTMLSpanElement>("#search-result-count", "search-result-count"),
   searchResults: requireElement<HTMLDivElement>("#search-results", "search-results"),
   spotifyHomeBrand: requireElement<HTMLDivElement>("#spotify-home-brand", "spotify-home-brand"),
+  spotifyHomeFullscreen: requireElement<HTMLButtonElement>("#spotify-home-fullscreen", "spotify-home-fullscreen"),
   spotifyHomeNext: requireElement<HTMLButtonElement>("#spotify-home-next", "spotify-home-next"),
   spotifyHomeOpen: requireElement<HTMLButtonElement>("#spotify-home-open", "spotify-home-open"),
   spotifyHomePlay: requireElement<HTMLButtonElement>("#spotify-home-play", "spotify-home-play"),
   spotifyHomePlayer: requireElement<HTMLElement>("#spotify-home-player", "spotify-home-player"),
   spotifyHomePrevious: requireElement<HTMLButtonElement>("#spotify-home-previous", "spotify-home-previous"),
   spotifyHomeStatus: requireElement<HTMLParagraphElement>("#spotify-home-status", "spotify-home-status"),
+  spotifyHomeTitle: requireElement<HTMLHeadingElement>("#spotify-home-title", "spotify-home-title"),
+  spotifyNowPlaying: requireElement<HTMLElement>("#spotify-now-playing", "spotify-now-playing"),
+  spotifyNowPlayingArt: requireElement<HTMLDivElement>("#spotify-now-playing-art", "spotify-now-playing-art"),
+  spotifyNowPlayingArtist: requireElement<HTMLParagraphElement>("#spotify-now-playing-artist", "spotify-now-playing-artist"),
+  spotifyNowPlayingClose: requireElement<HTMLButtonElement>("#spotify-now-playing-close", "spotify-now-playing-close"),
+  spotifyNowPlayingNext: requireElement<HTMLButtonElement>("#spotify-now-playing-next", "spotify-now-playing-next"),
+  spotifyNowPlayingPlay: requireElement<HTMLButtonElement>("#spotify-now-playing-play", "spotify-now-playing-play"),
+  spotifyNowPlayingPosition: requireElement<HTMLTimeElement>("#spotify-now-playing-position", "spotify-now-playing-position"),
+  spotifyNowPlayingPrevious: requireElement<HTMLButtonElement>("#spotify-now-playing-previous", "spotify-now-playing-previous"),
+  spotifyNowPlayingProgress: requireElement<HTMLSpanElement>("#spotify-now-playing-progress", "spotify-now-playing-progress"),
+  spotifyNowPlayingRemaining: requireElement<HTMLSpanElement>("#spotify-now-playing-remaining", "spotify-now-playing-remaining"),
+  spotifyNowPlayingTitle: requireElement<HTMLHeadingElement>("#spotify-now-playing-title", "spotify-now-playing-title"),
   settingsRemoteButton: requireElement<HTMLButtonElement>("#settings-remote-button", "settings-remote-button"),
   settingsRemoteCopy: requireElement<HTMLElement>("#settings-remote-copy", "settings-remote-copy"),
   soundToggle: requireElement<HTMLButtonElement>("#sound-toggle", "sound-toggle"),
@@ -209,12 +224,24 @@ const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
 let currentHostStatus: HostStatus | null = null;
 let currentServiceRecovery: ServiceRecoveryRequest | null = null;
+let currentSpotifyPlayback: SpotifyPlaybackPresentation = {
+  album: null,
+  artist: null,
+  artworkDataUrl: null,
+  durationSeconds: null,
+  playing: false,
+  positionSeconds: null,
+  signedIn: false,
+  title: null
+};
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let catalogSearchTimer: number | null = null;
 let catalogSearchVersion = 0;
 let ambientAnchorTimer: number | null = null;
 let ambientClockTimer: number | null = null;
 let ambientShownAt = 0;
+let ambientIdleVisible = false;
+let spotifyNowPlayingOpen = false;
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
@@ -248,28 +275,114 @@ function renderSpotifyHomePlayer(): void {
   elements.spotifyHomePlayer.hidden = !enabled;
   if (!enabled) return;
 
-  if (elements.spotifyHomeBrand.childElementCount === 0) {
-    elements.spotifyHomeBrand.append(createServiceMark("spotify", "Spotify"));
-  }
-
   const backgrounded = currentHostStatus?.activeServiceId === "spotify" &&
     currentHostStatus.playback.backgrounded;
-  const playing = backgrounded && currentHostStatus?.playback.active === true;
+  const playing = backgrounded && currentSpotifyPlayback.playing;
+  const trackReady = backgrounded && currentSpotifyPlayback.title !== null;
+
+  const existingArtwork = elements.spotifyHomeBrand.querySelector("img");
+  if (currentSpotifyPlayback.artworkDataUrl !== null) {
+    if (existingArtwork?.getAttribute("src") !== currentSpotifyPlayback.artworkDataUrl) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = currentSpotifyPlayback.artworkDataUrl;
+      elements.spotifyHomeBrand.replaceChildren(image);
+    }
+  } else if (existingArtwork !== null || elements.spotifyHomeBrand.childElementCount === 0) {
+    elements.spotifyHomeBrand.replaceChildren(createServiceMark("spotify", "Spotify"));
+  }
+
   elements.spotifyHomePlayer.dataset.active = String(backgrounded);
   elements.spotifyHomePlayer.dataset.playing = String(playing);
   elements.spotifyHomePrevious.disabled = !backgrounded;
   elements.spotifyHomePlay.disabled = !backgrounded;
   elements.spotifyHomeNext.disabled = !backgrounded;
+  elements.spotifyHomeFullscreen.disabled = !trackReady;
   elements.spotifyHomePlay.setAttribute(
     "aria-label",
     playing ? "Pause Spotify" : "Play Spotify"
   );
   elements.spotifyHomeOpen.textContent = backgrounded ? "Return to Spotify" : "Open Spotify";
-  elements.spotifyHomeStatus.textContent = backgrounded
-    ? playing
-      ? "Playing in the background · use the remote controls without leaving Home."
-      : "Paused in the background · press Play whenever you are ready."
+  elements.spotifyHomeTitle.textContent = trackReady
+    ? currentSpotifyPlayback.title ?? "Keep the music going."
+    : "Keep the music going.";
+  elements.spotifyHomeStatus.textContent = trackReady
+    ? [
+      currentSpotifyPlayback.artist,
+      playing ? "Playing in the background" : "Paused · press Play to resume"
+    ].filter((part) => part !== null).join(" · ")
+    : backgrounded
+      ? currentSpotifyPlayback.signedIn
+        ? "Spotify is connected. Choose a track once, then control it here."
+        : "Sign in to Spotify to control playback from Home."
     : "Choose music in Spotify, then press Home to keep it playing and control it here.";
+
+  renderSpotifyNowPlaying();
+}
+
+function spotifyPlaybackClock(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return "0:00";
+  const whole = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(whole / 3_600);
+  const minutes = Math.floor((whole % 3_600) / 60);
+  const remainder = whole % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+    : `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function renderSpotifyNowPlaying(): void {
+  const playback = currentSpotifyPlayback;
+  const backgrounded = currentHostStatus?.activeServiceId === "spotify" &&
+    currentHostStatus.playback.backgrounded;
+  const ready = backgrounded && playback.title !== null;
+  const remaining = playback.durationSeconds === null || playback.positionSeconds === null
+    ? null
+    : Math.max(0, playback.durationSeconds - playback.positionSeconds);
+  const progress = playback.durationSeconds !== null && playback.durationSeconds > 0 &&
+    playback.positionSeconds !== null
+    ? Math.min(100, Math.max(0, playback.positionSeconds / playback.durationSeconds * 100))
+    : 0;
+
+  elements.spotifyNowPlaying.dataset.playing = String(playback.playing);
+  elements.spotifyNowPlayingTitle.textContent = playback.title ?? "Choose something to play";
+  elements.spotifyNowPlayingArtist.textContent = playback.artist ??
+    (playback.signedIn ? "Spotify is ready." : "Open Spotify to sign in and start listening.");
+  elements.spotifyNowPlayingPosition.textContent = spotifyPlaybackClock(playback.positionSeconds);
+  elements.spotifyNowPlayingPosition.dateTime = `PT${Math.max(0, Math.floor(playback.positionSeconds ?? 0))}S`;
+  elements.spotifyNowPlayingRemaining.textContent = remaining === null
+    ? "No track loaded"
+    : `${spotifyPlaybackClock(remaining)} left`;
+  elements.spotifyNowPlayingProgress.style.width = `${progress}%`;
+  elements.spotifyNowPlayingPrevious.disabled = !backgrounded;
+  elements.spotifyNowPlayingPlay.disabled = !backgrounded;
+  elements.spotifyNowPlayingNext.disabled = !backgrounded;
+  elements.spotifyNowPlayingPlay.setAttribute(
+    "aria-label",
+    playback.playing ? "Pause Spotify" : "Play Spotify"
+  );
+
+  const currentImage = elements.spotifyNowPlayingArt.querySelector("img");
+  if (playback.artworkDataUrl !== null) {
+    if (currentImage?.getAttribute("src") !== playback.artworkDataUrl) {
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = playback.artworkDataUrl;
+      elements.spotifyNowPlayingArt.replaceChildren(image);
+    }
+    if (elements.spotifyAmbientBackdrop.getAttribute("src") !== playback.artworkDataUrl) {
+      elements.spotifyAmbientBackdrop.src = playback.artworkDataUrl;
+    }
+    elements.spotifyAmbientBackdrop.hidden = !spotifyNowPlayingOpen;
+  } else {
+    if (currentImage !== null || elements.spotifyNowPlayingArt.childElementCount === 0) {
+      elements.spotifyNowPlayingArt.replaceChildren(createServiceMark("spotify", "Spotify"));
+    }
+    elements.spotifyAmbientBackdrop.hidden = true;
+    elements.spotifyAmbientBackdrop.removeAttribute("src");
+  }
+
+  if (spotifyNowPlayingOpen && !ready) closeSpotifyNowPlaying();
 }
 
 function renderNetworkState(): void {
@@ -505,7 +618,9 @@ function updateAmbientClock(): void {
   );
   elements.ambientDisplay.setAttribute(
     "aria-label",
-    `Ambient display. ${formattedTime}, ${formattedDate}. Move or press any control to return.`
+    spotifyNowPlayingOpen
+      ? `Spotify Now Playing. ${formattedTime}, ${formattedDate}. Use the remote controls or Back to close.`
+      : `Ambient display. ${formattedTime}, ${formattedDate}. Move or press any control to return.`
   );
 }
 
@@ -514,12 +629,13 @@ function updateAmbientAnchor(): void {
   elements.ambientStage.dataset.anchor = ambientAnchors[index] ?? "center";
 }
 
-function setAmbientDisplayVisible(visible: boolean): void {
-  if (elements.ambientDisplay.hidden === !visible) {
-    return;
-  }
-
+function syncAmbientOverlay(): void {
+  const visible = ambientIdleVisible || spotifyNowPlayingOpen;
   elements.ambientDisplay.hidden = !visible;
+  elements.ambientDisplay.dataset.mode = spotifyNowPlayingOpen ? "spotify" : "clock";
+  elements.spotifyNowPlaying.hidden = !spotifyNowPlayingOpen;
+  elements.spotifyAmbientBackdrop.hidden = !spotifyNowPlayingOpen ||
+    currentSpotifyPlayback.artworkDataUrl === null;
   document.body.dataset.ambientDisplay = String(visible);
   if (!visible) {
     if (ambientClockTimer !== null) window.clearInterval(ambientClockTimer);
@@ -534,12 +650,37 @@ function setAmbientDisplayVisible(visible: boolean): void {
     localAppState?.devicePreferences.ambientClockStyle ?? "digital";
   updateAmbientClock();
   updateAmbientAnchor();
-  ambientClockTimer = window.setInterval(updateAmbientClock, 1_000);
-  ambientAnchorTimer = window.setInterval(updateAmbientAnchor, 60_000);
+  if (ambientClockTimer === null) {
+    ambientClockTimer = window.setInterval(updateAmbientClock, 1_000);
+  }
+  if (ambientAnchorTimer === null) {
+    ambientAnchorTimer = window.setInterval(updateAmbientAnchor, 60_000);
+  }
+}
+
+function setAmbientDisplayVisible(visible: boolean): void {
+  ambientIdleVisible = visible;
+  syncAmbientOverlay();
+}
+
+function openSpotifyNowPlaying(): void {
+  if (elements.spotifyHomeFullscreen.disabled) return;
+  spotifyNowPlayingOpen = true;
+  renderSpotifyNowPlaying();
+  syncAmbientOverlay();
+  elements.spotifyNowPlayingPlay.focus();
+}
+
+function closeSpotifyNowPlaying(): void {
+  if (!spotifyNowPlayingOpen) return;
+  spotifyNowPlayingOpen = false;
+  setRemoteFocusedElement(null);
+  syncAmbientOverlay();
+  if (!elements.spotifyHomeFullscreen.disabled) elements.spotifyHomeFullscreen.focus();
 }
 
 function dismissAmbientDisplayFromInput(): void {
-  if (elements.ambientDisplay.hidden) {
+  if (!ambientIdleVisible) {
     return;
   }
 
@@ -548,7 +689,7 @@ function dismissAmbientDisplayFromInput(): void {
 }
 
 function captureAmbientWake(event: Event): void {
-  if (elements.ambientDisplay.hidden) {
+  if (!ambientIdleVisible || spotifyNowPlayingOpen) {
     return;
   }
   if (event.type === "pointermove" && performance.now() - ambientShownAt < 1_500) {
@@ -747,9 +888,20 @@ elements.spotifyHomePlay.addEventListener("click", () => {
 elements.spotifyHomeNext.addEventListener("click", () => {
   void sendSpotifyHomeAction("fast-forward", "Next track sent to Spotify.");
 });
+elements.spotifyHomeFullscreen.addEventListener("click", openSpotifyNowPlaying);
 elements.spotifyHomeOpen.addEventListener("click", () => {
   void openService("spotify", "Spotify");
 });
+elements.spotifyNowPlayingPrevious.addEventListener("click", () => {
+  void sendSpotifyHomeAction("rewind", "Previous track sent to Spotify.");
+});
+elements.spotifyNowPlayingPlay.addEventListener("click", () => {
+  void sendSpotifyHomeAction("play-pause", "Playback control sent to Spotify.");
+});
+elements.spotifyNowPlayingNext.addEventListener("click", () => {
+  void sendSpotifyHomeAction("fast-forward", "Next track sent to Spotify.");
+});
+elements.spotifyNowPlayingClose.addEventListener("click", closeSpotifyNowPlaying);
 
 function serviceTile(service: ServiceSummary): HTMLButtonElement {
   const button = document.createElement("button");
@@ -2030,6 +2182,10 @@ function setRemoteFocusedElement(element: HTMLElement | null): void {
 }
 
 function activeNavigationScope(): ParentNode {
+  if (spotifyNowPlayingOpen) {
+    return elements.spotifyNowPlaying;
+  }
+
   if (elements.recoveryDialog.open) {
     return elements.recoveryDialog;
   }
@@ -2183,7 +2339,10 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (elements.recoveryDialog.open) {
+  if (spotifyNowPlayingOpen) {
+    closeSpotifyNowPlaying();
+    event.preventDefault();
+  } else if (elements.recoveryDialog.open) {
     elements.recoveryHome.click();
     event.preventDefault();
   } else if (elements.remoteDialog.open) {
@@ -2246,6 +2405,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
   }
 
   if (action === "back") {
+    if (spotifyNowPlayingOpen) {
+      closeSpotifyNowPlaying();
+      return;
+    }
+
     if (elements.recoveryDialog.open) {
       elements.recoveryHome.click();
       return;
@@ -2404,6 +2568,10 @@ elements.closeServiceButton.addEventListener("click", async () => {
 
 window.nhd.onAmbientDisplayChanged(setAmbientDisplayVisible);
 window.nhd.onHostStatusChanged(renderStatus);
+window.nhd.onSpotifyPlaybackChanged((presentation) => {
+  currentSpotifyPlayback = presentation;
+  renderSpotifyHomePlayer();
+});
 window.nhd.onContinueWatchingChanged((items) => {
   continueWatchingItems = items;
   renderContinueWatching();
@@ -2434,6 +2602,12 @@ window.nhd.onServiceQuitRequested((request) => {
 gamepadInput.start();
 initializeHorizontalRails();
 void refreshStatus();
+void window.nhd.getSpotifyPlayback()
+  .then((presentation) => {
+    currentSpotifyPlayback = presentation;
+    renderSpotifyHomePlayer();
+  })
+  .catch(() => undefined);
 void initializeContinueWatching();
 void initializeServices();
 void refreshRemoteStatus();

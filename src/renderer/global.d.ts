@@ -10,7 +10,8 @@ import type {
   ServiceRecoveryMode,
   ServiceRecoveryRequest,
   ServiceQuitRequest,
-  ServiceSummary
+  ServiceSummary,
+  SpotifyPlaybackPresentation
 } from "../main/contracts";
 
 declare global {
@@ -31,6 +32,7 @@ declare global {
       getHostStatus: () => Promise<HostStatus>;
       getLocalAppState: () => Promise<LocalAppState>;
       getRemoteStatus: () => Promise<RemoteStatus>;
+      getSpotifyPlayback: () => Promise<SpotifyPlaybackPresentation>;
       sendInputAction: (action: RemoteAction) => Promise<boolean>;
       onAmbientDisplayChanged: (callback: (visible: boolean) => void) => void;
       onHostStatusChanged: (callback: (status: HostStatus) => void) => void;
@@ -41,6 +43,9 @@ declare global {
       onRemotePrecisionMoved: (callback: () => void) => void;
       onRemoteSearchRequested: (callback: (query: string) => void) => void;
       onRemoteStatusChanged: (callback: (status: RemoteStatus) => void) => void;
+      onSpotifyPlaybackChanged: (
+        callback: (presentation: SpotifyPlaybackPresentation) => void
+      ) => void;
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;
       onServiceRecoveryRequested: (
         callback: (request: ServiceRecoveryRequest) => void

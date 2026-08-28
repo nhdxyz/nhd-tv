@@ -70,6 +70,7 @@
     </aside>
 
     <section class="ambient-display" id="ambient-display" aria-label="Ambient display" hidden>
+      <img class="spotify-ambient-backdrop" id="spotify-ambient-backdrop" alt="" hidden />
       <div class="ambient-stage" id="ambient-stage" data-anchor="top-left" data-clock-style="digital">
         <div class="ambient-clock ambient-clock-digital">
           <time class="ambient-digital-time" id="ambient-digital-time"></time>
@@ -124,6 +125,36 @@
           <p class="ambient-date"></p>
         </div>
       </div>
+      <article class="spotify-now-playing" id="spotify-now-playing" aria-labelledby="spotify-now-playing-title" hidden>
+        <button class="spotify-now-playing-close" id="spotify-now-playing-close" type="button" aria-label="Close Spotify Now Playing">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 12.6 12.6-1.4 1.4L5 6.4 6.4 5Zm11.2 0L19 6.4 6.4 19 5 17.6 17.6 5Z"></path></svg>
+        </button>
+        <div class="spotify-now-playing-art" id="spotify-now-playing-art" aria-hidden="true"></div>
+        <div class="spotify-now-playing-copy">
+          <p class="eyebrow">Spotify · Now Playing</p>
+          <h2 id="spotify-now-playing-title">Choose something to play</h2>
+          <p class="spotify-now-playing-artist" id="spotify-now-playing-artist">Open Spotify to start listening.</p>
+          <div class="spotify-now-playing-progress" aria-label="Track progress">
+            <span id="spotify-now-playing-progress"></span>
+          </div>
+          <div class="spotify-now-playing-times">
+            <time id="spotify-now-playing-position">0:00</time>
+            <span id="spotify-now-playing-remaining">No track loaded</span>
+          </div>
+          <div class="spotify-now-playing-transport" data-nav-group="spotify-now-playing-transport">
+            <button id="spotify-now-playing-previous" type="button" aria-label="Previous Spotify track">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5V5Zm3.5 7 10-6v12l-10-6Z"></path></svg>
+            </button>
+            <button class="spotify-now-playing-play" id="spotify-now-playing-play" type="button" aria-label="Play Spotify">
+              <svg class="spotify-now-playing-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"></path></svg>
+              <svg class="spotify-now-playing-pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"></path></svg>
+            </button>
+            <button id="spotify-now-playing-next" type="button" aria-label="Next Spotify track">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2V5ZM5.5 6l10 6-10 6V6Z"></path></svg>
+            </button>
+          </div>
+        </div>
+      </article>
       <p class="ambient-wake-hint">Move or press any control to return</p>
     </section>
 
@@ -187,9 +218,14 @@
               </svg>
             </button>
           </div>
-          <button class="spotify-home-open" id="spotify-home-open" type="button">
-            Open Spotify
-          </button>
+          <div class="spotify-home-actions" data-nav-group="spotify-home-actions">
+            <button class="spotify-home-fullscreen" id="spotify-home-fullscreen" type="button" disabled>
+              Now Playing
+            </button>
+            <button class="spotify-home-open" id="spotify-home-open" type="button">
+              Open Spotify
+            </button>
+          </div>
         </section>
 
         <section class="rail continue-rail" aria-labelledby="continue-title">

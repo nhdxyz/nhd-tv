@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   getHostStatus: "nhd:host:status:get",
   getLocalAppState: "nhd:local-state:get",
   getRemoteStatus: "nhd:remote:status:get",
+  getSpotifyPlayback: "nhd:spotify:playback:get",
   hostStatusChanged: "nhd:host:status:changed",
   inputAction: "nhd:input:action",
   openService: "nhd:service:open",
@@ -33,6 +34,7 @@ export const IPC_CHANNELS = {
   selectProfile: "nhd:profile:select",
   serviceRecoveryRequested: "nhd:service:recovery:requested",
   serviceQuitRequested: "nhd:service:quit:requested",
+  spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update"
@@ -218,6 +220,17 @@ export interface ServiceQuitRequest {
   backgroundDataUrl: string | null;
   serviceId: string;
   serviceName: string;
+}
+
+export interface SpotifyPlaybackPresentation {
+  album: string | null;
+  artist: string | null;
+  artworkDataUrl: string | null;
+  durationSeconds: number | null;
+  playing: boolean;
+  positionSeconds: number | null;
+  signedIn: boolean;
+  title: string | null;
 }
 
 export type WidevineState = "checking" | "ready" | "timed-out" | "unavailable";

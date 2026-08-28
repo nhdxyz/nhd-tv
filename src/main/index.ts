@@ -32,6 +32,7 @@ import {
   type RemoteTextInput,
   type ServiceRecoveryMode,
   type ServiceRecoveryRequest,
+  type SpotifyPlaybackPresentation,
   type WidevineState
 } from "./contracts";
 import {
@@ -60,6 +61,7 @@ import {
   setCustomServiceManifests
 } from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
+import type { SpotifyPlaybackSnapshot } from "./spotify-playback";
 import {
   isSystemVolumeAction,
   SystemVolumeController
@@ -116,6 +118,17 @@ let ambientDisplayVisible = false;
 let ambientIdleTimer: NodeJS.Timeout | null = null;
 let ambientLastActivityAt = Date.now();
 let lastServicePlaybackActive = false;
+let spotifyArtworkSourceUrl: string | null = null;
+let spotifyPlaybackPresentation: SpotifyPlaybackPresentation = {
+  album: null,
+  artist: null,
+  artworkDataUrl: null,
+  durationSeconds: null,
+  playing: false,
+  positionSeconds: null,
+  signedIn: false,
+  title: null
+};
 let gpuInfoReady = false;
 let widevineState: WidevineState = "checking";
 let widevineDetails = "Waiting for the Widevine component updater.";
@@ -131,6 +144,8 @@ const catalogCache = new Map<string, {
   results: readonly CatalogSearchResult[];
 }>();
 const catalogImageCache = new Map<string, string | null>();
+const spotifyArtworkCache = new Map<string, string>();
+const spotifyArtworkRequests = new Set<string>();
 
 function presentMainWindow(): void {
   const window = mainWindow;
@@ -421,6 +436,102 @@ function publishContinueWatching(): void {
       IPC_CHANNELS.continueWatchingChanged,
       continueWatchingStore?.list() ?? []
     );
+  }
+}
+
+function publishSpotifyPlayback(): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(
+      IPC_CHANNELS.spotifyPlaybackChanged,
+      spotifyPlaybackPresentation
+    );
+  }
+}
+
+async function fetchSpotifyArtworkDataUrl(artworkUrl: string): Promise<string | null> {
+  const cached = spotifyArtworkCache.get(artworkUrl);
+  if (cached !== undefined) return cached;
+
+  const definition = getServiceDefinition("spotify");
+  if (definition === null || !isAllowedArtworkUrl(artworkUrl, definition.artworkHosts)) {
+    return null;
+  }
+
+  try {
+    const serviceSession = session.fromPartition(definition.partition, { cache: true });
+    const response = await serviceSession.fetch(artworkUrl, { redirect: "error" });
+    const contentLength = Number(response.headers.get("content-length") ?? 0);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (
+      !response.ok ||
+      !contentType.toLocaleLowerCase().startsWith("image/") ||
+      contentLength > MAX_ARTWORK_BYTES ||
+      (response.url.length > 0 && !isAllowedArtworkUrl(response.url, definition.artworkHosts))
+    ) {
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0 || buffer.length > MAX_ARTWORK_BYTES) return null;
+    const source = nativeImage.createFromBuffer(buffer);
+    if (source.isEmpty()) return null;
+    const size = source.getSize();
+    const resized = Math.max(size.width, size.height) > 800
+      ? source.resize({
+        quality: "good",
+        width: Math.max(1, Math.round(size.width * 800 / Math.max(size.width, size.height)))
+      })
+      : source;
+    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(88).toString("base64")}`;
+    spotifyArtworkCache.set(artworkUrl, dataUrl);
+    if (spotifyArtworkCache.size > 12) {
+      spotifyArtworkCache.delete(spotifyArtworkCache.keys().next().value ?? artworkUrl);
+    }
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
+
+function handleSpotifyPlayback(snapshot: SpotifyPlaybackSnapshot | null): void {
+  spotifyArtworkSourceUrl = snapshot?.artworkUrl ?? null;
+  spotifyPlaybackPresentation = snapshot === null
+    ? {
+      album: null,
+      artist: null,
+      artworkDataUrl: null,
+      durationSeconds: null,
+      playing: false,
+      positionSeconds: null,
+      signedIn: false,
+      title: null
+    }
+    : {
+      album: snapshot.album,
+      artist: snapshot.artist,
+      artworkDataUrl: snapshot.artworkUrl === null
+        ? null
+        : spotifyArtworkCache.get(snapshot.artworkUrl) ?? null,
+      durationSeconds: snapshot.durationSeconds,
+      playing: snapshot.playing,
+      positionSeconds: snapshot.positionSeconds,
+      signedIn: snapshot.signedIn,
+      title: snapshot.title
+    };
+  publishSpotifyPlayback();
+
+  if (snapshot?.artworkUrl !== null && snapshot?.artworkUrl !== undefined &&
+    spotifyPlaybackPresentation.artworkDataUrl === null &&
+    !spotifyArtworkRequests.has(snapshot.artworkUrl)) {
+    const expectedUrl = snapshot.artworkUrl;
+    spotifyArtworkRequests.add(expectedUrl);
+    void fetchSpotifyArtworkDataUrl(expectedUrl).then((artworkDataUrl) => {
+      if (artworkDataUrl === null || spotifyArtworkSourceUrl !== expectedUrl) return;
+      spotifyPlaybackPresentation = { ...spotifyPlaybackPresentation, artworkDataUrl };
+      publishSpotifyPlayback();
+    }).finally(() => {
+      spotifyArtworkRequests.delete(expectedUrl);
+    });
   }
 }
 
@@ -1102,6 +1213,11 @@ function registerIpc(): void {
       : phoneRemote.ensurePairing();
   });
 
+  ipcMain.handle(IPC_CHANNELS.getSpotifyPlayback, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return spotifyPlaybackPresentation;
+  });
+
   ipcMain.handle(IPC_CHANNELS.inputAction, async (event, action: unknown) => {
     validateShellSender(event.senderFrame?.url ?? "");
 
@@ -1332,7 +1448,8 @@ async function createMainWindow(): Promise<void> {
     publishServiceRecovery,
     handlePlaybackObservation,
     (action) => void systemVolumeController.apply(action),
-    youtubeTvPreferencesFor(devicePreferences)
+    youtubeTvPreferencesFor(devicePreferences),
+    handleSpotifyPlayback
   );
   phoneRemote = new PhoneRemoteServer({
     onAction: handleRemoteAction,

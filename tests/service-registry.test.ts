@@ -102,6 +102,7 @@ describe("service registry", () => {
     expect(spotify).toMatchObject({
       allowedOrigins: ["https://open.spotify.com", "https://accounts.spotify.com"],
       allowedSubdomainHosts: ["spotify.com"],
+      artworkHosts: ["i.scdn.co"],
       fullscreenOrigins: [],
       kind: "commercial",
       mediaKeySystemOrigins: ["https://open.spotify.com"],

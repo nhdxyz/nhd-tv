@@ -382,6 +382,7 @@ export function buildYouTubeVoiceAutomationScript(
       for (const anchor of anchors) {
         const href = anchor.getAttribute("href") ?? "";
         if (!visible(anchor) || (!href.startsWith("/watch?") && !href.startsWith("/shorts/"))) continue;
+        if (intent.recency === "latest" && href.startsWith("/shorts/")) continue;
         const card = anchor.closest('ytd-video-renderer,ytd-rich-item-renderer,yt-lockup-view-model') ?? anchor;
         const videoTitle = normalize(anchor.getAttribute("title") ?? anchor.textContent);
         const byline = normalize(card.querySelector(

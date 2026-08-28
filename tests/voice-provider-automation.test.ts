@@ -203,6 +203,23 @@ describe("voice provider automation", () => {
     expect(creatorVideo.clicked).toBe(true);
   });
 
+  it("does not substitute a Short for a creator's latest full video", () => {
+    const byline = new FakeElement({ text: "Outdoor Boys" });
+    const short = new FakeElement({
+      attributes: { href: "/shorts/shortsvid01", title: "Quick campsite update" },
+      card: new FakeElement({ byline, text: "Quick campsite update" })
+    });
+    const video = new FakeElement({
+      attributes: { href: "/watch?v=official001", title: "A remote island camp" },
+      card: new FakeElement({ byline, text: "A remote island camp" })
+    });
+
+    expect(executeYouTubeScript(intent({ recency: "latest" }), [short, video]))
+      .toEqual({ state: "navigated", youtubeContentId: "official001" });
+    expect(short.clicked).toBe(false);
+    expect(video.clicked).toBe(true);
+  });
+
   it("leaves results open when no video belongs to the requested creator", () => {
     const unrelatedCard = new FakeElement({
       byline: new FakeElement({ text: "Different Channel" }),

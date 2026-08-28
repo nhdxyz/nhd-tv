@@ -973,12 +973,12 @@ export const REMOTE_JS = `(() => {
     const ready = remoteEnabled && voiceAvailable && browserReady;
     const awaitingConfirmation = pendingVoiceConfirmation !== null;
     const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
-    voiceButton.disabled = !ready || voiceProcessing || awaitingConfirmation;
+    voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult;
     voiceButton.classList.toggle("is-processing", voiceProcessing);
     voiceHelp.textContent = awaitingSubmittedResult
       ? "Check the playback result before starting another voice command."
       : awaitingConfirmation
-        ? "Choose Play or Cancel before starting another voice command."
+        ? "Say yes or no, or tap Play or Cancel."
       : !window.isSecureContext
       ? "Voice requires the secure Tailscale QR code."
       : supportedVoiceMimeType === null
@@ -1079,7 +1079,8 @@ export const REMOTE_JS = `(() => {
   }
 
   function updateVoiceConfirmationButtons() {
-    const disabled = !remoteEnabled || voiceProcessing || pendingVoiceConfirmation === null;
+    const disabled = !remoteEnabled || voiceProcessing || voiceStarting ||
+      voiceRecorder !== null || pendingVoiceConfirmation === null;
     const retry = pendingVoiceConfirmation?.submitted === true;
     voiceConfirmCancel.hidden = retry;
     voiceConfirmCancel.disabled = disabled || retry;
@@ -1176,7 +1177,7 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  async function uploadVoiceRecording(blob, durationMs, commandId) {
+  async function uploadVoiceRecording(blob, durationMs, commandId, confirmationId) {
     if (!controllerToken || !commandId) return;
     voiceProcessing = true;
     voiceButtonCopy.textContent = "Understanding";
@@ -1194,7 +1195,10 @@ export const REMOTE_JS = `(() => {
           "Authorization": "Bearer " + controllerToken,
           "Content-Type": blob.type,
           "X-NHD-TV-Audio-Duration-Ms": String(durationMs),
-          "X-NHD-TV-Voice-Command-Id": commandId
+          "X-NHD-TV-Voice-Command-Id": commandId,
+          ...(confirmationId === null
+            ? {}
+            : { "X-NHD-TV-Voice-Confirmation-Id": confirmationId })
         },
         body: blob,
         signal: requestController.signal
@@ -1274,8 +1278,12 @@ export const REMOTE_JS = `(() => {
       supportedVoiceMimeType === null
     ) return;
 
+    const spokenConfirmationId = pendingVoiceConfirmation?.submitted === true
+      ? null
+      : pendingVoiceConfirmation?.confirmationId ?? null;
     voiceCommandId = createVoiceCommandId();
     voiceStarting = true;
+    updateVoiceConfirmationButtons();
     voiceReleaseRequested = false;
     voiceDiscardRequested = false;
     setState("Starting microphone…");
@@ -1336,15 +1344,12 @@ export const REMOTE_JS = `(() => {
         }
         const blob = new Blob(recordedChunks, { type: mimeType });
         recordedChunks.length = 0;
-        void uploadVoiceRecording(blob, durationMs, commandId);
+        void uploadVoiceRecording(blob, durationMs, commandId, spokenConfirmationId);
       }, { once: true });
       voiceStartedAt = performance.now();
       recorder.start(250);
       voiceRecorder = recorder;
-      const supersededConfirmation = closeVoiceConfirmation();
-      if (supersededConfirmation !== null) {
-        void cancelVoiceConfirmation(supersededConfirmation, false);
-      }
+      updateVoiceConfirmationButtons();
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Listening";
       sendVoiceActivity("listening", false, commandId);
@@ -1373,6 +1378,7 @@ export const REMOTE_JS = `(() => {
     } finally {
       voiceStarting = false;
       updateVoiceButton();
+      updateVoiceConfirmationButtons();
     }
   }
 

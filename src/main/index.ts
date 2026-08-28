@@ -1655,7 +1655,8 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
 async function handleRemoteVoice(
   clip: VoiceAudioClip,
   commandId: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  confirmationId: string | null
 ): Promise<PhoneRemoteVoiceResult> {
   if (!remoteVoiceStatus().available || voiceCommandSession === null) {
     const result: PhoneRemoteVoiceResult = {
@@ -1668,7 +1669,7 @@ async function handleRemoteVoice(
   presentPhoneVoiceActivity({ commandId, phase: "understanding" });
   activeVoiceProcessingCommandId = commandId;
   try {
-    const result = await voiceCommandSession.process(clip, signal);
+    const result = await voiceCommandSession.process(clip, signal, confirmationId);
     if (signal.aborted) return voiceFailure(signal.reason);
     presentPhoneVoiceResult(result, commandId);
     return result;

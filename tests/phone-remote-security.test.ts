@@ -75,9 +75,20 @@ describe("phone remote boundary", () => {
     };
     expect(parseVoiceUploadMetadata(validHeaders, secureOrigin)).toEqual({
       commandId: "voice-command-test-1234",
+      confirmationId: null,
       durationMs: 2500,
       mimeType: "audio/webm"
     });
+    expect(parseVoiceUploadMetadata({
+      ...validHeaders,
+      "x-nhd-tv-voice-confirmation-id": "confirmation_token_1234"
+    }, secureOrigin)).toMatchObject({
+      confirmationId: "confirmation_token_1234"
+    });
+    expect(parseVoiceUploadMetadata({
+      ...validHeaders,
+      "x-nhd-tv-voice-confirmation-id": "short"
+    }, secureOrigin)).toBeNull();
     expect(parseVoiceUploadMetadata({ ...validHeaders, origin: "https://example.test" }, secureOrigin))
       .toBeNull();
     expect(parseVoiceUploadMetadata({ ...validHeaders, "content-type": "application/octet-stream" }, secureOrigin))
@@ -161,6 +172,10 @@ describe("phone remote boundary", () => {
     );
     expect(serverSource).toContain("#scheduleDeferredDisconnectCompletion(controllerId)");
     expect(serverSource).toContain("await this.#cancelAllVoiceConfirmations()");
+    expect(serverSource).toContain("await this.#cancelAllVoiceConfirmations(metadata.confirmationId)");
+    expect(serverSource).toContain(
+      "this.#voiceConfirmationForController(metadata.confirmationId, controllerId)"
+    );
   });
 
   it("records voice only while the secure push-to-talk control is held", () => {
@@ -182,10 +197,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
     expect(REMOTE_JS).toContain("submitted: true");
     expect(REMOTE_JS).toContain(
-      "voiceButton.disabled = !ready || voiceProcessing || awaitingConfirmation"
+      "voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult"
     );
     expect(REMOTE_JS).toContain(
-      "Choose Play or Cancel before starting another voice command."
+      "Say yes or no, or tap Play or Cancel."
     );
     expect(REMOTE_JS).toContain(
       "Check the playback result before starting another voice command."
@@ -198,6 +213,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("createVoiceCommandId");
     expect(REMOTE_JS).toContain("JSON.stringify({ commandId, phase })");
     expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Command-Id": commandId');
+    expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Confirmation-Id": confirmationId');
+    expect(REMOTE_JS).toContain("const spokenConfirmationId = pendingVoiceConfirmation?.submitted === true");
     expect(REMOTE_JS).toContain('sendVoiceActivity("listening", false, commandId)');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
@@ -212,11 +229,7 @@ describe("phone remote boundary", () => {
     const recorderAssignment = REMOTE_JS.indexOf("voiceRecorder = recorder", recorderStart);
     expect(recorderStart).toBeGreaterThan(-1);
     expect(recorderAssignment).toBeGreaterThan(recorderStart);
-    const confirmationSuperseded = REMOTE_JS.indexOf(
-      "const supersededConfirmation = closeVoiceConfirmation()",
-      recorderAssignment
-    );
-    expect(confirmationSuperseded).toBeGreaterThan(recorderAssignment);
+    expect(REMOTE_JS).not.toContain("const supersededConfirmation = closeVoiceConfirmation()");
     const microphoneCatch = REMOTE_JS.indexOf("} catch (error) {", recorderAssignment);
     expect(REMOTE_JS.slice(microphoneCatch, microphoneCatch + 500))
       .toContain("voiceRecorder = null");

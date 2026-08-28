@@ -101,7 +101,8 @@ export interface PhoneRemoteServerOptions {
   onVoice?: (
     clip: VoiceAudioClip,
     commandId: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    confirmationId: string | null
   ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   onVoiceTimeout?: (commandId: string) => void | Promise<void>;
   shouldAutoApproveFirstRemote: () => boolean;
@@ -124,6 +125,7 @@ export interface PhoneRemoteVoiceStatus {
 
 export interface VoiceUploadMetadata {
   commandId: string;
+  confirmationId: string | null;
   durationMs: number;
   mimeType: string;
 }
@@ -298,9 +300,17 @@ export function parseVoiceUploadMetadata(
   const commandId = typeof rawCommandId === "string" && VOICE_COMMAND_ID_PATTERN.test(rawCommandId)
     ? rawCommandId
     : null;
+  const rawConfirmationId = headers["x-nhd-tv-voice-confirmation-id"];
+  const confirmationId = rawConfirmationId === undefined
+    ? null
+    : typeof rawConfirmationId === "string" &&
+        VOICE_CONFIRMATION_ID_PATTERN.test(rawConfirmationId)
+      ? rawConfirmationId
+      : undefined;
 
   if (
     commandId === null ||
+    confirmationId === undefined ||
     !VOICE_AUDIO_TYPES.has(mimeType) ||
     !Number.isInteger(durationMs) ||
     durationMs < MIN_VOICE_AUDIO_DURATION_MS ||
@@ -309,7 +319,7 @@ export function parseVoiceUploadMetadata(
   ) {
     return null;
   }
-  return { commandId, durationMs, mimeType };
+  return { commandId, confirmationId, durationMs, mimeType };
 }
 
 function isSameOriginPost(request: IncomingMessage, expectedOrigin: string | null): boolean {
@@ -1037,6 +1047,15 @@ export class PhoneRemoteServer {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
+      if (
+        metadata.confirmationId !== null &&
+        this.#voiceConfirmationForController(metadata.confirmationId, controllerId) === null
+      ) {
+        writeJson(response, 410, {
+          error: "That voice confirmation expired — hold the microphone and try again"
+        });
+        return;
+      }
       const voiceStatus = await this.#voiceStatus(request);
       if (!voiceStatus.available || this.#onVoice === undefined) {
         writeJson(response, 503, { error: voiceStatus.detail });
@@ -1062,10 +1081,14 @@ export class PhoneRemoteServer {
 
       this.#lastVoiceAt = now;
       this.#voiceInFlight = true;
-      this.#activeVoiceConfirmationId = null;
+      this.#activeVoiceConfirmationId = metadata.confirmationId;
       this.#activeVoiceControllerId = controllerId;
       try {
-        await this.#cancelAllVoiceConfirmations();
+        if (metadata.confirmationId === null) {
+          await this.#cancelAllVoiceConfirmations();
+        } else {
+          await this.#cancelAllVoiceConfirmations(metadata.confirmationId);
+        }
         let bytes: Uint8Array | null;
         try {
           bytes = await readVoiceBody(request);
@@ -1097,7 +1120,7 @@ export class PhoneRemoteServer {
               bytes,
               durationMs: metadata.durationMs,
               mimeType: metadata.mimeType
-            }, metadata.commandId, signal) ?? Promise.resolve({
+            }, metadata.commandId, signal, metadata.confirmationId) ?? Promise.resolve({
               detail: "Voice control is unavailable.",
               outcome: "failed" as const
             }),
@@ -1115,6 +1138,12 @@ export class PhoneRemoteServer {
             return;
           }
           throw error;
+        }
+        if (metadata.confirmationId !== null) {
+          this.#pendingVoiceConfirmations.delete(metadata.confirmationId);
+          if (this.#activeVoiceConfirmationId === metadata.confirmationId) {
+            this.#activeVoiceConfirmationId = null;
+          }
         }
         let responseResult = result;
         if (
@@ -1139,6 +1168,7 @@ export class PhoneRemoteServer {
             controllerId,
             metadata.commandId
           );
+          this.#activeVoiceConfirmationId = result.confirmationId;
           responseResult = { ...result, confirmationExpiresAt };
         }
         writeJson(response, responseResult.outcome === "failed" ? 422 : 200, responseResult);
@@ -1433,10 +1463,15 @@ export class PhoneRemoteServer {
     return expiresAt;
   }
 
-  async #cancelAllVoiceConfirmations(): Promise<void> {
+  async #cancelAllVoiceConfirmations(
+    preservedConfirmationId: string | null = null
+  ): Promise<void> {
     this.#cleanupVoiceConfirmations();
-    const pending = [...this.#pendingVoiceConfirmations.entries()];
-    this.#pendingVoiceConfirmations.clear();
+    const pending = [...this.#pendingVoiceConfirmations.entries()]
+      .filter(([confirmationId]) => confirmationId !== preservedConfirmationId);
+    for (const [confirmationId] of pending) {
+      this.#pendingVoiceConfirmations.delete(confirmationId);
+    }
     for (const [confirmationId, binding] of pending) {
       await this.#notifyVoiceConfirmationCancelled(confirmationId, binding.commandId);
     }

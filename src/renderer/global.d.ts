@@ -4,6 +4,7 @@ import type {
   DevicePreferences,
   HostStatus,
   LocalAppState,
+  OpenAiCredentialStatus,
   ProfilePreferences,
   RemoteAction,
   RemoteStatus,
@@ -21,6 +22,7 @@ declare global {
       approveRemotePairing: () => Promise<RemoteStatus>;
       cancelServiceQuit: () => Promise<void>;
       clearServiceData: (serviceId: string) => Promise<void>;
+      clearOpenAiApiKey: () => Promise<OpenAiCredentialStatus>;
       cycleDisplay: () => Promise<LocalAppState>;
       closeService: () => Promise<void>;
       confirmServiceQuit: () => Promise<void>;
@@ -31,6 +33,7 @@ declare global {
       getServices: () => Promise<readonly ServiceSummary[]>;
       getHostStatus: () => Promise<HostStatus>;
       getLocalAppState: () => Promise<LocalAppState>;
+      getOpenAiCredentialStatus: () => Promise<OpenAiCredentialStatus>;
       getRemoteStatus: () => Promise<RemoteStatus>;
       getSpotifyPlayback: () => Promise<SpotifyPlaybackPresentation>;
       sendInputAction: (action: RemoteAction) => Promise<boolean>;
@@ -58,6 +61,7 @@ declare global {
       resumeContinueWatching: (itemId: string) => Promise<void>;
       searchCatalog: (query: string) => Promise<readonly CatalogSearchResult[]>;
       searchService: (serviceId: string, query: string) => Promise<void>;
+      saveOpenAiApiKey: (apiKey: string) => Promise<OpenAiCredentialStatus>;
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;
       updateProfilePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;

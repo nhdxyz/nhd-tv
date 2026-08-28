@@ -5,6 +5,7 @@ import type {
   DevicePreferences,
   HostStatus,
   LocalAppState,
+  OpenAiCredentialStatus,
   ProfilePreferences,
   RemoteAction,
   RemoteStatus,
@@ -23,6 +24,7 @@ const IPC_CHANNELS = {
   ambientDisplayChanged: "nhd:ambient-display:changed",
   approveRemotePairing: "nhd:remote:pairing:approve",
   cancelServiceQuit: "nhd:service:quit:cancel",
+  clearOpenAiApiKey: "nhd:openai:credential:clear",
   clearServiceData: "nhd:service:data:clear",
   cycleDisplay: "nhd:display:cycle",
   closeService: "nhd:service:close",
@@ -35,6 +37,7 @@ const IPC_CHANNELS = {
   getServices: "nhd:service:list",
   getHostStatus: "nhd:host:status:get",
   getLocalAppState: "nhd:local-state:get",
+  getOpenAiCredentialStatus: "nhd:openai:credential:status",
   getRemoteStatus: "nhd:remote:status:get",
   getSpotifyPlayback: "nhd:spotify:playback:get",
   hostStatusChanged: "nhd:host:status:changed",
@@ -51,6 +54,7 @@ const IPC_CHANNELS = {
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
+  saveOpenAiApiKey: "nhd:openai:credential:save",
   selectProfile: "nhd:profile:select",
   serviceRecoveryRequested: "nhd:service:recovery:requested",
   serviceQuitRequested: "nhd:service:quit:requested",
@@ -69,6 +73,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.cancelServiceQuit),
   clearServiceData: (serviceId: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.clearServiceData, serviceId),
+  clearOpenAiApiKey: (): Promise<OpenAiCredentialStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.clearOpenAiApiKey),
   cycleDisplay: (): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.cycleDisplay),
   closeService: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.closeService),
@@ -87,6 +93,8 @@ contextBridge.exposeInMainWorld("nhd", {
   getHostStatus: (): Promise<HostStatus> => ipcRenderer.invoke(IPC_CHANNELS.getHostStatus),
   getLocalAppState: (): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.getLocalAppState),
+  getOpenAiCredentialStatus: (): Promise<OpenAiCredentialStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getOpenAiCredentialStatus),
   getRemoteStatus: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.getRemoteStatus),
   getSpotifyPlayback: (): Promise<SpotifyPlaybackPresentation> =>
@@ -166,6 +174,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.searchCatalog, query),
   searchService: (serviceId: string, query: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.searchService, serviceId, query),
+  saveOpenAiApiKey: (apiKey: string): Promise<OpenAiCredentialStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.saveOpenAiApiKey, apiKey),
   selectProfile: (profileId: string): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.selectProfile, profileId),
   startRemotePairing: (): Promise<RemoteStatus> =>

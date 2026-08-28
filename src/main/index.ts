@@ -11,6 +11,7 @@ import {
   net,
   powerMonitor,
   protocol,
+  safeStorage,
   screen,
   session
 } from "electron";
@@ -49,6 +50,10 @@ import {
   validateJpegDataUrl
 } from "./image-transcode";
 import { LocalStateStore } from "./local-state-store";
+import {
+  type CredentialCipher,
+  OpenAiCredentialStore
+} from "./openai-credential-store";
 import { isMediaAction } from "./media-actions";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
 import { dispatchPrecisionPointer } from "./precision-pointer";
@@ -109,6 +114,7 @@ if (!ownsSingleInstanceLock) {
 let mainWindow: BrowserWindow | null = null;
 let continueWatchingStore: ContinueWatchingStore | null = null;
 let localStateStore: LocalStateStore | null = null;
+let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
@@ -1063,6 +1069,15 @@ function validateShellSender(senderUrl: string): void {
   }
 }
 
+function electronCredentialCipher(): CredentialCipher {
+  return {
+    decryptString: (value) => safeStorage.decryptString(value),
+    encryptString: (value) => safeStorage.encryptString(value),
+    isEncryptionAvailable: () => safeStorage.isEncryptionAvailable() &&
+      (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text")
+  };
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC_CHANNELS.dismissAmbientDisplay, (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
@@ -1090,6 +1105,30 @@ function registerIpc(): void {
       throw new Error("Local profile state is not ready.");
     }
     return localStateStore.snapshot();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.getOpenAiCredentialStatus, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (openAiCredentialStore === null) {
+      throw new Error("OpenAI credential storage is not ready.");
+    }
+    return openAiCredentialStore.status();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.saveOpenAiApiKey, (event, apiKey: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (openAiCredentialStore === null) {
+      throw new Error("OpenAI credential storage is not ready.");
+    }
+    return openAiCredentialStore.save(apiKey);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.clearOpenAiApiKey, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (openAiCredentialStore === null) {
+      throw new Error("OpenAI credential storage is not ready.");
+    }
+    return openAiCredentialStore.clear();
   });
 
   ipcMain.handle(
@@ -1526,6 +1565,11 @@ app.whenReady().then(async () => {
       .map((service) => service.id)
   );
   await localStateStore.initialize();
+  openAiCredentialStore = new OpenAiCredentialStore(
+    path.join(app.getPath("userData"), "openai-credential.bin"),
+    electronCredentialCipher()
+  );
+  await openAiCredentialStore.initialize();
   setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(
     localStateStore.snapshot().activeProfileId,

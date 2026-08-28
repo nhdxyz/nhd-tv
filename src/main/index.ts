@@ -94,7 +94,11 @@ import type {
   VoiceCommandPlan
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
-import { resolveVoiceMediaDestination } from "./voice/voice-media-destination";
+import {
+  isVoiceDiscoveryIntent,
+  resolveVoiceMediaDestination,
+  voiceDiscoveryOpenedDetail
+} from "./voice/voice-media-destination";
 import { GoogleWatchCache } from "./voice/google-watch-cache";
 import {
   GoogleWatchResolver,
@@ -1103,7 +1107,9 @@ async function executeVoiceCommandPlan(
   const destination = resolveVoiceMediaDestination(plan.intent, plan.candidateServiceIds);
   if (destination === null) {
     return {
-      detail: "That title is not on a service enabled in this profile.",
+      detail: isVoiceDiscoveryIntent(plan.intent)
+        ? "Netflix is not enabled in this profile, so recommendations cannot be opened yet."
+        : "That title is not on a service enabled in this profile.",
       handled: false
     };
   }
@@ -1130,10 +1136,11 @@ async function executeVoiceCommandPlan(
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
+  const discoveryDetail = voiceDiscoveryOpenedDetail(plan.intent, definition.name);
   return {
-    detail: automated
+    detail: discoveryDetail ?? (automated
       ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
-      : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`,
+      : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`),
     handled: true
   };
 }

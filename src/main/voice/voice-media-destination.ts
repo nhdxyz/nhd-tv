@@ -6,8 +6,25 @@ export interface VoiceMediaDestination {
   serviceId: VoiceServiceId;
 }
 
+export function isVoiceDiscoveryIntent(intent: VoiceMediaIntent): boolean {
+  return intent.mediaType === "recommendation" || intent.mediaType === "similar-title";
+}
+
+export function voiceDiscoveryOpenedDetail(
+  intent: VoiceMediaIntent,
+  serviceName: string
+): string | null {
+  if (intent.mediaType === "recommendation") {
+    return `Opened ${serviceName} recommendations for ${intent.title}.`;
+  }
+  if (intent.mediaType === "similar-title") {
+    return `Opened ${serviceName} results related to ${intent.title}.`;
+  }
+  return null;
+}
+
 function preferredService(intent: VoiceMediaIntent): VoiceServiceId {
-  if (intent.mediaType === "recommendation" || intent.mediaType === "similar-title") {
+  if (isVoiceDiscoveryIntent(intent)) {
     return "netflix";
   }
   if (["album", "artist", "playlist", "song"].includes(intent.mediaType)) {

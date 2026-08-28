@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  isVoiceDiscoveryIntent,
   resolveVoiceMediaDestination,
+  voiceDiscoveryOpenedDetail,
   voiceMediaSearchQuery
 } from "../src/main/voice/voice-media-destination";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
@@ -55,19 +57,27 @@ describe("voice media destination", () => {
   });
 
   it("opens bounded recommendation discovery in Netflix rather than exact-title lookup", () => {
-    expect(resolveVoiceMediaDestination(intent({
+    const recommendation = intent({
       action: "open",
       mediaType: "recommendation",
       title: "tense action movies with a clever lead"
-    }), ["netflix"])).toEqual({
+    });
+    expect(resolveVoiceMediaDestination(recommendation, ["netflix"])).toEqual({
       query: "tense action movies with a clever lead",
       serviceId: "netflix"
     });
-    expect(resolveVoiceMediaDestination(intent({
+    expect(isVoiceDiscoveryIntent(recommendation)).toBe(true);
+    expect(voiceDiscoveryOpenedDetail(recommendation, "Netflix"))
+      .toBe("Opened Netflix recommendations for tense action movies with a clever lead.");
+    const similar = intent({
       action: "open",
       mediaType: "similar-title",
       title: "Inception"
-    }), ["netflix"])).toEqual({ query: "Inception", serviceId: "netflix" });
+    });
+    expect(resolveVoiceMediaDestination(similar, ["netflix"]))
+      .toEqual({ query: "Inception", serviceId: "netflix" });
+    expect(voiceDiscoveryOpenedDetail(similar, "Netflix"))
+      .toBe("Opened Netflix results related to Inception.");
   });
 
   it("keeps an explicit Disney Plus exact-title request on Disney Plus", () => {

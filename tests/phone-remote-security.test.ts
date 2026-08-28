@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   remotePostHeadersAreAllowed,
+  secureRemoteHeadersAllowMicrophone,
   shouldAutoApprovePairing
 } from "../src/main/remote/phone-remote-server";
 import {
@@ -41,6 +42,22 @@ describe("phone remote boundary", () => {
     expect(remotePostHeadersAreAllowed({
       "content-type": "application/json",
       origin: expectedOrigin
+    }, null)).toBe(false);
+  });
+
+  it("enables microphone permission only for the exact secure remote host", () => {
+    const secureOrigin = "https://living-room.example.ts.net:8443";
+    expect(secureRemoteHeadersAllowMicrophone({
+      host: "living-room.example.ts.net:8443"
+    }, secureOrigin)).toBe(true);
+    expect(secureRemoteHeadersAllowMicrophone({
+      host: "living-room.example.ts.net:8443"
+    }, expectedOrigin)).toBe(false);
+    expect(secureRemoteHeadersAllowMicrophone({ host: "192.0.2.10:43123" }, secureOrigin))
+      .toBe(false);
+    expect(secureRemoteHeadersAllowMicrophone({
+      host: "living-room.example.ts.net:8443",
+      "x-forwarded-proto": "https"
     }, null)).toBe(false);
   });
 

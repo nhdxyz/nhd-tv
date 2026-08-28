@@ -56,6 +56,7 @@ import {
 } from "./openai-credential-store";
 import { isMediaAction } from "./media-actions";
 import { PhoneRemoteServer } from "./remote/phone-remote-server";
+import { TailscaleSecureRemote } from "./remote/tailscale-secure-remote";
 import { dispatchPrecisionPointer } from "./precision-pointer";
 import { buildRemoteTextEntryScript } from "./remote-text-entry";
 import { providerArtworkFallbackUrls } from "./provider-artwork";
@@ -116,6 +117,7 @@ let continueWatchingStore: ContinueWatchingStore | null = null;
 let localStateStore: LocalStateStore | null = null;
 let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
+let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
 let ambientDisplayPreview = false;
@@ -1496,6 +1498,16 @@ async function createMainWindow(): Promise<void> {
     onGetRecentServices: recentRemoteServices,
     onLaunchService: handleRemoteServiceLaunch,
     onPointer: handleRemotePointer,
+    onPrepareSecureAccess: (localPort) => {
+      if (tailscaleSecureRemote === null) {
+        return {
+          detail: "Tailscale secure access is still starting.",
+          origin: null,
+          state: "unavailable"
+        };
+      }
+      return tailscaleSecureRemote.prepare(localPort);
+    },
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus,
     onText: handleRemoteText,
@@ -1565,6 +1577,9 @@ app.whenReady().then(async () => {
       .map((service) => service.id)
   );
   await localStateStore.initialize();
+  tailscaleSecureRemote = new TailscaleSecureRemote(
+    path.join(app.getPath("userData"), "tailscale-serve.json")
+  );
   openAiCredentialStore = new OpenAiCredentialStore(
     path.join(app.getPath("userData"), "openai-credential.bin"),
     electronCredentialCipher()

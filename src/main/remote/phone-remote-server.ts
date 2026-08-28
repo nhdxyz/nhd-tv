@@ -24,6 +24,7 @@ import {
   parseRemoteTextInput
 } from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
+import type { TailscaleSecureRemoteResult } from "./tailscale-secure-remote";
 
 const MAX_JSON_BYTES = 4_096;
 const MIN_COMMAND_INTERVAL_MS = 24;
@@ -43,6 +44,9 @@ export interface PhoneRemoteServerOptions {
     { detail?: string; handled: boolean } |
     Promise<{ detail?: string; handled: boolean }>;
   onPointer: (input: RemotePointerInput) => RemotePointerResult | Promise<RemotePointerResult>;
+  onPrepareSecureAccess?: (localPort: number) =>
+    TailscaleSecureRemoteResult |
+    Promise<TailscaleSecureRemoteResult>;
   onGetContext: () => RemoteControlContext | Promise<RemoteControlContext>;
   onGetRecentServices: () =>
     readonly RemoteServiceShortcut[] |
@@ -73,11 +77,16 @@ function lanIpv4Address(): string | null {
   return null;
 }
 
-function setSecurityHeaders(response: ServerResponse): void {
+function setSecurityHeaders(response: ServerResponse, microphoneAllowed: boolean): void {
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Content-Security-Policy", REMOTE_CSP);
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader(
+    "Permissions-Policy",
+    microphoneAllowed
+      ? "camera=(), microphone=(self), geolocation=()"
+      : "camera=(), microphone=(), geolocation=()"
+  );
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
@@ -89,7 +98,6 @@ function writeText(
   contentType: string,
   body: string
 ): void {
-  setSecurityHeaders(response);
   response.writeHead(statusCode, { "Content-Type": contentType });
   response.end(body);
 }
@@ -116,6 +124,23 @@ export function remotePostHeadersAreAllowed(
     typeof contentType === "string" &&
     contentType.toLowerCase().startsWith("application/json")
   );
+}
+
+export function secureRemoteHeadersAllowMicrophone(
+  headers: IncomingHttpHeaders,
+  expectedOrigin: string | null
+): boolean {
+  if (expectedOrigin === null) {
+    return false;
+  }
+
+  try {
+    const origin = new URL(expectedOrigin);
+    return origin.protocol === "https:" &&
+      headers.host?.toLowerCase() === origin.host.toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 function isSameOriginPost(request: IncomingMessage, expectedOrigin: string | null): boolean {
@@ -153,6 +178,7 @@ export class PhoneRemoteServer {
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
   readonly #onGetContext: PhoneRemoteServerOptions["onGetContext"];
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
+  readonly #onPrepareSecureAccess: PhoneRemoteServerOptions["onPrepareSecureAccess"];
   readonly #onGetRecentServices: PhoneRemoteServerOptions["onGetRecentServices"];
   readonly #onLaunchService: PhoneRemoteServerOptions["onLaunchService"];
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
@@ -165,6 +191,11 @@ export class PhoneRemoteServer {
   #networkAddress: string | null = null;
   #qrDataUrl: string | null = null;
   #remoteOrigin: string | null = null;
+  #secureAccess: TailscaleSecureRemoteResult = {
+    detail: "Secure phone voice has not been prepared yet.",
+    origin: null,
+    state: "unavailable"
+  };
   #server: Server | null = null;
 
   constructor(options: PhoneRemoteServerOptions) {
@@ -173,6 +204,7 @@ export class PhoneRemoteServer {
     this.#onGetRecentServices = options.onGetRecentServices;
     this.#onLaunchService = options.onLaunchService;
     this.#onPointer = options.onPointer;
+    this.#onPrepareSecureAccess = options.onPrepareSecureAccess;
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
     this.#onText = options.onText;
@@ -197,9 +229,12 @@ export class PhoneRemoteServer {
     }
 
     if (this.#qrDataUrl !== null && this.#expiresAt !== null) {
+      const secure = this.#secureAccess.state === "ready";
       return {
         connectedControllers: this.#manager.connectedControllers,
-        detail: "Scan the QR code with a phone on this trusted local network.",
+        detail: secure
+          ? "Scan the secure QR code with a phone connected to this Tailscale network."
+          : `Scan the QR code on this trusted local network. ${this.#secureAccess.detail}`,
         expiresAt: this.#expiresAt,
         networkAddress: this.#networkAddress,
         qrDataUrl: this.#qrDataUrl,
@@ -240,8 +275,24 @@ export class PhoneRemoteServer {
       throw new Error("The phone remote server did not expose a local port.");
     }
 
+    const lanOrigin = `http://${this.#networkAddress}:${address.port}`;
+    try {
+      this.#secureAccess = await this.#onPrepareSecureAccess?.(address.port) ?? {
+        detail: "Tailscale secure access is not configured for this build.",
+        origin: null,
+        state: "unavailable"
+      };
+    } catch {
+      this.#secureAccess = {
+        detail: "Tailscale secure access could not be prepared.",
+        origin: null,
+        state: "error"
+      };
+    }
+    this.#remoteOrigin = this.#secureAccess.state === "ready" && this.#secureAccess.origin !== null
+      ? this.#secureAccess.origin
+      : lanOrigin;
     const offer = this.#manager.beginPairing();
-    this.#remoteOrigin = `http://${this.#networkAddress}:${address.port}`;
     const remoteUrl = `${this.#remoteOrigin}/#${offer.token}`;
 
     this.#expiresAt = offer.expiresAt;
@@ -296,6 +347,11 @@ export class PhoneRemoteServer {
     this.#networkAddress = null;
     this.#qrDataUrl = null;
     this.#remoteOrigin = null;
+    this.#secureAccess = {
+      detail: "Secure phone voice has not been prepared yet.",
+      origin: null,
+      state: "unavailable"
+    };
 
     const server = this.#server;
     this.#server = null;
@@ -332,6 +388,10 @@ export class PhoneRemoteServer {
   }
 
   async #handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    setSecurityHeaders(
+      response,
+      secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)
+    );
     const method = request.method ?? "GET";
     const origin = requestOrigin(request) ?? "http://invalid";
     const url = new URL(request.url ?? "/", origin);

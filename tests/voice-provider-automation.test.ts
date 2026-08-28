@@ -729,7 +729,7 @@ describe("voice provider automation", () => {
     expect(executeProviderScript(script, documentValue, "/search/Stronger")).toBe("idle");
   });
 
-  it("does not accept unrelated Spotify playback until the requested artist was started", () => {
+  it("opens the exact Spotify artist profile before starting artist playback", () => {
     const play = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
     const artist = new FakeElement({ attributes: { href: "/artist/kanye" }, text: "Kanye West" });
     const artistCard = new FakeElement({
@@ -757,65 +757,41 @@ describe("voice provider automation", () => {
       buildSpotifyVoiceAutomationScript(artistIntent, false),
       documentValue,
       "/search/Kanye%20West"
-    )).toBe("play-clicked");
-    expect(play.clicked).toBe(true);
+    )).toBe("navigated");
+    expect(artist.clicked).toBe(true);
+    expect(play.clicked).toBe(false);
 
     expect(executeProviderScript(
       buildSpotifyVoiceAutomationScript(artistIntent, true),
       documentValue,
       "/search/Kanye%20West"
-    )).toBe("play-clicked");
-
-    const localPause = new FakeElement({ attributes: { "aria-label": "Pause Kanye West" } });
-    const playingArtistCard = new FakeElement({
-      selectAll: (selector) => selector === "a[href]"
-        ? [artist]
-        : selector.includes('data-testid="play-button"') ? [localPause] : []
-    });
-    const verifiedDocument = {
-      querySelector: () => null,
-      querySelectorAll: (selector: string) => {
-        if (selector.includes('data-testid="control-button-playpause"')) {
-          return [unrelatedPause];
-        }
-        return selector.includes('data-testid="tracklist-row"') ? [playingArtistCard] : [];
-      }
-    };
-    const localOnlyDocument = {
-      querySelector: () => null,
-      querySelectorAll: (selector: string) =>
-        selector.includes('data-testid="tracklist-row"') ? [playingArtistCard] : []
-    };
-    expect(executeProviderScript(
-      buildSpotifyVoiceAutomationScript(artistIntent, true),
-      localOnlyDocument,
-      "/search/Kanye%20West"
-    )).not.toBe("playing");
-    expect(executeProviderScript(
-      buildSpotifyVoiceAutomationScript(artistIntent, true),
-      verifiedDocument,
-      "/search/Kanye%20West"
-    )).toBe("playing");
+    )).toBe("navigated");
+    expect(play.clicked).toBe(false);
+    expect(unrelatedPause.clicked).toBe(false);
   });
 
-  it("does not use an unrelated global Spotify Pause control to verify an entity page", () => {
-    const heading = new FakeElement({ text: "Kanye West" });
-    const entityPlay = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
-    const entityRoot = new FakeElement({
-      selectAll: (selector) => selector.includes('data-testid="play-button"')
-        ? [entityPlay]
+  it("starts playback only from the exact Spotify artist profile action bar", () => {
+    const wrongPlay = new FakeElement({ attributes: { "aria-label": "Play Drake" } });
+    const entityPlay = new FakeElement({ attributes: { title: "Shuffle Kanye West" } });
+    const actionBar = new FakeElement({
+      selectAll: (selector) => selector.includes("button[aria-label]")
+        ? [wrongPlay, entityPlay]
         : []
     });
+    const entityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="action-bar"')
+        ? [actionBar]
+        : []
+    });
+    const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
+    const fixedNowPlayingTitle = new FakeElement({ text: "Stronger" });
     const unrelatedPause = new FakeElement({ attributes: { "aria-label": "Pause" } });
     const documentValue = {
-      querySelector: (selector: string) => {
-        if (selector.startsWith("h1,")) return heading;
-        if (selector.includes('data-testid="artist-page"')) return entityRoot;
-        return null;
-      },
-      querySelectorAll: (selector: string) => selector.includes("control-button-playpause")
-        ? [unrelatedPause]
-        : []
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.startsWith("h1,")) return [fixedNowPlayingTitle, heading];
+        return selector.includes("control-button-playpause") ? [unrelatedPause] : [];
+      }
     };
     const artistIntent = intent({
       creator: "Kanye West",
@@ -830,21 +806,27 @@ describe("voice provider automation", () => {
       "/artist/kanye"
     )).toBe("play-clicked");
     expect(entityPlay.clicked).toBe(true);
+    expect(wrongPlay.clicked).toBe(false);
 
     const entityPause = new FakeElement({
       attributes: { "aria-label": "Pause Kanye West" }
     });
-    const playingEntityRoot = new FakeElement({
-      selectAll: (selector) => selector.includes('data-testid="play-button"')
+    const playingActionBar = new FakeElement({
+      selectAll: (selector) => selector.includes("button[aria-label]")
         ? [entityPause]
         : []
     });
+    const playingEntityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="action-bar"')
+        ? [playingActionBar]
+        : []
+    });
+    const playingHeading = new FakeElement({ card: playingEntityRoot, text: "Kanye West" });
     const verifiedDocument = {
       ...documentValue,
-      querySelector: (selector: string) => {
-        if (selector.startsWith("h1,")) return heading;
-        if (selector.includes('data-testid="artist-page"')) return playingEntityRoot;
-        return null;
+      querySelectorAll: (selector: string) => {
+        if (selector.startsWith("h1,")) return [fixedNowPlayingTitle, playingHeading];
+        return selector.includes("control-button-playpause") ? [unrelatedPause] : [];
       }
     };
     expect(executeProviderScript(
@@ -852,6 +834,34 @@ describe("voice provider automation", () => {
       verifiedDocument,
       "/artist/kanye"
     )).toBe("playing");
+  });
+
+  it("opens a Spotify artist profile without autoplaying it", () => {
+    const entityPlay = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
+    const actionBar = new FakeElement({
+      selectAll: (selector) => selector.includes("button[aria-label]") ? [entityPlay] : []
+    });
+    const entityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="action-bar"') ? [actionBar] : []
+    });
+    const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
+    const documentValue = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading] : []
+    };
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        action: "open",
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      })),
+      documentValue,
+      "/artist/kanye"
+    )).toBe("complete");
+    expect(entityPlay.clicked).toBe(false);
   });
 
   it("bounds provider retries and revalidates a Netflix destination before profile recovery", async () => {

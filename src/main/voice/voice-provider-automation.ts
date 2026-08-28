@@ -156,16 +156,32 @@ export function buildSpotifyVoiceAutomationScript(
       }
       return Boolean(exactLink(root, routePrefix, titleIdentity)) && creatorMatches(root);
     };
+    const controlLabel = (button) => normalize(
+      button.getAttribute("aria-label") ?? button.getAttribute("title") ?? button.textContent
+    );
     const playButton = (root) => [...root.querySelectorAll(
-      '[data-testid="play-button"],button[aria-label^="Play "],button[aria-label="Play"]'
-    )].find((button) => visible(button) && !/^pause(?:\\s|$)/i.test(
-      button.getAttribute("aria-label") ?? button.textContent ?? ""
-    ));
+      '[data-testid="play-button"],button[aria-label^="Play " i],button[aria-label="Play" i],'
+      + 'button[title^="Play " i],button[title="Play" i]'
+    )].find((button) => visible(button) && !/^pause(?:\\s|$)/i.test(controlLabel(button)));
     const pauseButton = (root) => [...root.querySelectorAll(
-      '[data-testid="play-button"],button[aria-label^="Pause"]'
-    )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(
-      button.getAttribute("aria-label") ?? button.textContent ?? ""
-    ));
+      '[data-testid="play-button"],button[aria-label^="Pause" i],button[title^="Pause" i]'
+    )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(controlLabel(button)));
+    const artistActionButton = (root, expected, paused) => {
+      const actionRoots = [...root.querySelectorAll(
+        '[data-testid="action-bar"],[data-testid="action-bar-row"]'
+      )].filter(visible);
+      return actionRoots.flatMap((actionRoot) => [...actionRoot.querySelectorAll(
+        '[data-testid="play-button"],button[aria-label],button[title]'
+      )]).find((button) => {
+        if (!visible(button)) return false;
+        const label = controlLabel(button);
+        if (paused) return /^pause(?:\\s|$)/i.test(label);
+        if (!/^(?:play|shuffle)(?:\\s|$)/i.test(label) &&
+          button.getAttribute("data-testid") !== "play-button") return false;
+        const labelIdentity = identity(label.replace(/^(?:play|shuffle)\\s*/i, ""));
+        return labelIdentity.length === 0 || labelIdentity === expected;
+      });
+    };
     const globalPauseButton = () => [...document.querySelectorAll(
       '[data-testid="control-button-playpause"],'
       + '[data-testid="now-playing-bar"] button[aria-label^="Pause"]'
@@ -192,6 +208,16 @@ export function buildSpotifyVoiceAutomationScript(
       + '[role="row"][aria-rowindex],[data-testid="card-container"],[data-encore-id="card"]'
     )].filter((root) => visible(root) && candidateMatches(root));
     for (const root of roots) {
+      const destination = exactLink(root, routePrefix,
+        intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity);
+      if (
+        intent.mediaType === "artist" &&
+        destination instanceof HTMLElement &&
+        visible(destination)
+      ) {
+        destination.click();
+        return intent.action === "play" ? "navigated" : "complete";
+      }
       if (intent.action === "play") {
         if (
           playbackRequested &&
@@ -204,32 +230,35 @@ export function buildSpotifyVoiceAutomationScript(
           return "play-clicked";
         }
       }
-      const destination = exactLink(root, routePrefix,
-        intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity);
       if (destination instanceof HTMLElement && visible(destination)) {
         destination.click();
         return intent.action === "play" ? "navigated" : "complete";
       }
     }
     if (routePrefix !== "/" && location.pathname.startsWith(routePrefix)) {
-      const headingIdentity = identity(document.querySelector(
-        'h1,[data-testid="entityTitle"],[data-testid="context-item-info-title"]'
-      )?.textContent);
-      const entityRoot = document.querySelector(
-        '[data-testid="album-page"],[data-testid="artist-page"],'
-        + '[data-testid="playlist-page"],[data-testid="track-page"],main,[role="main"]'
-      );
       const requestedIdentity = intent.mediaType === "artist"
         ? titleIdentity || creatorIdentity
         : titleIdentity;
-      if (headingIdentity === requestedIdentity && entityRoot) {
+      const exactHeading = [...document.querySelectorAll(
+        'h1,[data-testid="entityTitle"],[data-testid="context-item-info-title"]'
+      )].find((heading) => visible(heading) && identity(heading.textContent) === requestedIdentity);
+      const entityRoot = exactHeading?.closest(
+        '[data-testid="album-page"],[data-testid="artist-page"],'
+        + '[data-testid="playlist-page"],[data-testid="track-page"],main,[role="main"]'
+      ) ?? null;
+      if (exactHeading && entityRoot) {
         if (intent.action !== "play") return "complete";
+        const profilePause = intent.mediaType === "artist"
+          ? artistActionButton(entityRoot, requestedIdentity, true)
+          : pauseButton(entityRoot);
         if (
           playbackRequested &&
-          pauseButton(entityRoot) instanceof HTMLElement &&
+          profilePause instanceof HTMLElement &&
           globalPauseButton() instanceof HTMLElement
         ) return "playing";
-        const button = playButton(entityRoot);
+        const button = intent.mediaType === "artist"
+          ? artistActionButton(entityRoot, requestedIdentity, false)
+          : playButton(entityRoot);
         if (button instanceof HTMLElement) {
           button.click();
           return "play-clicked";

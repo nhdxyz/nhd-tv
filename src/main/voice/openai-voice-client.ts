@@ -43,7 +43,7 @@ Use next-track or previous-track only when the user explicitly asks for the next
 A bare exact movie, show, or title name such as "Apollo 13" is a play request: use mediaAction=play. Do not reinterpret a bare named title as open or lookup.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
-For an unspecified song from a named artist, such as "play a song from Kanye West", use mediaType=artist, mediaAction=play, title=<artist name>, creator=<artist name>, and providerHint=spotify so Spotify can start that artist's own playback. Do not invent a song title.
+For an artist-only playback request, such as "play Kanye West on Spotify" or "play a song from Kanye West", use mediaType=artist, mediaAction=play, title=<artist name>, creator=<artist name>, and providerHint=spotify so Spotify can open the exact artist profile and start that artist's own playback. Do not invent a song title.
 Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is unknown.
 Use null for every field that does not apply. Do not guess missing season or episode numbers.`;
 

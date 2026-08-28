@@ -164,8 +164,8 @@ describe("OpenAI voice client", () => {
   it("defines unspecified artist playback without inventing a song title", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.input).toBe("Play a song from Kanye West");
-      expect(body.instructions).toContain('"play a song from Kanye West"');
+      expect(body.input).toBe("Play Kanye West on Spotify");
+      expect(body.instructions).toContain('"play Kanye West on Spotify"');
       return Response.json({ output_text: JSON.stringify(outputIntent({
         creator: "Kanye West",
         mediaType: "artist",
@@ -174,7 +174,7 @@ describe("OpenAI voice client", () => {
       })) });
     });
 
-    await expect(client(fetchMock).interpret("Play a song from Kanye West")).resolves
+    await expect(client(fetchMock).interpret("Play Kanye West on Spotify")).resolves
       .toMatchObject({
         action: "play",
         creator: "Kanye West",

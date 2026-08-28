@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "NHD Spotify TV Mode",
+  "version": "0.1.0",
+  "description": "A ten-foot presentation and remote-navigation layer for Spotify's real Web Player.",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://open.spotify.com/*"
+      ],
+      "css": [
+        "styles/tv.css"
+      ],
+      "js": [
+        "src/navigation.js",
+        "src/content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://accounts.spotify.com/*"
+      ],
+      "css": [
+        "styles/auth.css"
+      ],
+      "js": [
+        "src/navigation.js",
+        "src/auth.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

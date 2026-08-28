@@ -52,19 +52,15 @@ describe("TV catalog layout", () => {
     expect(css).toContain('.search-result-card[data-service-id="spotify"]');
   });
 
-  it("removes Spotify's native-app handoff from the embedded player", () => {
+  it("loads Spotify's dedicated TV Mode extension", () => {
     const host = readFileSync(
       new URL("../src/main/service-host.ts", import.meta.url),
       "utf8"
     );
 
-    expect(host).toContain("const SPOTIFY_TV_STYLE");
-    expect(host).toContain('[data-testid="open-app-button"]');
-    expect(host).toContain('[data-testid="download-button"]');
-    expect(host).toContain('a[href^="https://open.spotify.com/download"]');
-    expect(host).toContain('a[href^="spotify:"]');
-    expect(host).toContain('definition.id === "spotify"');
-    expect(host).toContain("insertCSS(SPOTIFY_TV_STYLE)");
+    expect(host).toContain("ensureSpotifyTvExtension");
+    expect(host).toContain('"extensions", "spotify-tv"');
+    expect(host).toContain('extension.name === "NHD Spotify TV Mode"');
   });
 
   it("keeps the frozen service preview available behind the quit dialog", () => {

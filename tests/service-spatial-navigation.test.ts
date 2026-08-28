@@ -27,6 +27,9 @@ describe("service spatial navigation", () => {
     expect(script).toContain("new CustomEvent('nhdtv-remote-action'");
     expect(script).toContain("detail: { action }");
     expect(script).toContain("remoteEvent.defaultPrevented");
+    expect(script.indexOf("dataset.nhdtvExtensionActive")).toBeLessThan(
+      script.indexOf("active.isContentEditable")
+    );
   });
 
   it("leaves Shorts and other playback routes on the provider's native input path", async () => {

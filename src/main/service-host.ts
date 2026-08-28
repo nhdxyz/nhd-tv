@@ -116,6 +116,7 @@ interface NetflixSmokeSnapshot {
 
 const configuredSessions = new WeakSet<Session>();
 const youtubeTvExtensionLoads = new WeakMap<Session, Promise<void>>();
+const spotifyTvExtensionLoads = new WeakMap<Session, Promise<void>>();
 const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
@@ -147,20 +148,6 @@ const SERVICE_FOCUS_STYLE = `
     transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out !important;
   }
 `;
-const SPOTIFY_TV_STYLE = `
-  [data-testid="open-app"],
-  [data-testid="open-app-button"],
-  [data-testid="install-app"],
-  [data-testid="download-button"],
-  a[aria-label="Open App"],
-  button[aria-label="Open App"],
-  a[href="/download"],
-  a[href^="https://open.spotify.com/download"],
-  a[href^="spotify:"] {
-    display: none !important;
-  }
-`;
-
 async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> {
   const pending = youtubeTvExtensionLoads.get(serviceSession);
   if (pending !== undefined) return pending;
@@ -181,6 +168,29 @@ async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> 
   } catch {
     youtubeTvExtensionLoads.delete(serviceSession);
     // The conservative host navigator remains available if extension loading is unsupported.
+  }
+}
+
+async function ensureSpotifyTvExtension(serviceSession: Session): Promise<void> {
+  const pending = spotifyTvExtensionLoads.get(serviceSession);
+  if (pending !== undefined) return pending;
+
+  const load = (async () => {
+    const extensionPath = path.join(app.getAppPath(), "extensions", "spotify-tv");
+    const installed = serviceSession.extensions.getAllExtensions().some((extension) =>
+      extension.name === "NHD Spotify TV Mode"
+    );
+    if (!installed) {
+      await serviceSession.extensions.loadExtension(extensionPath, { allowFileAccess: false });
+    }
+  })();
+  spotifyTvExtensionLoads.set(serviceSession, load);
+
+  try {
+    await load;
+  } catch {
+    spotifyTvExtensionLoads.delete(serviceSession);
+    // The host spatial navigator remains available if extension loading is unsupported.
   }
 }
 
@@ -257,15 +267,6 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       return false;
     }
 
-    const active = document.activeElement;
-    if (
-      active instanceof HTMLElement &&
-      (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))
-    ) {
-      clearFocus();
-      return false;
-    }
-
     if (document.documentElement.dataset.nhdtvExtensionActive === 'true') {
       clearFocus();
       const remoteEvent = new CustomEvent('nhdtv-remote-action', {
@@ -275,6 +276,15 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
       });
       document.dispatchEvent(remoteEvent);
       if (remoteEvent.defaultPrevented) return true;
+    }
+
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))
+    ) {
+      clearFocus();
+      return false;
     }
 
     const netflix = location.hostname === 'www.netflix.com' || location.hostname.endsWith('.netflix.com');
@@ -739,6 +749,9 @@ export class ServiceHost {
     if (definition.id === "youtube") {
       await ensureYouTubeTvExtension(serviceSession);
     }
+    if (definition.id === "spotify") {
+      await ensureSpotifyTvExtension(serviceSession);
+    }
 
     const view = new WebContentsView({
       webPreferences: {
@@ -909,10 +922,6 @@ export class ServiceHost {
       if (this.#view === view && definition.spatialNavigation === "dom") {
         void view.webContents.insertCSS(SERVICE_FOCUS_STYLE).catch(() => undefined);
       }
-      if (this.#view === view && definition.id === "spotify") {
-        void view.webContents.insertCSS(SPOTIFY_TV_STYLE).catch(() => undefined);
-      }
-
       if (this.#view === view) {
         this.#scheduleYouTubeTvConfiguration(view);
         if (definition.playback !== null) {

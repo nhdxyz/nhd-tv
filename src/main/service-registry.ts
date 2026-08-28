@@ -164,6 +164,7 @@ const services: readonly ServiceDefinition[] = [
     partition: "persist:service-spotify",
     playback: null,
     remoteTextEntrySelectors: [
+      "#nhdtv-spotify-tv-search",
       'input[data-testid="search-input"]',
       'input[role="searchbox"]',
       'input[type="search"]',

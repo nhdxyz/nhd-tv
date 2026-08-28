@@ -16,19 +16,21 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(host).toContain("this.#window.contentView.removeChildView(view)");
     expect(host).toContain("restoreFromHome(): boolean");
     expect(main).toContain("if (!serviceHost.returnHomeInBackground())");
-    expect(main).toContain("await serviceHost.closeWithCheckpoint()");
-    expect(main).toContain("await serviceHost.forceReturnHome()");
+    expect(main).toContain("await serviceHost.closeWithCheckpoint(signal, operation)");
+    expect(main).toContain("await serviceHost.forceReturnHome(signal, operation)");
   });
 
   it("treats Back at Spotify's root as a background return instead of a quit", () => {
     expect(host).toContain('definition.id === "spotify" && this.returnHomeInBackground()');
     expect(host.indexOf('definition.id === "spotify" && this.returnHomeInBackground()'))
-      .toBeLessThan(host.indexOf("await this.#requestQuit()"));
+      .toBeLessThan(host.indexOf("await this.#requestQuit(operation)"));
   });
 
   it("routes hidden Spotify media controls to the player and navigation to Home", () => {
     expect(main).toContain("if (serviceHost.isBackgrounded)");
-    expect(main).toContain("return { handled: await serviceHost.sendRemoteAction(action) }");
+    expect(main).toContain(
+      "const handled = await serviceHost.sendRemoteAction(action, signal, operation)"
+    );
     expect(main).toContain("mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action)");
     expect(host).toContain("if (this.#backgrounded && !isMediaAction(action))");
     expect(host).toContain("if (!this.#backgrounded)");

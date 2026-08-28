@@ -40,6 +40,21 @@ describe("service spatial navigation", () => {
     expect(source).toContain("(?:play|player|shorts|video|watch)");
   });
 
+  it("binds voice cancellation and late fallbacks to the operation's provider view", async () => {
+    const source = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../src/main/service-host.ts", import.meta.url), "utf8")
+    );
+
+    expect(source).toContain("async closeWithCheckpoint(");
+    expect(source).toContain("this.#closeVoiceOperationView(view, operation)");
+    expect(source).toContain("this.#operationOwner.throwIfSuperseded(operation)");
+    expect(source).toContain("this.#playbackCheckpointOwner === operationToken");
+    expect(source).toContain("if (this.#view === view) this.close()");
+    expect(source).toContain("this.#sendKey(action, view)");
+    expect(source).toContain("this.#sendMediaKey(action, view)");
+    expect(source).not.toContain("cancelVoiceOperation(): void");
+  });
+
   it("sends persisted TV presentation preferences to hosted YouTube", () => {
     const script = youtubeTvModeConfigurationScript({
       enabled: false,

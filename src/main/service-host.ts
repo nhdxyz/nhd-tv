@@ -75,6 +75,10 @@ import {
 } from "./spotify-playback";
 import type { VoiceMediaIntent } from "./voice/voice-intent";
 import {
+  ServiceOperationOwner,
+  type ServiceOperationToken
+} from "./service-operation-owner";
+import {
   buildNetflixVoiceAutomationScript,
   buildSpotifyVoiceAutomationScript,
   buildYouTubeVoiceAutomationScript,
@@ -142,6 +146,7 @@ const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SPOTIFY_PLAYBACK_INTERVAL_MS = 1_000;
 const VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000;
+const SERVICE_EXTENSION_LOAD_TIMEOUT_MS = 8_000;
 const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
 const YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS = [0, 120, 600] as const;
 const DEFAULT_YOUTUBE_TV_PREFERENCES: YouTubeTvModePreferences = {
@@ -168,11 +173,27 @@ const SERVICE_FOCUS_STYLE = `
     transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out !important;
   }
 `;
+
+async function boundExtensionLoad(operation: Promise<unknown>): Promise<void> {
+  let timeout: NodeJS.Timeout | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error("Service extension loading timed out")),
+      SERVICE_EXTENSION_LOAD_TIMEOUT_MS
+    );
+  });
+  try {
+    await Promise.race([operation, deadline]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+  }
+}
+
 async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> {
   const pending = youtubeTvExtensionLoads.get(serviceSession);
   if (pending !== undefined) return pending;
 
-  const load = (async () => {
+  const operation = (async () => {
     const extensionPath = path.join(app.getAppPath(), "extensions", "youtube-tv");
     const installed = serviceSession.extensions.getAllExtensions().some((extension) =>
       extension.name === "NHD YouTube TV Mode"
@@ -181,12 +202,15 @@ async function ensureYouTubeTvExtension(serviceSession: Session): Promise<void> 
       await serviceSession.extensions.loadExtension(extensionPath, { allowFileAccess: false });
     }
   })();
+  const load = boundExtensionLoad(operation);
   youtubeTvExtensionLoads.set(serviceSession, load);
 
   try {
     await load;
   } catch {
-    youtubeTvExtensionLoads.delete(serviceSession);
+    if (youtubeTvExtensionLoads.get(serviceSession) === load) {
+      youtubeTvExtensionLoads.delete(serviceSession);
+    }
     // The conservative host navigator remains available if extension loading is unsupported.
   }
 }
@@ -195,7 +219,7 @@ async function ensureSpotifyTvExtension(serviceSession: Session): Promise<void> 
   const pending = spotifyTvExtensionLoads.get(serviceSession);
   if (pending !== undefined) return pending;
 
-  const load = (async () => {
+  const operation = (async () => {
     const extensionPath = path.join(app.getAppPath(), "extensions", "spotify-tv");
     const installed = serviceSession.extensions.getAllExtensions().some((extension) =>
       extension.name === "NHD Spotify TV Mode"
@@ -204,12 +228,15 @@ async function ensureSpotifyTvExtension(serviceSession: Session): Promise<void> 
       await serviceSession.extensions.loadExtension(extensionPath, { allowFileAccess: false });
     }
   })();
+  const load = boundExtensionLoad(operation);
   spotifyTvExtensionLoads.set(serviceSession, load);
 
   try {
     await load;
   } catch {
-    spotifyTvExtensionLoads.delete(serviceSession);
+    if (spotifyTvExtensionLoads.get(serviceSession) === load) {
+      spotifyTvExtensionLoads.delete(serviceSession);
+    }
     // The host spatial navigator remains available if extension loading is unsupported.
   }
 }
@@ -510,27 +537,77 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
   })()`;
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(finish, milliseconds);
+    const abort = () => finish(signal?.reason, true);
+    function finish(reason?: unknown, aborted = false): void {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+      if (aborted) reject(reason);
+      else resolve();
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+async function waitWithSignal<T>(
+  operation: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (signal === undefined) return operation;
+  if (signal.aborted) {
+    void operation.catch(() => undefined);
+    signal.throwIfAborted();
+  }
+  let handleAbort: (() => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    handleAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    if (handleAbort !== null) signal.removeEventListener("abort", handleAbort);
+  }
 }
 
 function waitForProviderNavigation(
   view: WebContentsView,
-  timeoutMilliseconds: number
+  timeoutMilliseconds: number,
+  signal?: AbortSignal
 ): Promise<void> {
   const webContents = view.webContents;
-  return new Promise((resolve) => {
-    const finish = () => {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (aborted = false) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
-      webContents.removeListener("did-finish-load", finish);
-      webContents.removeListener("did-navigate", finish);
-      webContents.removeListener("did-navigate-in-page", finish);
-      resolve();
+      if (!webContents.isDestroyed()) {
+        webContents.removeListener("did-finish-load", finishNormally);
+        webContents.removeListener("did-navigate", finishNormally);
+        webContents.removeListener("did-navigate-in-page", finishNormally);
+      }
+      signal?.removeEventListener("abort", abort);
+      if (aborted) reject(signal?.reason);
+      else resolve();
     };
-    const timeout = setTimeout(finish, timeoutMilliseconds);
-    webContents.once("did-finish-load", finish);
-    webContents.once("did-navigate", finish);
-    webContents.once("did-navigate-in-page", finish);
+    const abort = () => {
+      try {
+        if (!webContents.isDestroyed()) webContents.stop();
+      } finally {
+        finish(true);
+      }
+    };
+    const finishNormally = () => finish(false);
+    const timeout = setTimeout(() => finish(), timeoutMilliseconds);
+    webContents.once("did-finish-load", finishNormally);
+    webContents.once("did-navigate", finishNormally);
+    webContents.once("did-navigate-in-page", finishNormally);
+    signal?.addEventListener("abort", abort, { once: true });
   });
 }
 
@@ -660,6 +737,7 @@ function configureServiceSession(serviceSession: Session, definition: ServiceDef
 }
 
 export class ServiceHost {
+  readonly #operationOwner = new ServiceOperationOwner();
   readonly #window: BrowserWindow;
   readonly #onStateChanged: ServiceStateListener;
   readonly #onQuitRequested: ServiceQuitListener;
@@ -677,6 +755,7 @@ export class ServiceHost {
   #recoveryTarget: ServiceRecoveryTarget | null = null;
   #replayingInput = false;
   #playbackCheckpoint: Promise<void> | null = null;
+  #playbackCheckpointOwner: ServiceOperationToken | null = null;
   #playbackActive = false;
   #playbackQualificationTimer: NodeJS.Timeout | null = null;
   #playbackTimer: NodeJS.Timeout | null = null;
@@ -709,6 +788,10 @@ export class ServiceHost {
 
   get activeServiceId(): string | null {
     return this.#activeDefinition?.id ?? null;
+  }
+
+  beginOperation(): ServiceOperationToken {
+    return this.#operationOwner.begin();
   }
 
   get activeProcessId(): number | null {
@@ -790,7 +873,15 @@ export class ServiceHost {
     }
   }
 
-  async open(definition: ServiceDefinition, initialUrl = definition.startUrl): Promise<void> {
+  async open(
+    definition: ServiceDefinition,
+    initialUrl = definition.startUrl,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<void> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     if (!isAllowedServiceUrl(
       initialUrl,
       definition.allowedOrigins,
@@ -806,11 +897,14 @@ export class ServiceHost {
       !this.#view.webContents.isDestroyed() &&
       initialUrl === definition.startUrl
     ) {
+      this.#operationOwner.throwIfSuperseded(operation);
       this.restoreFromHome();
       return;
     }
 
-    await this.closeWithCheckpoint();
+    await this.closeWithCheckpoint(signal, operation);
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     this.#recoveryTarget = null;
     this.#lastBlockedNavigation = null;
     this.#pointerSnapKey = null;
@@ -819,11 +913,13 @@ export class ServiceHost {
     const serviceSession = session.fromPartition(definition.partition, { cache: true });
     configureServiceSession(serviceSession, definition);
     if (definition.id === "youtube") {
-      await ensureYouTubeTvExtension(serviceSession);
+      await waitWithSignal(ensureYouTubeTvExtension(serviceSession), signal);
     }
     if (definition.id === "spotify") {
-      await ensureSpotifyTvExtension(serviceSession);
+      await waitWithSignal(ensureSpotifyTvExtension(serviceSession), signal);
     }
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
 
     const view = new WebContentsView({
       webPreferences: {
@@ -986,7 +1082,7 @@ export class ServiceHost {
         event.preventDefault();
         void this.#runDomSpatialNavigation(action).then((handled) => {
           if (!handled) {
-            this.#sendKey(action);
+            this.#sendKey(action, view);
           }
         });
       }
@@ -1142,12 +1238,25 @@ export class ServiceHost {
       ? SPOTIFY_PLAYBACK_INTERVAL_MS
       : PLAYBACK_CHECKPOINT_INTERVAL_MS);
 
+    this.#operationOwner.throwIfSuperseded(operation);
+    const cancelOpen = () => this.#closeVoiceOperationView(view, operation);
+    signal?.addEventListener("abort", cancelOpen, { once: true });
     try {
       await view.webContents.loadURL(initialUrl);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
       if (this.#view === view && !view.webContents.isDestroyed()) {
         view.webContents.focus();
       }
     } catch (error) {
+      if (signal?.aborted) {
+        this.#closeVoiceOperationView(view, operation);
+        signal.throwIfAborted();
+      }
+      if (!this.#operationOwner.owns(operation)) {
+        this.#closeVoiceOperationView(view, operation);
+        throw error;
+      }
       const currentUrl = view.webContents.isDestroyed()
         ? initialUrl
         : view.webContents.getURL();
@@ -1165,8 +1274,10 @@ export class ServiceHost {
         return;
       }
 
-      this.close();
+      this.#closeVoiceOperationView(view, operation);
       throw error;
+    } finally {
+      signal?.removeEventListener("abort", cancelOpen);
     }
   }
 
@@ -1196,6 +1307,8 @@ export class ServiceHost {
     this.#ambientDisplayVisible = false;
     this.#backgrounded = false;
     this.#playbackActive = false;
+    this.#playbackCheckpoint = null;
+    this.#playbackCheckpointOwner = null;
     this.#spotifyPlaybackCheckpoint = null;
     this.#pointerSnapKey = null;
     this.#popupWindow = null;
@@ -1220,24 +1333,71 @@ export class ServiceHost {
     this.#onStateChanged(null);
   }
 
-  async closeWithCheckpoint(): Promise<void> {
-    await Promise.all([
-      this.#checkpointPlayback(),
-      this.#flushActiveServiceStorage()
-    ]);
-    this.close();
+  async closeWithCheckpoint(
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<void> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    const view = this.#view;
+    const playbackCheckpoint = this.#checkpointPlayback(operation);
+    const cancelCheckpoint = () => {
+      if (view !== null) this.#closeVoiceOperationView(view, operation);
+      if (
+        this.#operationOwner.owns(operation) &&
+        this.#playbackCheckpoint === playbackCheckpoint
+      ) {
+        this.#playbackCheckpoint = null;
+        this.#playbackCheckpointOwner = null;
+      }
+    };
+    signal?.addEventListener("abort", cancelCheckpoint, { once: true });
+    try {
+      await waitWithSignal(Promise.all([
+        playbackCheckpoint,
+        this.#flushActiveServiceStorage()
+      ]), signal);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
+      if (this.#view === view) this.close();
+    } finally {
+      signal?.removeEventListener("abort", cancelCheckpoint);
+    }
   }
 
-  async forceReturnHome(): Promise<void> {
+  async forceReturnHome(
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<void> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    const view = this.#view;
     this.#recoveryTarget = null;
-    await Promise.race([
-      Promise.all([
-        this.#checkpointPlayback(),
-        this.#flushActiveServiceStorage()
-      ]),
-      delay(350)
-    ]).catch(() => undefined);
-    this.close();
+    const playbackCheckpoint = this.#checkpointPlayback(operation);
+    const cancelOperation = () => {
+      if (view !== null) this.#closeVoiceOperationView(view, operation);
+    };
+    signal?.addEventListener("abort", cancelOperation, { once: true });
+    try {
+      await waitWithSignal(Promise.race([
+        Promise.all([
+          playbackCheckpoint,
+          this.#flushActiveServiceStorage()
+        ]),
+        delay(350)
+      ]).catch(() => undefined), signal);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
+      if (this.#view === view) this.close();
+    } finally {
+      signal?.removeEventListener("abort", cancelOperation);
+      if (this.#playbackCheckpoint === playbackCheckpoint) {
+        this.#playbackCheckpoint = null;
+        this.#playbackCheckpointOwner = null;
+      }
+    }
   }
 
   returnHomeInBackground(): boolean {
@@ -1299,7 +1459,12 @@ export class ServiceHost {
     await serviceSession.cookies.flushStore();
   }
 
-  async recover(mode: ServiceRecoveryMode): Promise<boolean> {
+  async recover(
+    mode: ServiceRecoveryMode,
+    operationToken?: ServiceOperationToken
+  ): Promise<boolean> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
     const target = this.#recoveryTarget;
     if (mode === "home") {
       this.#recoveryTarget = null;
@@ -1311,7 +1476,9 @@ export class ServiceHost {
     this.#recoveryTarget = null;
     await this.open(
       target.definition,
-      mode === "retry" ? target.url : target.definition.startUrl
+      mode === "retry" ? target.url : target.definition.startUrl,
+      undefined,
+      operation
     );
     return true;
   }
@@ -1331,6 +1498,8 @@ export class ServiceHost {
   }
 
   async navigate(url: string): Promise<void> {
+    const operation = this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1355,11 +1524,14 @@ export class ServiceHost {
       this.cancelQuit();
     }
 
-    await this.#checkpointPlayback();
+    await this.#checkpointPlayback(operation);
+    this.#operationOwner.throwIfSuperseded(operation);
 
     try {
       await view.webContents.loadURL(url);
+      this.#operationOwner.throwIfSuperseded(operation);
     } catch (error) {
+      this.#operationOwner.throwIfSuperseded(operation);
       if (
         !isExpectedAllowedNavigationAbort(
           error,
@@ -1378,8 +1550,13 @@ export class ServiceHost {
     options: {
       intendedUrl?: string | null;
       profileNameHint?: string | null;
-    } = {}
+    } = {},
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
   ): Promise<boolean> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     const view = this.#view;
     const definition = this.#activeDefinition;
     if (
@@ -1391,123 +1568,143 @@ export class ServiceHost {
       return false;
     }
 
-    const suppliedDestination = options.intendedUrl ?? null;
-    const safeSuppliedDestination = suppliedDestination !== null && isAllowedServiceUrl(
-      suppliedDestination,
-      definition.allowedOrigins,
-      definition.allowedSubdomainHosts
-    )
-      ? suppliedDestination
-      : null;
-    const netflixFallbackDestination = definition.id === "netflix"
-      ? `https://www.netflix.com/search?q=${encodeURIComponent(intent.title)}`
-      : null;
-    const intendedDestination = safeSuppliedDestination ?? netflixFallbackDestination;
-    let profileRetried = false;
-    let playbackRevealAttempts = 0;
-    let playbackRequested = false;
-    let fullscreenRequested = false;
-    let trustedNetflixContentId = definition.id === "netflix"
-      ? netflixContentIdFromUrl(safeSuppliedDestination)
-      : null;
-    let trustNextNetflixNavigation = false;
-    const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
-    while (
-      Date.now() < deadline &&
-      this.#view === view &&
-      !view.webContents.isDestroyed()
-    ) {
-      let settleDelayMs = 250;
-      try {
-        if (definition.id === "netflix" && trustNextNetflixNavigation) {
-          const navigatedContentId = netflixContentIdFromUrl(view.webContents.getURL());
-          if (navigatedContentId !== null) {
-            trustedNetflixContentId = navigatedContentId;
-            trustNextNetflixNavigation = false;
-          }
-        }
-        const script = definition.id === "netflix"
-          ? buildNetflixVoiceAutomationScript(
-            intent,
-            options.profileNameHint ?? null,
-            trustedNetflixContentId,
-            fullscreenRequested
-          )
-          : definition.id === "spotify"
-            ? buildSpotifyVoiceAutomationScript(intent, playbackRequested)
-            : buildYouTubeVoiceAutomationScript(intent, fullscreenRequested);
-        const result = await view.webContents.executeJavaScript(
-          script,
-          true
-        ) as VoiceProviderAutomationResult;
-        if (result === "complete") {
-          if (definition.id === "spotify") void this.#captureSpotifyPlayback();
-          return true;
-        }
-        if (result === "navigated" || result === "play-clicked") {
-          settleDelayMs = 650;
-          if (result === "play-clicked") playbackRequested = true;
-          if (definition.id === "netflix") trustNextNetflixNavigation = true;
-        } else if (result === "fullscreen-requested") {
-          settleDelayMs = 450;
-          fullscreenRequested = true;
-          playbackRevealAttempts = Math.max(1, playbackRevealAttempts);
-        }
-        if (result === "playing" && definition.id === "spotify" && playbackRequested) {
-          void this.#captureSpotifyPlayback();
-          return true;
-        }
-        if (
-          result === "playing" &&
-          ["netflix", "youtube"].includes(definition.id)
-        ) {
-          this.#window.focus();
-          view.webContents.focus();
-          this.#replayingInput = true;
-          try {
-            if (playbackRevealAttempts === 0) {
-              const bounds = view.getBounds();
-              view.webContents.sendInputEvent({
-                type: "mouseMove",
-                x: Math.max(0, Math.floor(bounds.width / 2)),
-                y: Math.max(0, bounds.height - 80)
-              });
-            } else if (playbackRevealAttempts === 1) {
-              view.webContents.sendInputEvent({ keyCode: "F", type: "keyDown" });
-              view.webContents.sendInputEvent({ keyCode: "F", type: "keyUp" });
+    const cancelOperation = () => this.#closeVoiceOperationView(view, operation);
+    signal?.addEventListener("abort", cancelOperation, { once: true });
+    try {
+      const suppliedDestination = options.intendedUrl ?? null;
+      const safeSuppliedDestination = suppliedDestination !== null && isAllowedServiceUrl(
+        suppliedDestination,
+        definition.allowedOrigins,
+        definition.allowedSubdomainHosts
+      )
+        ? suppliedDestination
+        : null;
+      const netflixFallbackDestination = definition.id === "netflix"
+        ? `https://www.netflix.com/search?q=${encodeURIComponent(intent.title)}`
+        : null;
+      const intendedDestination = safeSuppliedDestination ?? netflixFallbackDestination;
+      let profileRetried = false;
+      let playbackRevealAttempts = 0;
+      let playbackRequested = false;
+      let fullscreenRequested = false;
+      let trustedNetflixContentId = definition.id === "netflix"
+        ? netflixContentIdFromUrl(safeSuppliedDestination)
+        : null;
+      let trustNextNetflixNavigation = false;
+      const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
+      while (
+        Date.now() < deadline &&
+        signal?.aborted !== true &&
+        this.#operationOwner.owns(operation) &&
+        this.#view === view &&
+        !view.webContents.isDestroyed()
+      ) {
+        let settleDelayMs = 250;
+        try {
+          if (definition.id === "netflix" && trustNextNetflixNavigation) {
+            const navigatedContentId = netflixContentIdFromUrl(view.webContents.getURL());
+            if (navigatedContentId !== null) {
+              trustedNetflixContentId = navigatedContentId;
+              trustNextNetflixNavigation = false;
             }
-          } finally {
-            this.#replayingInput = false;
           }
-          playbackRevealAttempts += 1;
-        }
-        if (
-          result === "profile-selected" &&
-          !profileRetried &&
-          intendedDestination !== null
-        ) {
-          profileRetried = true;
-          await waitForProviderNavigation(view, 1_500);
+          const script = definition.id === "netflix"
+            ? buildNetflixVoiceAutomationScript(
+              intent,
+              options.profileNameHint ?? null,
+              trustedNetflixContentId,
+              fullscreenRequested
+            )
+            : definition.id === "spotify"
+              ? buildSpotifyVoiceAutomationScript(intent, playbackRequested)
+              : buildYouTubeVoiceAutomationScript(intent, fullscreenRequested);
+          const result = await view.webContents.executeJavaScript(
+            script,
+            true
+          ) as VoiceProviderAutomationResult;
+          this.#operationOwner.throwIfSuperseded(operation);
+          signal?.throwIfAborted();
           if (this.#view !== view || view.webContents.isDestroyed()) return false;
-          try {
-            await view.webContents.loadURL(intendedDestination);
-          } catch (error) {
-            if (!isExpectedAllowedNavigationAbort(
-              error,
-              view.webContents.getURL(),
-              definition.allowedOrigins,
-              definition.allowedSubdomainHosts
-            )) {
-              throw error;
+          if (result === "complete") {
+            if (definition.id === "spotify") void this.#captureSpotifyPlayback();
+            return true;
+          }
+          if (result === "navigated" || result === "play-clicked") {
+            settleDelayMs = 650;
+            if (result === "play-clicked") playbackRequested = true;
+            if (definition.id === "netflix") trustNextNetflixNavigation = true;
+          } else if (result === "fullscreen-requested") {
+            settleDelayMs = 450;
+            fullscreenRequested = true;
+            playbackRevealAttempts = Math.max(1, playbackRevealAttempts);
+          }
+          if (result === "playing" && definition.id === "spotify" && playbackRequested) {
+            void this.#captureSpotifyPlayback();
+            return true;
+          }
+          if (
+            result === "playing" &&
+            ["netflix", "youtube"].includes(definition.id)
+          ) {
+            this.#window.focus();
+            view.webContents.focus();
+            this.#replayingInput = true;
+            try {
+              if (playbackRevealAttempts === 0) {
+                const bounds = view.getBounds();
+                view.webContents.sendInputEvent({
+                  type: "mouseMove",
+                  x: Math.max(0, Math.floor(bounds.width / 2)),
+                  y: Math.max(0, bounds.height - 80)
+                });
+              } else if (playbackRevealAttempts === 1) {
+                view.webContents.sendInputEvent({ keyCode: "F", type: "keyDown" });
+                view.webContents.sendInputEvent({ keyCode: "F", type: "keyUp" });
+              }
+            } finally {
+              this.#replayingInput = false;
+            }
+            playbackRevealAttempts += 1;
+          }
+          if (
+            result === "profile-selected" &&
+            !profileRetried &&
+            intendedDestination !== null
+          ) {
+            profileRetried = true;
+            await waitForProviderNavigation(view, 1_500, signal);
+            this.#operationOwner.throwIfSuperseded(operation);
+            if (this.#view !== view || view.webContents.isDestroyed()) return false;
+            try {
+              await view.webContents.loadURL(intendedDestination);
+              this.#operationOwner.throwIfSuperseded(operation);
+              signal?.throwIfAborted();
+            } catch (error) {
+              signal?.throwIfAborted();
+              if (!isExpectedAllowedNavigationAbort(
+                error,
+                view.webContents.getURL(),
+                definition.allowedOrigins,
+                definition.allowedSubdomainHosts
+              )) {
+                throw error;
+              }
             }
           }
+        } catch {
+          signal?.throwIfAborted();
+          this.#operationOwner.throwIfSuperseded(operation);
+          // Provider navigation can replace the page between attempts.
         }
-      } catch {
-        // Provider navigation can replace the page between attempts.
+        await delay(settleDelayMs, signal);
+        this.#operationOwner.throwIfSuperseded(operation);
       }
-      await delay(settleDelayMs);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
+      return false;
+    } finally {
+      signal?.removeEventListener("abort", cancelOperation);
     }
-    return false;
   }
 
   cancelQuit(): void {
@@ -1530,9 +1727,16 @@ export class ServiceHost {
     }
   }
 
-  async requestBack(): Promise<boolean> {
-    const view = this.#view;
-    const definition = this.#activeDefinition;
+  async requestBack(
+    signal?: AbortSignal,
+    expectedView?: WebContentsView,
+    operationToken?: ServiceOperationToken
+  ): Promise<boolean> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    const view = expectedView ?? this.#view;
+    const definition = this.#view === view ? this.#activeDefinition : null;
 
     if (view === null || definition === null || view.webContents.isDestroyed()) {
       return false;
@@ -1548,19 +1752,24 @@ export class ServiceHost {
     }
 
     if (this.#htmlFullscreen) {
-      this.#sendKey("back");
+      this.#sendKey("back", view);
       return true;
     }
 
     if (isServiceRootUrl(view.webContents.getURL(), definition.rootUrls)) {
+      this.#operationOwner.throwIfSuperseded(operation);
       if (definition.id === "spotify" && this.returnHomeInBackground()) {
         return true;
       }
-      await this.#requestQuit();
+      await this.#requestQuit(operation);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
       return true;
     }
 
-    await this.#checkpointPlayback();
+    await waitWithSignal(this.#checkpointPlayback(operation), signal);
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
 
     const beforeBackUrl = view.webContents.getURL();
     let beforeBack: ServiceBackState | null = null;
@@ -1570,11 +1779,16 @@ export class ServiceHost {
         true
       ) as ServiceBackState;
     } catch {
+      signal?.throwIfAborted();
       // A native key fallback still works when the document cannot be sampled.
     }
 
-    this.#sendKey("back");
-    await delay(120);
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    if (this.#view !== view || view.webContents.isDestroyed()) return false;
+    this.#sendKey("back", view);
+    await delay(120, signal);
+    this.#operationOwner.throwIfSuperseded(operation);
 
     if (!view.webContents.isDestroyed() && view.webContents.getURL() !== beforeBackUrl) {
       return true;
@@ -1586,13 +1800,19 @@ export class ServiceHost {
           serviceBackStateScript,
           true
         ) as ServiceBackState;
+        this.#operationOwner.throwIfSuperseded(operation);
         if (serviceConsumedBack(beforeBack, afterBack)) {
           return true;
         }
       } catch {
+        signal?.throwIfAborted();
         // Continue to navigation history if the service did not visibly consume Back.
       }
     }
+
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    if (this.#view !== view || view.webContents.isDestroyed()) return false;
 
     if (view.webContents.navigationHistory.canGoBack()) {
       view.webContents.navigationHistory.goBack();
@@ -1601,8 +1821,12 @@ export class ServiceHost {
 
     try {
       await view.webContents.loadURL(definition.startUrl);
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
       return true;
     } catch (error) {
+      signal?.throwIfAborted();
+      this.#operationOwner.throwIfSuperseded(operation);
       return isExpectedAllowedNavigationAbort(
         error,
         view.webContents.getURL(),
@@ -1612,7 +1836,14 @@ export class ServiceHost {
     }
   }
 
-  async sendRemoteAction(action: Exclude<RemoteAction, "home">): Promise<boolean> {
+  async sendRemoteAction(
+    action: Exclude<RemoteAction, "home">,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<boolean> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1624,38 +1855,59 @@ export class ServiceHost {
       return false;
     }
 
-    if (action === "back") {
-      return this.requestBack();
-    }
-
-    if (action === "force-home") {
-      await this.forceReturnHome();
-      return true;
-    }
-
-    if (isMediaAction(action)) {
-      if (isSystemVolumeAction(action)) {
-        await this.#onSystemVolume(action);
-      } else if (definition.id === "spotify") {
-        return this.#sendSpotifyMediaAction(action);
-      } else {
-        this.#sendMediaKey(action);
+    const cancelOperation = () => this.#closeVoiceOperationView(view, operation);
+    signal?.addEventListener("abort", cancelOperation, { once: true });
+    try {
+      if (action === "back") {
+        return this.requestBack(signal, view, operation);
       }
-      return true;
-    }
 
-    if (
-      shouldUseDomSpatialNavigation(definition, view.webContents.getURL(), this.#htmlFullscreen) &&
-      await this.#runDomSpatialNavigation(action)
-    ) {
-      return true;
-    }
+      if (action === "force-home") {
+        await this.forceReturnHome(signal, operation);
+        return true;
+      }
 
-    this.#sendKey(action);
-    return true;
+      if (isMediaAction(action)) {
+        if (isSystemVolumeAction(action)) {
+          await waitWithSignal(Promise.resolve(this.#onSystemVolume(action)), signal);
+          this.#operationOwner.throwIfSuperseded(operation);
+          signal?.throwIfAborted();
+        } else if (definition.id === "spotify") {
+          const handled = await this.#sendSpotifyMediaAction(
+            action,
+            view,
+            signal,
+            operation
+          );
+          this.#operationOwner.throwIfSuperseded(operation);
+          return handled;
+        } else {
+          signal?.throwIfAborted();
+          this.#sendMediaKey(action, view);
+        }
+        return true;
+      }
+
+      if (
+        shouldUseDomSpatialNavigation(definition, view.webContents.getURL(), this.#htmlFullscreen) &&
+        await this.#runDomSpatialNavigation(action, view, signal, operation)
+      ) {
+        this.#operationOwner.throwIfSuperseded(operation);
+        return true;
+      }
+
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
+      if (this.#view !== view || view.webContents.isDestroyed()) return false;
+      this.#sendKey(action, view);
+      return true;
+    } finally {
+      signal?.removeEventListener("abort", cancelOperation);
+    }
   }
 
   async sendRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
+    const operation = this.beginOperation();
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1681,6 +1933,7 @@ export class ServiceHost {
         definition.remoteTextEntrySelectors,
         definition.remoteTextEntryTriggerSelectors
       );
+      this.#operationOwner.throwIfSuperseded(operation);
       this.#pointerSnapKey = result.snapKey;
 
       let textEntryAvailable = result.textEntryAvailable;
@@ -1708,6 +1961,7 @@ export class ServiceHost {
             buildRemoteTextEntryAvailabilityScript(definition.remoteTextEntrySelectors),
             true
           ) as unknown;
+          this.#operationOwner.throwIfSuperseded(operation);
           if (ready === true) {
             textEntryAvailable = true;
             break;
@@ -1721,12 +1975,16 @@ export class ServiceHost {
         textEntryAvailable
       };
     } catch {
+      if (!this.#operationOwner.owns(operation)) {
+        return { snapChanged: false, snapped: false, textEntryAvailable: false };
+      }
       this.#pointerSnapKey = null;
       return { snapChanged: false, snapped: false, textEntryAvailable: false };
     }
   }
 
   async sendRemoteText(input: RemoteTextInput): Promise<boolean> {
+    const operation = this.beginOperation();
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -1747,6 +2005,7 @@ export class ServiceHost {
         buildRemoteTextEntryScript(input.text, definition.remoteTextEntrySelectors),
         true
       ) as unknown;
+      this.#operationOwner.throwIfSuperseded(operation);
       if (accepted !== true) {
         return false;
       }
@@ -2001,7 +2260,10 @@ export class ServiceHost {
     };
   }
 
-  async #requestQuit(): Promise<void> {
+  async #requestQuit(operationToken?: ServiceOperationToken): Promise<void> {
+    if (operationToken !== undefined) {
+      this.#operationOwner.throwIfSuperseded(operationToken);
+    }
     const view = this.#view;
     const definition = this.#activeDefinition;
 
@@ -2028,6 +2290,13 @@ export class ServiceHost {
       // The prompt remains usable if a protected surface cannot be captured.
     }
 
+    if (
+      operationToken !== undefined &&
+      !this.#operationOwner.owns(operationToken)
+    ) {
+      if (this.#view === view) this.#quitPromptVisible = false;
+      return;
+    }
     if (!this.#quitPromptVisible || this.#view !== view) {
       return;
     }
@@ -2042,10 +2311,19 @@ export class ServiceHost {
     this.#onStateChanged(definition.id);
   }
 
-  async #runDomSpatialNavigation(action: ServiceSpatialAction): Promise<boolean> {
-    const view = this.#view;
+  async #runDomSpatialNavigation(
+    action: ServiceSpatialAction,
+    expectedView?: WebContentsView,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<boolean> {
+    if (operationToken !== undefined) {
+      this.#operationOwner.throwIfSuperseded(operationToken);
+    }
+    signal?.throwIfAborted();
+    const view = expectedView ?? this.#view;
 
-    if (view === null || view.webContents.isDestroyed()) {
+    if (view === null || this.#view !== view || view.webContents.isDestroyed()) {
       return false;
     }
 
@@ -2054,14 +2332,25 @@ export class ServiceHost {
         serviceSpatialNavigationScript(action),
         true
       );
-      return result === true;
+      if (operationToken !== undefined) {
+        this.#operationOwner.throwIfSuperseded(operationToken);
+      }
+      signal?.throwIfAborted();
+      return result === true && this.#view === view && !view.webContents.isDestroyed();
     } catch {
+      signal?.throwIfAborted();
+      if (operationToken !== undefined) {
+        this.#operationOwner.throwIfSuperseded(operationToken);
+      }
       return false;
     }
   }
 
-  async #checkpointPlayback(): Promise<void> {
-    if (this.#playbackCheckpoint !== null) {
+  #checkpointPlayback(operationToken?: ServiceOperationToken): Promise<void> {
+    if (
+      this.#playbackCheckpoint !== null &&
+      (operationToken === undefined || this.#playbackCheckpointOwner === operationToken)
+    ) {
       return this.#playbackCheckpoint;
     }
 
@@ -2073,22 +2362,26 @@ export class ServiceHost {
       definition === null ||
       playback === null
     ) {
-      return;
+      return Promise.resolve();
     }
 
     const webContents = view.webContents;
     if (webContents === undefined || webContents.isDestroyed()) {
-      return;
+      return Promise.resolve();
     }
 
-    this.#playbackCheckpoint = (async () => {
+    const operation = (async () => {
       try {
         const rawSnapshot = await webContents.executeJavaScript(
           buildPlaybackSnapshotScript(playback, definition.name, definition.artworkHosts),
           true
         ) as unknown;
         const snapshot = qualifyPlaybackSnapshot(rawSnapshot);
-        if (snapshot === null || this.#view !== view) {
+        if (
+          snapshot === null ||
+          this.#view !== view ||
+          (operationToken !== undefined && !this.#operationOwner.owns(operationToken))
+        ) {
           return;
         }
 
@@ -2115,14 +2408,20 @@ export class ServiceHost {
       } catch {
         // A page navigation can replace the document during a passive snapshot.
       }
-    })().finally(() => {
-      this.#playbackCheckpoint = null;
+    })();
+    const checkpoint = operation.finally(() => {
+      if (this.#playbackCheckpoint === checkpoint) {
+        this.#playbackCheckpoint = null;
+        this.#playbackCheckpointOwner = null;
+      }
     });
+    this.#playbackCheckpoint = checkpoint;
+    this.#playbackCheckpointOwner = operationToken ?? null;
 
-    return this.#playbackCheckpoint;
+    return checkpoint;
   }
 
-  async #captureSpotifyPlayback(): Promise<void> {
+  #captureSpotifyPlayback(): Promise<void> {
     if (this.#spotifyPlaybackCheckpoint !== null) {
       return this.#spotifyPlaybackCheckpoint;
     }
@@ -2130,10 +2429,10 @@ export class ServiceHost {
     const view = this.#view;
     const definition = this.#activeDefinition;
     if (view === null || definition?.id !== "spotify" || view.webContents.isDestroyed()) {
-      return;
+      return Promise.resolve();
     }
 
-    this.#spotifyPlaybackCheckpoint = (async () => {
+    const operation = (async () => {
       try {
         const snapshot = qualifySpotifyPlaybackSnapshot(
           await view.webContents.executeJavaScript(
@@ -2151,39 +2450,87 @@ export class ServiceHost {
       } catch {
         // Spotify can replace its document while navigating between TV views.
       }
-    })().finally(() => {
-      this.#spotifyPlaybackCheckpoint = null;
+    })();
+    const checkpoint = operation.finally(() => {
+      if (this.#spotifyPlaybackCheckpoint === checkpoint) {
+        this.#spotifyPlaybackCheckpoint = null;
+      }
     });
+    this.#spotifyPlaybackCheckpoint = checkpoint;
 
-    return this.#spotifyPlaybackCheckpoint;
+    return checkpoint;
   }
 
-  async #sendSpotifyMediaAction(action: MediaAction): Promise<boolean> {
-    const view = this.#view;
+  async #sendSpotifyMediaAction(
+    action: MediaAction,
+    expectedView?: WebContentsView,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<boolean> {
+    if (operationToken !== undefined) {
+      this.#operationOwner.throwIfSuperseded(operationToken);
+    }
+    signal?.throwIfAborted();
+    const view = expectedView ?? this.#view;
     const script = buildSpotifyMediaActionScript(action);
     if (
       view === null ||
+      this.#view !== view ||
       this.#activeDefinition?.id !== "spotify" ||
       view.webContents.isDestroyed() ||
       script === null
     ) {
-      if (script === null) this.#sendMediaKey(action);
+      if (script === null) this.#sendMediaKey(action, view);
       return script === null;
     }
 
     try {
       const handled = await view.webContents.executeJavaScript(script, true) as boolean;
+      if (operationToken !== undefined) {
+        this.#operationOwner.throwIfSuperseded(operationToken);
+      }
+      signal?.throwIfAborted();
+      if (this.#view !== view || view.webContents.isDestroyed()) return false;
       if (handled === true) {
-        await delay(120);
-        await this.#captureSpotifyPlayback();
+        await delay(120, signal);
+        await waitWithSignal(this.#captureSpotifyPlayback(), signal);
+        if (operationToken !== undefined) {
+          this.#operationOwner.throwIfSuperseded(operationToken);
+        }
+        signal?.throwIfAborted();
         return true;
       }
     } catch {
+      signal?.throwIfAborted();
+      if (operationToken !== undefined) {
+        this.#operationOwner.throwIfSuperseded(operationToken);
+      }
       // Fall back if Spotify replaces the control between the snapshot and click.
     }
 
-    this.#sendMediaKey(action);
+    if (operationToken !== undefined) {
+      this.#operationOwner.throwIfSuperseded(operationToken);
+    }
+    if (this.#view !== view || view.webContents.isDestroyed()) return false;
+    this.#sendMediaKey(action, view);
     return true;
+  }
+
+  #closeVoiceOperationView(
+    view: WebContentsView,
+    operationToken?: ServiceOperationToken
+  ): void {
+    if (this.#view === view) {
+      if (
+        operationToken !== undefined &&
+        !this.#operationOwner.owns(operationToken)
+      ) {
+        return;
+      }
+      this.close();
+      return;
+    }
+    if (!view.webContents.isDestroyed()) view.webContents.close();
   }
 
   #failActiveService(kind: ServiceFailureKind): void {
@@ -2208,10 +2555,10 @@ export class ServiceHost {
     this.#onRecoveryRequested(serviceRecoveryRequest(kind, definition.id, definition.name));
   }
 
-  #sendKey(action: ServiceKeyAction): void {
-    const view = this.#view;
+  #sendKey(action: ServiceKeyAction, expectedView?: WebContentsView): void {
+    const view = expectedView ?? this.#view;
 
-    if (view === null || view.webContents.isDestroyed()) {
+    if (view === null || this.#view !== view || view.webContents.isDestroyed()) {
       return;
     }
 
@@ -2236,10 +2583,10 @@ export class ServiceHost {
     }
   }
 
-  #sendMediaKey(action: MediaAction): void {
-    const view = this.#view;
+  #sendMediaKey(action: MediaAction, expectedView?: WebContentsView | null): void {
+    const view = expectedView ?? this.#view;
 
-    if (view === null || view.webContents.isDestroyed()) {
+    if (view === null || this.#view !== view || view.webContents.isDestroyed()) {
       return;
     }
 

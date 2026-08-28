@@ -74,6 +74,7 @@ import {
   setCustomServiceManifests
 } from "./service-registry";
 import { ServiceHost, type PlaybackObservation } from "./service-host";
+import type { ServiceOperationToken } from "./service-operation-owner";
 import type { SpotifyPlaybackSnapshot } from "./spotify-playback";
 import {
   isSystemVolumeAction,
@@ -132,7 +133,7 @@ const CATALOG_CACHE_MS = 15 * 60 * 1_000;
 const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
 const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
-const VOICE_UNDERSTANDING_TIMEOUT_MS = 70_000;
+const VOICE_UNDERSTANDING_TIMEOUT_MS = 130_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
   "#store-search"
@@ -983,13 +984,17 @@ async function handlePlaybackObservation(observation: PlaybackObservation): Prom
 
 async function openTrackedService(
   definition: ServiceDefinition,
-  initialUrl = definition.startUrl
+  initialUrl = definition.startUrl,
+  signal?: AbortSignal,
+  operationToken?: ServiceOperationToken
 ): Promise<void> {
   if (serviceHost === null) {
     throw new Error("The service host is not ready.");
   }
 
-  await serviceHost.open(definition, initialUrl);
+  signal?.throwIfAborted();
+  await serviceHost.open(definition, initialUrl, signal, operationToken);
+  signal?.throwIfAborted();
   await localStateStore?.recordServiceLaunch(definition.id).catch(() => undefined);
 }
 
@@ -1071,19 +1076,28 @@ interface RemoteActionOutcome {
   handled: boolean;
 }
 
-async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOutcome> {
+async function handleRemoteAction(
+  action: RemoteAction,
+  signal?: AbortSignal,
+  operationToken?: ServiceOperationToken
+): Promise<RemoteActionOutcome> {
+  signal?.throwIfAborted();
   if (ambientDisplayVisible && action !== "force-home") {
     markAmbientActivity();
     return { handled: true };
   }
   markAmbientActivity();
+  const operation = serviceHost === null
+    ? undefined
+    : operationToken ?? serviceHost.beginOperation();
 
   if (action === "force-home") {
     if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
-      await serviceHost.forceReturnHome();
+      await serviceHost.forceReturnHome(signal, operation);
     } else if (serviceHost?.hasRecoveryTarget) {
-      await serviceHost.recover("home");
+      await serviceHost.recover("home", operation);
     }
+    signal?.throwIfAborted();
     if (mainWindow !== null && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
     }
@@ -1091,7 +1105,9 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
   }
 
   if (isMediaAction(action) && isSystemVolumeAction(action)) {
-    return systemVolumeController.apply(action);
+    const result = await systemVolumeController.apply(action);
+    signal?.throwIfAborted();
+    return result;
   }
 
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {
@@ -1104,7 +1120,9 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
 
     if (serviceHost.isBackgrounded) {
       if (isMediaAction(action)) {
-        return { handled: await serviceHost.sendRemoteAction(action) };
+        const handled = await serviceHost.sendRemoteAction(action, signal, operation);
+        signal?.throwIfAborted();
+        return { handled };
       }
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
@@ -1114,15 +1132,18 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
 
     if (action === "home") {
       if (!serviceHost.returnHomeInBackground()) {
-        await serviceHost.closeWithCheckpoint();
+        await serviceHost.closeWithCheckpoint(signal, operation);
       }
+      signal?.throwIfAborted();
       if (mainWindow !== null && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
       }
       return { handled: true };
     }
 
-    return { handled: await serviceHost.sendRemoteAction(action) };
+    const handled = await serviceHost.sendRemoteAction(action, signal, operation);
+    signal?.throwIfAborted();
+    return { handled };
   }
 
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
@@ -1196,15 +1217,20 @@ function usesGoogleWatchDiscovery(
 }
 
 async function executeGoogleWatchPlan(
-  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
+  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
+  signal?: AbortSignal,
+  operationToken?: ServiceOperationToken
 ): Promise<(RemoteActionOutcome & { detail: string }) | null> {
   const resolver = googleWatchResolver;
   if (resolver === null || !usesGoogleWatchDiscovery(plan)) return null;
 
   const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
+  signal?.throwIfAborted();
   let result = await resolver.resolve(lookup, {
-    completeOffers: plan.intent.action === "lookup"
+    completeOffers: plan.intent.action === "lookup",
+    signal
   });
+  signal?.throwIfAborted();
   if (!googleWatchResultMatchesIntent(result, plan.intent)) {
     throw new Error("Google watch discovery returned a different title or episode.");
   }
@@ -1217,7 +1243,8 @@ async function executeGoogleWatchPlan(
 
   let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
   if (selected === null && !result.offersComplete) {
-    result = await resolver.resolve(lookup, { completeOffers: true });
+    result = await resolver.resolve(lookup, { completeOffers: true, signal });
+    signal?.throwIfAborted();
     if (!googleWatchResultMatchesIntent(result, plan.intent)) {
       throw new Error("Google watch discovery changed title or episode while expanding offers.");
     }
@@ -1235,11 +1262,12 @@ async function executeGoogleWatchPlan(
   const playbackUrl = sanitizePlaybackUrl(selected.offer.watchUrl, definition);
   if (playbackUrl === null) return null;
 
-  await openTrackedService(definition, playbackUrl);
+  await openTrackedService(definition, playbackUrl, signal, operationToken);
   const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
     intendedUrl: playbackUrl,
     profileNameHint: activeVoiceProfileName()
-  }) ?? false;
+  }, signal, operationToken) ?? false;
+  signal?.throwIfAborted();
   const handled = voiceProviderCommandHandled(plan.intent, automated);
   return {
     detail: plan.intent.action === "play"
@@ -1251,14 +1279,18 @@ async function executeGoogleWatchPlan(
   };
 }
 
-async function executeVoiceCommandPlan(
-  plan: VoiceCommandPlan
+async function executeVoiceCommandPlanCore(
+  plan: VoiceCommandPlan,
+  signal?: AbortSignal
 ): Promise<RemoteActionOutcome & { detail: string }> {
+  signal?.throwIfAborted();
   if (plan.kind === "no-op") {
     return { detail: plan.detail, handled: true };
   }
+  const operation = serviceHost?.beginOperation();
   if (plan.kind === "remote-action") {
-    const result = await handleRemoteAction(plan.action);
+    const result = await handleRemoteAction(plan.action, signal, operation);
+    signal?.throwIfAborted();
     return {
       detail: result.detail ?? "Voice control sent to the TV.",
       handled: result.handled
@@ -1268,7 +1300,8 @@ async function executeVoiceCommandPlan(
     if (serviceHost === null || serviceHost.activeServiceId === null) {
       return { detail: "Nothing is currently open.", handled: true };
     }
-    await serviceHost.closeWithCheckpoint();
+    await serviceHost.closeWithCheckpoint(signal, operation);
+    signal?.throwIfAborted();
     if (mainWindow !== null && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
     }
@@ -1276,9 +1309,10 @@ async function executeVoiceCommandPlan(
   }
 
   try {
-    const googleResult = await executeGoogleWatchPlan(plan);
+    const googleResult = await executeGoogleWatchPlan(plan, signal, operation);
     if (googleResult !== null) return googleResult;
   } catch {
+    signal?.throwIfAborted();
     // Google discovery is a best-effort private-project adapter. A provider's
     // own search page remains available if its markup, network, or rate limit changes.
   }
@@ -1310,13 +1344,14 @@ async function executeVoiceCommandPlan(
   const searchUrl = destination.serviceId === "youtube"
     ? applyYouTubeLatestSort(baseSearchUrl, plan.intent)
     : baseSearchUrl;
-  await openTrackedService(definition, searchUrl);
+  await openTrackedService(definition, searchUrl, signal, operation);
   const automated = isVoiceDiscoveryIntent(plan.intent)
     ? false
     : await serviceHost?.executeVoiceMediaIntent(plan.intent, {
       intendedUrl: searchUrl,
       profileNameHint: activeVoiceProfileName()
-    }) ?? false;
+    }, signal, operation) ?? false;
+  signal?.throwIfAborted();
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
@@ -1333,6 +1368,21 @@ async function executeVoiceCommandPlan(
   };
 }
 
+async function executeVoiceCommandPlan(
+  plan: VoiceCommandPlan,
+  signal?: AbortSignal
+): Promise<RemoteActionOutcome & { detail: string }> {
+  const cancelNavigation = () => {
+    googleWatchResolver?.cancelActive();
+  };
+  signal?.addEventListener("abort", cancelNavigation, { once: true });
+  try {
+    return await executeVoiceCommandPlanCore(plan, signal);
+  } finally {
+    signal?.removeEventListener("abort", cancelNavigation);
+  }
+}
+
 function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
   return {
     detail: error instanceof OpenAiVoiceError
@@ -1344,7 +1394,8 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
 
 async function handleRemoteVoice(
   clip: VoiceAudioClip,
-  commandId: string
+  commandId: string,
+  signal: AbortSignal
 ): Promise<PhoneRemoteVoiceResult> {
   if (!remoteVoiceStatus().available || voiceCommandSession === null) {
     const result: PhoneRemoteVoiceResult = {
@@ -1357,11 +1408,13 @@ async function handleRemoteVoice(
   presentPhoneVoiceActivity({ commandId, phase: "understanding" });
   activeVoiceProcessingCommandId = commandId;
   try {
-    const result = await voiceCommandSession.process(clip);
+    const result = await voiceCommandSession.process(clip, signal);
+    if (signal.aborted) return voiceFailure(signal.reason);
     presentPhoneVoiceResult(result, commandId);
     return result;
   } catch (error) {
     const result = voiceFailure(error);
+    if (signal.aborted) return result;
     presentPhoneVoiceResult(result, commandId);
     return result;
   } finally {
@@ -1373,7 +1426,8 @@ async function handleRemoteVoice(
 
 async function confirmRemoteVoice(
   confirmationId: string,
-  commandId: string
+  commandId: string,
+  signal: AbortSignal
 ): Promise<PhoneRemoteVoiceResult> {
   if (voiceCommandSession === null) {
     const result: PhoneRemoteVoiceResult = {
@@ -1390,14 +1444,27 @@ async function confirmRemoteVoice(
     commandId
   );
   try {
-    const result = await voiceCommandSession.confirm(confirmationId);
+    const result = await voiceCommandSession.confirm(confirmationId, signal);
+    if (signal.aborted) return voiceFailure(signal.reason);
     presentPhoneVoiceResult(result, commandId);
     return result;
   } catch (error) {
     const result = voiceFailure(error);
+    if (signal.aborted) return result;
     presentPhoneVoiceResult(result, commandId);
     return result;
   }
+}
+
+function presentRemoteVoiceTimeout(commandId: string): void {
+  if (activeVoiceProcessingCommandId === commandId) {
+    activeVoiceProcessingCommandId = null;
+  }
+  if (currentVoiceCommandId !== commandId) return;
+  presentPhoneVoiceResult({
+    detail: "The voice command timed out. Hold the microphone and try again.",
+    outcome: "failed"
+  }, commandId);
 }
 
 function cancelRemoteVoiceConfirmation(
@@ -1986,6 +2053,7 @@ async function createMainWindow(): Promise<void> {
     onConfirmVoice: confirmRemoteVoice,
     onVoiceActivity: presentPhoneVoiceActivity,
     onVoice: handleRemoteVoice,
+    onVoiceTimeout: presentRemoteVoiceTimeout,
     shouldAutoApproveFirstRemote: () =>
       localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
   });

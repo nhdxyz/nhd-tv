@@ -34,7 +34,8 @@ describe("service recovery policy", () => {
     expect(host).toContain('"did-fail-load"');
     expect(host).toContain('"render-process-gone"');
     expect(host).toContain('"unresponsive"');
-    expect(host).toContain("async forceReturnHome()");
+    expect(host).toContain("async forceReturnHome(");
+    expect(host).toContain("operationToken?: ServiceOperationToken");
     expect(main).toContain('powerMonitor.on("suspend"');
     expect(main).toContain('powerMonitor.on("resume"');
     expect(renderer).toContain("onServiceRecoveryRequested(showServiceRecovery)");

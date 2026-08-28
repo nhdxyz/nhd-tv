@@ -4,6 +4,8 @@ NHD-TV voice control is a phone-based push-to-talk feature. The existing session
 
 The implementation is tracked in [GitHub issue #45](https://github.com/nhdxyz/nhd-tv/issues/45).
 
+For supported phrases and current limits, see the [voice command reference](voice-command-reference.md).
+
 ## First-time setup
 
 1. Install Tailscale on the NHD-TV computer and phone, sign both into the same tailnet, enable MagicDNS, and [enable HTTPS certificates](https://tailscale.com/docs/how-to/set-up-https-certificates) for the tailnet.

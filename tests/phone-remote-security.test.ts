@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  parseVoiceUploadMetadata,
   remotePostHeadersAreAllowed,
   secureRemoteHeadersAllowMicrophone,
   shouldAutoApprovePairing
@@ -59,6 +60,29 @@ describe("phone remote boundary", () => {
       host: "living-room.example.ts.net:8443",
       "x-forwarded-proto": "https"
     }, null)).toBe(false);
+  });
+
+  it("accepts only bounded audio uploads from the exact secure origin", () => {
+    const secureOrigin = "https://living-room.example.ts.net:8443";
+    const validHeaders = {
+      "content-length": "4096",
+      "content-type": "audio/webm;codecs=opus",
+      host: "living-room.example.ts.net:8443",
+      origin: secureOrigin,
+      "x-nhd-tv-audio-duration-ms": "2500"
+    };
+    expect(parseVoiceUploadMetadata(validHeaders, secureOrigin)).toEqual({
+      durationMs: 2500,
+      mimeType: "audio/webm"
+    });
+    expect(parseVoiceUploadMetadata({ ...validHeaders, origin: "https://example.test" }, secureOrigin))
+      .toBeNull();
+    expect(parseVoiceUploadMetadata({ ...validHeaders, "content-type": "application/octet-stream" }, secureOrigin))
+      .toBeNull();
+    expect(parseVoiceUploadMetadata({ ...validHeaders, "content-length": String(9 * 1024 * 1024) }, secureOrigin))
+      .toBeNull();
+    expect(parseVoiceUploadMetadata({ ...validHeaders, "x-nhd-tv-audio-duration-ms": "20001" }, secureOrigin))
+      .toBeNull();
   });
 
   it("auto-approves only the first remote when the device preference allows it", () => {

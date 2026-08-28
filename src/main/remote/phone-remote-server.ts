@@ -25,10 +25,25 @@ import {
 } from "./pairing-manager";
 import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "./remote-assets";
 import type { TailscaleSecureRemoteResult } from "./tailscale-secure-remote";
+import {
+  MAX_VOICE_AUDIO_BYTES,
+  MAX_VOICE_AUDIO_DURATION_MS,
+  MIN_VOICE_AUDIO_DURATION_MS,
+  type VoiceAudioClip
+} from "../voice/openai-voice-client";
 
 const MAX_JSON_BYTES = 4_096;
 const MIN_COMMAND_INTERVAL_MS = 24;
 const MIN_POINTER_INTERVAL_MS = 16;
+const MIN_VOICE_INTERVAL_MS = 1_000;
+const VOICE_AUDIO_TYPES = new Set([
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-m4a"
+]);
 const REMOTE_CSP = [
   "default-src 'none'",
   "script-src 'self'",
@@ -55,7 +70,19 @@ export interface PhoneRemoteServerOptions {
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
   onText: (input: RemoteTextInput) => boolean | Promise<boolean>;
+  onVoice?: (clip: VoiceAudioClip) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   shouldAutoApproveFirstRemote: () => boolean;
+}
+
+export interface PhoneRemoteVoiceResult {
+  detail: string;
+  outcome: "completed" | "confirmation-required" | "failed";
+  transcript?: string;
+}
+
+export interface VoiceUploadMetadata {
+  durationMs: number;
+  mimeType: string;
 }
 
 export function shouldAutoApprovePairing(
@@ -143,6 +170,42 @@ export function secureRemoteHeadersAllowMicrophone(
   }
 }
 
+export function parseVoiceUploadMetadata(
+  headers: IncomingHttpHeaders,
+  expectedOrigin: string | null
+): VoiceUploadMetadata | null {
+  if (
+    !secureRemoteHeadersAllowMicrophone(headers, expectedOrigin) ||
+    headers.origin !== expectedOrigin
+  ) {
+    return null;
+  }
+
+  const rawContentType = headers["content-type"];
+  const mimeType = typeof rawContentType === "string"
+    ? rawContentType.split(";", 1)[0]?.trim().toLowerCase() ?? ""
+    : "";
+  const rawDuration = headers["x-nhd-tv-audio-duration-ms"];
+  const durationMs = typeof rawDuration === "string" && /^\d{1,6}$/.test(rawDuration)
+    ? Number(rawDuration)
+    : Number.NaN;
+  const rawContentLength = headers["content-length"];
+  const contentLength = typeof rawContentLength === "string" && /^\d+$/.test(rawContentLength)
+    ? Number(rawContentLength)
+    : null;
+
+  if (
+    !VOICE_AUDIO_TYPES.has(mimeType) ||
+    !Number.isInteger(durationMs) ||
+    durationMs < MIN_VOICE_AUDIO_DURATION_MS ||
+    durationMs > MAX_VOICE_AUDIO_DURATION_MS ||
+    (contentLength !== null && (contentLength < 1 || contentLength > MAX_VOICE_AUDIO_BYTES))
+  ) {
+    return null;
+  }
+  return { durationMs, mimeType };
+}
+
 function isSameOriginPost(request: IncomingMessage, expectedOrigin: string | null): boolean {
   return remotePostHeadersAreAllowed(request.headers, expectedOrigin);
 }
@@ -173,6 +236,27 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   }
 }
 
+async function readVoiceBody(request: IncomingMessage): Promise<Uint8Array | null> {
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  let tooLarge = false;
+
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > MAX_VOICE_AUDIO_BYTES) {
+      tooLarge = true;
+      chunks.length = 0;
+      continue;
+    }
+    if (!tooLarge) {
+      chunks.push(buffer);
+    }
+  }
+
+  return tooLarge || totalBytes === 0 ? null : new Uint8Array(Buffer.concat(chunks));
+}
+
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
@@ -184,10 +268,12 @@ export class PhoneRemoteServer {
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   readonly #onText: PhoneRemoteServerOptions["onText"];
+  readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
   #lastCommandAt = 0;
   #lastPointerAt = 0;
+  #lastVoiceAt = 0;
   #networkAddress: string | null = null;
   #qrDataUrl: string | null = null;
   #remoteOrigin: string | null = null;
@@ -197,6 +283,7 @@ export class PhoneRemoteServer {
     state: "unavailable"
   };
   #server: Server | null = null;
+  #voiceInFlight = false;
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
@@ -208,6 +295,7 @@ export class PhoneRemoteServer {
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
     this.#onText = options.onText;
+    this.#onVoice = options.onVoice;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
 
@@ -674,6 +762,47 @@ export class PhoneRemoteServer {
       }
 
       writeJson(response, 200, { context: await this.#onGetContext(), ok: true });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice") {
+      const metadata = parseVoiceUploadMetadata(request.headers, this.#remoteOrigin);
+      if (metadata === null) {
+        writeJson(response, 403, { error: "Voice upload rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      if (this.#onVoice === undefined) {
+        writeJson(response, 503, { error: "Voice control is not available yet" });
+        return;
+      }
+      const now = Date.now();
+      if (this.#voiceInFlight || now - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS) {
+        writeJson(response, 429, { error: "A voice command is already being processed" });
+        return;
+      }
+
+      this.#lastVoiceAt = now;
+      this.#voiceInFlight = true;
+      try {
+        const bytes = await readVoiceBody(request);
+        if (bytes === null) {
+          writeJson(response, 413, { error: "The voice recording is empty or too large" });
+          return;
+        }
+        const result = await this.#onVoice({ bytes, ...metadata });
+        writeJson(response, result.outcome === "failed" ? 422 : 200, result);
+      } finally {
+        this.#voiceInFlight = false;
+      }
       return;
     }
 

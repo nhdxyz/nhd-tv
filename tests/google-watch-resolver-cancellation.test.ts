@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GoogleWatchCache } from "../src/main/voice/google-watch-cache";
+import type {
+  GoogleWatchCache,
+  GoogleWatchResult
+} from "../src/main/voice/google-watch-cache";
 
 const electron = vi.hoisted(() => {
+  const behavior = { extractionResult: undefined as unknown };
   const fetch = vi.fn();
   const windows: FakeBrowserWindow[] = [];
 
   class FakeWebContents {
     destroyed = false;
-    executeJavaScript = vi.fn(() => new Promise<never>(() => undefined));
+    executeJavaScript = vi.fn(() => behavior.extractionResult === undefined
+      ? new Promise<never>(() => undefined)
+      : Promise.resolve(behavior.extractionResult));
     isDestroyed = vi.fn(() => this.destroyed);
     on = vi.fn();
     removeListener = vi.fn();
@@ -37,6 +43,7 @@ const electron = vi.hoisted(() => {
 
   return {
     BrowserWindow: FakeBrowserWindow,
+    behavior,
     fetch,
     fromPartition: vi.fn(() => ({
       fetch,
@@ -65,11 +72,45 @@ const lookup = {
 function cache(): GoogleWatchCache {
   return {
     getFresh: vi.fn(() => null),
+    invalidate: vi.fn(),
     save: vi.fn()
   } as unknown as GoogleWatchCache;
 }
 
+function cachedResult(overrides: Partial<GoogleWatchResult> = {}): GoogleWatchResult {
+  return {
+    countryCode: "US",
+    episodeNumber: null,
+    expiresAt: "2026-08-29T00:00:00.000Z",
+    fetchedAt: "2026-08-28T00:00:00.000Z",
+    mediaType: "show",
+    offers: [{
+      monetizationType: "subscription",
+      priceText: null,
+      providerContentId: "70196252",
+      providerHost: "www.netflix.com",
+      providerName: "Netflix",
+      rawLabel: "Netflix Subscription",
+      watchUrl: "https://www.netflix.com/watch/70196252"
+    }],
+    offersComplete: true,
+    queryText: "Breaking Bad",
+    renderMs: null,
+    requestAfterRenderHasData: false,
+    requestBeforeRenderHasData: true,
+    resolvedSubtitle: null,
+    resolvedTitle: "Breaking Bad",
+    retrievalMode: "warmed-session-request",
+    seasonNumber: null,
+    source: "google-search",
+    sourceUrl: "https://www.google.com/search?q=Breaking+Bad",
+    warmMs: 25,
+    ...overrides
+  };
+}
+
 beforeEach(() => {
+  electron.behavior.extractionResult = undefined;
   electron.fetch.mockReset();
   electron.fetch.mockImplementation(async () => new Response(
     "<div>Where to watch https://www.netflix.com</div>",
@@ -80,6 +121,50 @@ beforeEach(() => {
 });
 
 describe("Google watch resolver cancellation", () => {
+  it("invalidates a fresh cache row whose resolved title does not match", async () => {
+    electron.fetch.mockResolvedValue(new Response("", { status: 429 }));
+    const invalidate = vi.fn();
+    const resolver = new GoogleWatchResolver({
+      cache: {
+        getFresh: vi.fn()
+          .mockReturnValueOnce(cachedResult({ resolvedTitle: "Better Call Saul" }))
+          .mockReturnValue(null),
+        invalidate,
+        save: vi.fn()
+      } as unknown as GoogleWatchCache
+    });
+
+    await expect(resolver.resolve(lookup)).rejects.toThrow(
+      "Google discovery needs a cooldown before retrying."
+    );
+    expect(invalidate).toHaveBeenCalledWith("Breaking Bad", "US");
+  });
+
+  it("does not save an uncached panel with an unverified title", async () => {
+    electron.behavior.extractionResult = {
+      candidateLinks: [{
+        href: "https://www.netflix.com/watch/70196252",
+        label: "Netflix Subscription"
+      }],
+      episodeMetadataCandidates: [],
+      resolvedSubtitle: null,
+      resolvedTitle: "Better Call Saul"
+    };
+    const save = vi.fn();
+    const resolver = new GoogleWatchResolver({
+      cache: {
+        getFresh: vi.fn(() => null),
+        invalidate: vi.fn(),
+        save
+      } as unknown as GoogleWatchCache
+    });
+
+    await expect(resolver.resolve(lookup)).rejects.toThrow(
+      "Google discovery returned unverified title or episode metadata."
+    );
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("uses a cooldown after Google rate limits the warmed session", async () => {
     electron.fetch.mockResolvedValue(new Response("", { status: 429 }));
     const resolver = new GoogleWatchResolver({ cache: cache() });

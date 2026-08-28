@@ -5,6 +5,7 @@ import {
   type GoogleWatchOffer,
   type GoogleWatchResult
 } from "./google-watch-cache";
+import { googleWatchResultMatchesIdentity } from "./google-watch-identity";
 
 const MAX_GOOGLE_RESPONSE_BYTES = 5 * 1024 * 1024;
 const PANEL_TIMEOUT_MS = 12_000;
@@ -233,6 +234,18 @@ function verifiedCachedResult(
     ...result,
     ...googleWatchMetadataForLookup(lookup, result)
   };
+}
+
+function googleWatchResultMatchesLookup(
+  result: Pick<GoogleWatchResult, "resolvedSubtitle" | "resolvedTitle">,
+  lookup: GoogleWatchLookup
+): boolean {
+  return googleWatchResultMatchesIdentity(result, {
+    episodeNumber: lookup.episodeNumber,
+    mediaType: lookup.mediaType,
+    requestedTitle: lookup.requestedTitle,
+    seasonNumber: lookup.seasonNumber
+  });
 }
 
 function providerIdentity(value: string): string {
@@ -486,8 +499,12 @@ export class GoogleWatchResolver {
     const completeOffers = options.completeOffers === true;
     const fresh = this.#cache.getFresh(lookup.queryText, countryCode);
     if (fresh !== null && (!completeOffers || fresh.offersComplete)) {
-      if (!googleWatchCachedIdentityNeedsRefresh(lookup, fresh)) {
-        return verifiedCachedResult(fresh, lookup);
+      const verified = verifiedCachedResult(fresh, lookup);
+      if (
+        !googleWatchCachedIdentityNeedsRefresh(lookup, fresh) &&
+        googleWatchResultMatchesLookup(verified, lookup)
+      ) {
+        return verified;
       }
       this.#cache.invalidate(lookup.queryText, countryCode);
     }
@@ -500,8 +517,12 @@ export class GoogleWatchResolver {
       try {
         const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
         if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
-          if (!googleWatchCachedIdentityNeedsRefresh(lookup, secondFresh)) {
-            return verifiedCachedResult(secondFresh, lookup);
+          const verified = verifiedCachedResult(secondFresh, lookup);
+          if (
+            !googleWatchCachedIdentityNeedsRefresh(lookup, secondFresh) &&
+            googleWatchResultMatchesLookup(verified, lookup)
+          ) {
+            return verified;
           }
           this.#cache.invalidate(lookup.queryText, countryCode);
         }
@@ -865,6 +886,9 @@ export class GoogleWatchResolver {
       sourceUrl,
       warmMs: this.#warmMs
     };
+    if (!googleWatchResultMatchesLookup(result, lookup)) {
+      throw new Error("Google discovery returned unverified title or episode metadata.");
+    }
     this.#cache.save(result);
     return result;
   }

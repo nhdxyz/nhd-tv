@@ -1405,6 +1405,12 @@ export const REMOTE_JS = `(() => {
     } catch (error) {
       if (request.cancelAccepted) return;
       applyOrDeferVoiceResponse(request, () => {
+        if (error && error.code === "voice_cancelled") {
+          request.cancelAccepted = true;
+          finishActiveVoiceRequest(request);
+          setState("Cancelled — hold to correct", "connected");
+          return;
+        }
         // Sanitized command failures and server deadlines have already published
         // the TV error and must not be hidden by a later cancellation activity.
         if (!error || (error.status !== 422 && error.status !== 504)) {

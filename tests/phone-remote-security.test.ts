@@ -222,6 +222,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("VOICE_CANCELLATION_REQUEST_TIMEOUT_MS");
     expect(REMOTE_JS).toContain("JSON.stringify({ operationId: request.operationId })");
     expect(REMOTE_JS).toContain('setState("Cancelled — hold to correct"');
+    expect(REMOTE_JS).toContain('error.code === "voice_cancelled"');
     expect(REMOTE_JS).toContain("status >= 500 && status !== 504");
     expect(REMOTE_JS).toContain('voiceConfirmPlay.textContent = retry ? "Check result" : "Play"');
     expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
@@ -302,6 +303,21 @@ describe("phone remote boundary", () => {
     expect(understanding).toBeGreaterThan(uploadLease);
     expect(bodyRead).toBeGreaterThan(understanding);
     expect(uploadRoute.slice(understanding, bodyRead)).toContain("controllerId");
+    expect(uploadRoute).toContain("#voiceOperations.isCancelled(controllerId, metadata.commandId)");
+    expect(uploadRoute).toContain('code: "voice_cancelled"');
+
+    const cancellationRoute = serverSource.slice(
+      serverSource.indexOf('url.pathname === "/api/voice/cancel"'),
+      serverSource.indexOf('url.pathname === "/api/voice/confirm/cancel"')
+    );
+    const pendingLease = cancellationRoute.indexOf(
+      "#voiceActivityLease.cancelPendingUpload(controllerId, operationId)"
+    );
+    const pendingTombstone = cancellationRoute.indexOf("acceptPending: true");
+    expect(pendingLease).toBeGreaterThan(-1);
+    expect(pendingTombstone).toBeGreaterThan(pendingLease);
+    expect(cancellationRoute).toContain('cancellation.state === "accepted-pending"');
+    expect(cancellationRoute).toContain("preemptive: true");
 
     const disconnect = serverSource.slice(
       serverSource.indexOf("async #completeControllerDisconnect"),

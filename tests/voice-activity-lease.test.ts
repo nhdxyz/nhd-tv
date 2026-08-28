@@ -117,6 +117,66 @@ describe("voice activity lease", () => {
     expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(false);
   });
 
+  it("lets only the exact owner cancel an upload before registration", () => {
+    const lease = new VoiceActivityLease();
+    reserveAndListen(lease, "phone-a", COMMAND_A);
+
+    expect(lease.cancelPendingUpload("phone-b", COMMAND_A)).toBe(false);
+    expect(lease.cancelPendingUpload("phone-a", COMMAND_B)).toBe(false);
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(true);
+    expect(lease.cancelPendingUpload("phone-a", COMMAND_A)).toBe(false);
+  });
+
+  it("tombstones a pre-registration cancellation so a late upload cannot execute", () => {
+    const lease = new VoiceActivityLease();
+    reserveAndListen(lease, "phone-a", COMMAND_A);
+
+    expect(lease.cancelPendingUpload("phone-a", COMMAND_A)).toBe(true);
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(false);
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("ignored");
+    expect(lease.acceptActivity("phone-a", {
+      commandId: "voice-command-future-9",
+      phase: "reserved"
+    })).toBe("accepted");
+  });
+
+  it("can cancel the exact reservation while microphone startup is still pending", () => {
+    const lease = new VoiceActivityLease();
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("accepted");
+
+    expect(lease.cancelPendingUpload("phone-a", COMMAND_A)).toBe(true);
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "listening"
+    })).toBe("ignored");
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(false);
+  });
+
+  it("does not authorize cancellation after a pending reservation expires", () => {
+    let now = 1_000;
+    const lease = new VoiceActivityLease({
+      now: () => now,
+      reservationMs: 500
+    });
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("accepted");
+
+    now += 501;
+    expect(lease.cancelPendingUpload("phone-a", COMMAND_A)).toBe(false);
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "reserved"
+    })).toBe("accepted");
+  });
+
   it("expires abandoned ownership without allowing its old events to revive", () => {
     let now = 1_000;
     const lease = new VoiceActivityLease({

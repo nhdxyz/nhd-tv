@@ -67,4 +67,68 @@ describe("voice operation registry", () => {
     expect(registry.active).toBe(next);
     expect(registry.busy).toBe(true);
   });
+
+  it("tombstones an owner-authorized cancellation before operation registration", () => {
+    const registry = new VoiceOperationRegistry();
+
+    expect(registry.cancel("phone-a", "voice-command-pending-1")).toEqual({
+      operation: null,
+      state: "not-active"
+    });
+    expect(registry.cancel("phone-a", "voice-command-pending-1", {
+      acceptPending: true
+    })).toEqual({
+      operation: null,
+      state: "accepted-pending"
+    });
+    expect(registry.cancel("phone-a", "voice-command-pending-1")).toEqual({
+      operation: null,
+      state: "already-cancelled"
+    });
+    expect(registry.isCancelled("phone-a", "voice-command-pending-1")).toBe(true);
+    expect(registry.begin({
+      commandId: "voice-command-pending-1",
+      confirmationId: null,
+      controllerId: "phone-a",
+      kind: "command",
+      operationId: "voice-command-pending-1"
+    })).toBeNull();
+
+    const otherOwner = registry.begin({
+      commandId: "voice-command-pending-1",
+      confirmationId: null,
+      controllerId: "phone-b",
+      kind: "command",
+      operationId: "voice-command-pending-1"
+    });
+    expect(otherOwner).not.toBeNull();
+    if (otherOwner === null) throw new Error("other owner operation was not reserved");
+    expect(registry.finish(otherOwner)).toBe(true);
+
+    const futureCommand = beginCommand(registry, "voice-command-future-9");
+    expect(futureCommand.controller.signal.aborted).toBe(false);
+  });
+
+  it("expires and bounds pre-registration cancellation tombstones", () => {
+    let now = 1_000;
+    const registry = new VoiceOperationRegistry({
+      cancellationTombstoneMs: 500,
+      maximumCancellationTombstones: 2,
+      now: () => now
+    });
+    for (const operationId of [
+      "voice-command-pending-1",
+      "voice-command-pending-2",
+      "voice-command-pending-3"
+    ]) {
+      expect(registry.cancel("phone-a", operationId, { acceptPending: true }).state)
+        .toBe("accepted-pending");
+    }
+
+    expect(registry.isCancelled("phone-a", "voice-command-pending-1")).toBe(false);
+    expect(registry.isCancelled("phone-a", "voice-command-pending-2")).toBe(true);
+    now += 501;
+    expect(registry.isCancelled("phone-a", "voice-command-pending-2")).toBe(false);
+    expect(beginCommand(registry, "voice-command-pending-2")).not.toBeNull();
+  });
 });

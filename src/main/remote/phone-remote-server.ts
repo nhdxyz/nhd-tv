@@ -1143,7 +1143,21 @@ export class PhoneRemoteServer {
         });
         return;
       }
+      if (this.#voiceOperations.isCancelled(controllerId, metadata.commandId)) {
+        writeJson(response, 409, {
+          code: "voice_cancelled",
+          error: "Voice command cancelled"
+        });
+        return;
+      }
       const voiceStatus = await this.#voiceStatus(request);
+      if (this.#voiceOperations.isCancelled(controllerId, metadata.commandId)) {
+        writeJson(response, 409, {
+          code: "voice_cancelled",
+          error: "Voice command cancelled"
+        });
+        return;
+      }
       if (!voiceStatus.available || this.#onVoice === undefined) {
         writeJson(response, 503, { error: voiceStatus.detail });
         return;
@@ -1154,7 +1168,14 @@ export class PhoneRemoteServer {
         return;
       }
       if (!this.#voiceActivityLease.beginUpload(controllerId, metadata.commandId)) {
-        writeJson(response, 409, { error: "This voice recording is no longer active" });
+        if (this.#voiceOperations.isCancelled(controllerId, metadata.commandId)) {
+          writeJson(response, 409, {
+            code: "voice_cancelled",
+            error: "Voice command cancelled"
+          });
+        } else {
+          writeJson(response, 409, { error: "This voice recording is no longer active" });
+        }
         return;
       }
       const operation = this.#voiceOperations.begin({
@@ -1451,7 +1472,15 @@ export class PhoneRemoteServer {
         return;
       }
 
-      const cancellation = this.#voiceOperations.cancel(controllerId, operationId);
+      let cancellation = this.#voiceOperations.cancel(controllerId, operationId);
+      if (
+        cancellation.state === "not-active" &&
+        this.#voiceActivityLease.cancelPendingUpload(controllerId, operationId)
+      ) {
+        cancellation = this.#voiceOperations.cancel(controllerId, operationId, {
+          acceptPending: true
+        });
+      }
       if (cancellation.state === "not-owner") {
         writeJson(response, 403, { error: "Only the phone that started voice can cancel it" });
         return;
@@ -1462,6 +1491,16 @@ export class PhoneRemoteServer {
       }
       if (cancellation.state === "already-cancelled") {
         writeJson(response, 200, { cancelled: true, ok: true, ready: true });
+        return;
+      }
+      if (cancellation.state === "accepted-pending") {
+        await this.#publishVoiceCancellation(operationId, controllerId);
+        writeJson(response, 200, {
+          cancelled: true,
+          ok: true,
+          preemptive: true,
+          ready: true
+        });
         return;
       }
       if (cancellation.operation === null) {

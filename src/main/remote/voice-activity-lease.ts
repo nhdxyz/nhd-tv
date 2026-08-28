@@ -131,6 +131,27 @@ export class VoiceActivityLease {
   }
 
   /**
+   * Claims a cancellation that arrived before the upload registered its
+   * server-side operation. Only the exact owner and command may release an
+   * unlocked, unexpired capture lease.
+   */
+  cancelPendingUpload(controllerId: string, commandId: string): boolean {
+    this.#cleanup();
+    const active = this.#active;
+    if (
+      active === null ||
+      active.locked ||
+      active.controllerId !== controllerId ||
+      active.commandId !== commandId
+    ) {
+      return false;
+    }
+    this.#remember(commandKey(controllerId, commandId));
+    this.#active = null;
+    return true;
+  }
+
+  /**
    * Reacquires a completed command for a server-authenticated follow-up such
    * as a playback confirmation. Callers must validate the original controller
    * and command binding before using this method.

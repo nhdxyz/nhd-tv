@@ -19,7 +19,18 @@ export interface VoiceOperationHandle {
 
 export type VoiceOperationCancellationDecision =
   | { operation: VoiceOperationHandle; state: "accepted" }
-  | { operation: null; state: "already-cancelled" | "not-active" | "not-owner" };
+  | {
+      operation: null;
+      state: "accepted-pending" | "already-cancelled" | "not-active" | "not-owner";
+    };
+
+interface VoiceOperationCancellationOptions {
+  /**
+   * The caller has synchronously claimed the matching pending activity lease.
+   * This must never be set based only on client-supplied identifiers.
+   */
+  acceptPending?: boolean;
+}
 
 interface InternalVoiceOperation extends VoiceOperationHandle {
   finish: () => void;
@@ -72,6 +83,7 @@ export class VoiceOperationRegistry {
   begin(input: VoiceOperationInput): VoiceOperationHandle | null {
     this.#cleanup();
     if (this.#active !== null) return null;
+    if (this.#cancelled.has(operationKey(input.controllerId, input.operationId))) return null;
 
     let finish!: () => void;
     const finished = new Promise<void>((resolve) => {
@@ -91,14 +103,23 @@ export class VoiceOperationRegistry {
     return operation;
   }
 
-  cancel(controllerId: string, operationId: string): VoiceOperationCancellationDecision {
+  cancel(
+    controllerId: string,
+    operationId: string,
+    options: VoiceOperationCancellationOptions = {}
+  ): VoiceOperationCancellationDecision {
     this.#cleanup();
     const active = this.#active;
     const key = operationKey(controllerId, operationId);
     if (active === null) {
-      return this.#cancelled.has(key)
-        ? { operation: null, state: "already-cancelled" }
-        : { operation: null, state: "not-active" };
+      if (this.#cancelled.has(key)) {
+        return { operation: null, state: "already-cancelled" };
+      }
+      if (options.acceptPending === true) {
+        this.#rememberCancellation(key);
+        return { operation: null, state: "accepted-pending" };
+      }
+      return { operation: null, state: "not-active" };
     }
     if (active.operationId !== operationId) {
       return { operation: null, state: "not-active" };
@@ -112,6 +133,11 @@ export class VoiceOperationRegistry {
       active.controller.abort(new VoiceOperationCancelledError());
     }
     return { operation: active, state: "accepted" };
+  }
+
+  isCancelled(controllerId: string, operationId: string): boolean {
+    this.#cleanup();
+    return this.#cancelled.has(operationKey(controllerId, operationId));
   }
 
   finish(operation: VoiceOperationHandle): boolean {

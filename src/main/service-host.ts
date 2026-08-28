@@ -89,6 +89,12 @@ import {
   youtubeContentIdFromUrl,
   type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
+import {
+  buildVoiceSemanticControlScript,
+  parseVoiceSemanticControlResult,
+  type VoiceSemanticControlRequest,
+  type VoiceSemanticControlResult
+} from "./voice/voice-semantic-control";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -2038,6 +2044,38 @@ export class ServiceHost {
       return true;
     } finally {
       signal?.removeEventListener("abort", cancelOperation);
+    }
+  }
+
+  async executeVoiceSemanticControl(
+    request: VoiceSemanticControlRequest,
+    signal?: AbortSignal,
+    operationToken?: ServiceOperationToken
+  ): Promise<VoiceSemanticControlResult> {
+    const operation = operationToken ?? this.beginOperation();
+    this.#operationOwner.throwIfSuperseded(operation);
+    signal?.throwIfAborted();
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (view === null || definition === null || view.webContents.isDestroyed()) {
+      return "unavailable";
+    }
+
+    const script = buildVoiceSemanticControlScript(definition.id, request);
+    if (script === null) return "unsupported";
+    try {
+      const rawResult = await waitWithSignal(
+        view.webContents.executeJavaScript(script, true),
+        signal
+      );
+      this.#operationOwner.throwIfSuperseded(operation);
+      signal?.throwIfAborted();
+      if (this.#view !== view || view.webContents.isDestroyed()) return "unavailable";
+      return parseVoiceSemanticControlResult(rawResult);
+    } catch {
+      signal?.throwIfAborted();
+      this.#operationOwner.throwIfSuperseded(operation);
+      return "unavailable";
     }
   }
 

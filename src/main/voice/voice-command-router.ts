@@ -221,6 +221,13 @@ export function planVoiceCommand(
   if (intent.kind === "current-media") {
     return { action: intent.action, kind: "query-current-media" };
   }
+  if (intent.kind === "media-reference") {
+    return {
+      detail: "I lost track of what that referred to. Please name it again.",
+      handled: false,
+      kind: "no-op"
+    };
+  }
   return intent.kind === "control"
     ? controlPlan(intent.action, context)
     : mediaPlan(intent, context);

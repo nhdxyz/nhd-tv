@@ -45,6 +45,20 @@ describe("voice command planning", () => {
     });
   });
 
+  it("fails closed when a contextual reference reaches the router unresolved", () => {
+    expect(planVoiceCommand({
+      action: "play",
+      kind: "media-reference",
+      ordinal: null,
+      providerHint: null,
+      reference: "last-media"
+    }, context)).toEqual({
+      detail: "I lost track of what that referred to. Please name it again.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
   it("routes ordinary controls directly", () => {
     expect(planVoiceCommand({ action: "volume-up", kind: "control" }, context)).toEqual({
       action: "volume-up",

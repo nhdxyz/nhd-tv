@@ -98,6 +98,9 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("Use kind=app");
       expect(body.instructions).toContain("Use kind=current-media");
       expect(body.instructions).toContain("currentMediaAction=identity");
+      expect(body.instructions).toContain("position for the elapsed playback position");
+      expect(body.instructions).toContain("duration for the media's total runtime");
+      expect(body.instructions).toContain("Keep position and duration distinct");
       expect(body.instructions).toContain("Use mediaAction=search");
       expect(body.instructions).toContain("Use controlAction=close-app");
       expect(body.instructions).toContain("Use next-track or previous-track only");
@@ -238,6 +241,10 @@ describe("OpenAI voice client", () => {
     ["What am I watching?", "identity"],
     ["What episode is this?", "episode"],
     ["What song is this?", "song"],
+    ["How far into this am I?", "position"],
+    ["What timestamp are we at?", "position"],
+    ["How long is this?", "duration"],
+    ["What's the runtime?", "duration"],
     ["How much time is left?", "time-remaining"],
     ["What time will this end?", "end-time"]
   ] as const)("routes the current-media question %s locally", async (phrase, action) => {

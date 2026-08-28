@@ -107,6 +107,14 @@ describe("voice command planning", () => {
       action: "song",
       kind: "query-current-media"
     });
+    expect(planVoiceCommand({ action: "position", kind: "current-media" }, context)).toEqual({
+      action: "position",
+      kind: "query-current-media"
+    });
+    expect(planVoiceCommand({ action: "duration", kind: "current-media" }, context)).toEqual({
+      action: "duration",
+      kind: "query-current-media"
+    });
     expect(planVoiceCommand({
       action: "time-remaining",
       kind: "current-media"

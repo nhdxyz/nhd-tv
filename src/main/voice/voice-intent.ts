@@ -40,9 +40,11 @@ const VOICE_SEMANTIC_CONTROL_ACTIONS = [
   "skip-recap"
 ] as const;
 const VOICE_CURRENT_MEDIA_ACTIONS = [
+  "duration",
   "end-time",
   "episode",
   "identity",
+  "position",
   "song",
   "time-remaining"
 ] as const;

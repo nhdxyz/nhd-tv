@@ -93,6 +93,35 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
+    ["How far into this am I?", "position"],
+    ["how far in am I", "position"],
+    ["What timestamp are we at?", "position"],
+    ["What's the current timestamp?", "position"],
+    ["How long is this?", "duration"],
+    ["how long is this episode", "duration"],
+    ["What's the runtime?", "duration"],
+    ["what is the total runtime", "duration"],
+    ["How much time is left?", "time-remaining"],
+    ["When will this end?", "end-time"]
+  ] as const)("represents the read-only current-media question %s", (phrase, action) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action,
+      kind: "current-media"
+    });
+  });
+
+  it("does not confuse current timing questions with seeks or titled media", () => {
+    expect(voiceTranscriptShortcut("Play The Runtime")).toBeNull();
+    expect(voiceTranscriptShortcut("Play How Long Is This Love")).toBeNull();
+    expect(voiceTranscriptShortcut("go to timestamp 12:30")).toEqual({
+      action: "seek-absolute",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      positionSeconds: 750
+    });
+  });
+
+  it.each([
     ["Rewind thirty seconds", -30],
     ["skip ahead 2 minutes", 120],
     ["go back one minute and thirty seconds", -90],

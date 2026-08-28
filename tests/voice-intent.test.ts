@@ -453,8 +453,10 @@ describe("voice intent boundary", () => {
   });
 
   it.each([
+    ["duration", "duration"],
     ["identity", "identity"],
     ["episode", "episode"],
+    ["position", "position"],
     ["song", "song"],
     ["time-remaining", "time-remaining"],
     ["end-time", "end-time"]
@@ -478,7 +480,7 @@ describe("voice intent boundary", () => {
     }))).toThrow("current-media voice intent is inconsistent");
     expect(() => parseVoiceIntent(mediaIntent({
       kind: "current-media",
-      currentMediaAction: "position",
+      currentMediaAction: "playback-status",
       mediaAction: null,
       mediaType: null,
       title: null

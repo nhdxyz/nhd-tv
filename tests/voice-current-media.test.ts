@@ -70,6 +70,35 @@ describe("current media voice answers", () => {
     );
   });
 
+  it("formats elapsed position and total runtime from observed playback", () => {
+    expect(answerCurrentMediaQuestion("position", videoSnapshot()).detail).toBe(
+      "You're 15 minutes into this."
+    );
+    expect(answerCurrentMediaQuestion("duration", videoSnapshot()).detail).toBe(
+      "The total runtime is 1 hour."
+    );
+    const precise = videoSnapshot({
+      durationSeconds: 3_723.4,
+      positionSeconds: 754.4
+    });
+    expect(answerCurrentMediaQuestion("position", precise).detail).toBe(
+      "You're 12 minutes and 34 seconds into this."
+    );
+    expect(answerCurrentMediaQuestion("duration", precise).detail).toBe(
+      "The total runtime is 1 hour, 2 minutes, and 3 seconds."
+    );
+  });
+
+  it("reports the beginning and bounds a stale position to the observed runtime", () => {
+    expect(answerCurrentMediaQuestion("position", videoSnapshot({
+      positionSeconds: 0
+    })).detail).toBe("Playback is at the beginning.");
+    expect(answerCurrentMediaQuestion("position", videoSnapshot({
+      durationSeconds: 3_600,
+      positionSeconds: 3_700
+    })).detail).toBe("You're 1 hour into this.");
+  });
+
   it("formats remaining duration and estimated end time", () => {
     const snapshot = videoSnapshot({
       durationSeconds: 7_500,
@@ -102,6 +131,28 @@ describe("current media voice answers", () => {
     expect(answerCurrentMediaQuestion("episode", unknown).detail).toBe(
       "You're watching Breaking Bad on Netflix, but the episode is not available."
     );
+    expect(answerCurrentMediaQuestion("position", unknown).detail).toBe(
+      "The current media is not reporting its playback position."
+    );
+    expect(answerCurrentMediaQuestion("duration", unknown).detail).toBe(
+      "The current media does not report a total runtime."
+    );
+  });
+
+  it("rejects non-finite or negative timing observations without inventing values", () => {
+    expect(answerCurrentMediaQuestion("position", videoSnapshot({
+      positionSeconds: Number.NaN
+    })).detail).toBe("The current media is not reporting its playback position.");
+    expect(answerCurrentMediaQuestion("position", videoSnapshot({
+      durationSeconds: null,
+      positionSeconds: 42
+    })).detail).toBe("You're 42 seconds into this.");
+    expect(answerCurrentMediaQuestion("duration", videoSnapshot({
+      durationSeconds: Number.POSITIVE_INFINITY
+    })).detail).toBe("The current media does not report a total runtime.");
+    expect(answerCurrentMediaQuestion("duration", videoSnapshot({
+      durationSeconds: -1
+    })).detail).toBe("The current media does not report a total runtime.");
   });
 
   it("uses structured coordinates when an episode subtitle is unavailable", () => {

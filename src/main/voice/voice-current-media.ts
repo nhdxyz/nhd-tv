@@ -61,6 +61,46 @@ function mediaIdentity(snapshot: VoiceCurrentMediaSnapshot): string | null {
     : `You're watching ${title} — ${subtitle}${suffix}.`;
 }
 
+function wholeObservedSeconds(value: number | null, allowZero: boolean): number | null {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    (!allowZero && value === 0)
+  ) {
+    return null;
+  }
+  const rounded = Math.round(value);
+  if (!Number.isSafeInteger(rounded)) return null;
+  return allowZero ? rounded : Math.max(1, rounded);
+}
+
+function naturalTimeDetail(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
+  if (seconds > 0 || parts.length === 0) {
+    parts.push(`${seconds} ${seconds === 1 ? "second" : "seconds"}`);
+  }
+  if (parts.length === 1) return parts[0] ?? "0 seconds";
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts[0]}, ${parts[1]}, and ${parts[2]}`;
+}
+
+function observedPositionSeconds(snapshot: VoiceCurrentMediaSnapshot): number | null {
+  const position = wholeObservedSeconds(snapshot.positionSeconds, true);
+  if (position === null) return null;
+  const duration = wholeObservedSeconds(snapshot.durationSeconds, false);
+  return duration === null ? position : Math.min(position, duration);
+}
+
+function observedDurationSeconds(snapshot: VoiceCurrentMediaSnapshot): number | null {
+  return wholeObservedSeconds(snapshot.durationSeconds, false);
+}
+
 function remainingSeconds(snapshot: VoiceCurrentMediaSnapshot): number | null {
   const duration = snapshot.durationSeconds;
   const position = snapshot.positionSeconds;
@@ -159,6 +199,35 @@ export function answerCurrentMediaQuestion(
           : `You're watching ${title} — ${subtitle}${serviceSuffix(snapshot)}.`,
       handled: true
     };
+  }
+
+  if (action === "position") {
+    const position = observedPositionSeconds(snapshot);
+    if (position === null) {
+      return {
+        detail: "The current media is not reporting its playback position.",
+        handled: true
+      };
+    }
+    return {
+      detail: position === 0
+        ? "Playback is at the beginning."
+        : `You're ${naturalTimeDetail(position)} into this.`,
+      handled: true
+    };
+  }
+
+  if (action === "duration") {
+    const duration = observedDurationSeconds(snapshot);
+    return duration === null
+      ? {
+        detail: "The current media does not report a total runtime.",
+        handled: true
+      }
+      : {
+        detail: `The total runtime is ${naturalTimeDetail(duration)}.`,
+        handled: true
+      };
   }
 
   const remaining = remainingSeconds(snapshot);

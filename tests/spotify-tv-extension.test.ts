@@ -77,6 +77,11 @@ describe("Spotify TV Mode extension", () => {
     expect(css).toContain('grid-template-areas:');
     expect(css).toContain('nav[aria-label="Main"]');
     expect(css).toContain('[data-testid="component-shelf"]');
+    expect(css).toContain('[role="grid"] > [role="row"]');
+    expect(css).toContain("width: max-content !important");
+    expect(css).toContain('[data-encore-id="listRowTitle"]');
+    expect(css).toContain('[data-nhdtv-spotify-quick="true"]');
+    expect(css).toContain('[data-encore-id="chip"]');
     expect(css).toContain('[data-testid="playlist-page"] [data-testid="entityTitle"]');
     expect(css).toContain('[data-testid="tracklist-row"]');
     expect(css).toContain('[data-testid="now-playing-bar"]');
@@ -93,6 +98,8 @@ describe("Spotify TV Mode extension", () => {
     expect(navigation).toContain('document.addEventListener("nhdtv-remote-action"');
     expect(navigation).toContain("horizontalScore");
     expect(navigation).toContain("verticalScore");
+    expect(navigation).toContain("const media = content.filter");
+    expect(navigation).toContain('[data-encore-id="chip"]');
     expect(navigation).toContain("frame.scrollIntoView");
     expect(navigation).toContain('element.getAttribute("data-nhdtv-spotify-default")');
     expect(navigation).toContain("event.preventDefault()");
@@ -103,7 +110,17 @@ describe("Spotify TV Mode extension", () => {
     const content = await readFile(path.join(extensionRoot, "src/content.js"), "utf8");
 
     expect(content).toContain('document.querySelectorAll(\'[data-encore-id="card"]\')');
+    expect(content).toContain('QUICK_ATTRIBUTE = "data-nhdtv-spotify-quick"');
+    expect(content).toContain('rect.width >= rect.height * 1.8');
     expect(content).not.toContain('document.querySelectorAll(\'[role="gridcell"]\')');
+  });
+
+  it("keeps home filters and shelf actions reachable from the remote", async () => {
+    const content = await readFile(path.join(extensionRoot, "src/content.js"), "utf8");
+
+    expect(content).toContain('\'[data-encore-id="chip"]\'');
+    expect(content).toContain('\'[data-testid="rich-title-row-shelf-header"]\'');
+    expect(content).toContain('const showAll = links.length > 1 ? links.at(-1) : null');
   });
 
   it("keeps annotation updates stable so provider DOM changes do not cause an observer loop", async () => {

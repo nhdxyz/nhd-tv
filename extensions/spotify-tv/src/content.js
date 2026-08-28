@@ -8,6 +8,7 @@
   const FOCUS_ATTRIBUTE = "data-nhdtv-spotify-focused";
   const TARGET_ATTRIBUTE = "data-nhdtv-spotify-target";
   const CARD_ATTRIBUTE = "data-nhdtv-spotify-card";
+  const QUICK_ATTRIBUTE = "data-nhdtv-spotify-quick";
   const TRACK_ATTRIBUTE = "data-nhdtv-spotify-track";
   const root = document.documentElement;
   let mutationFrame = null;
@@ -202,6 +203,7 @@
 
   const markPrimaryTargets = () => {
     const cards = [];
+    const quickCards = [];
     const tracks = [];
     const targets = [...document.querySelectorAll(`#${NAV_ID} [${TARGET_ATTRIBUTE}="true"]`)]
       .filter((element) => element instanceof HTMLElement && isRendered(element));
@@ -209,6 +211,10 @@
     for (const card of document.querySelectorAll('[data-encore-id="card"]')) {
       if (!(card instanceof HTMLElement) || !isRendered(card)) continue;
       cards.push(card);
+      const rect = card.getBoundingClientRect();
+      if (routeKind() === "home" && rect.height <= 160 && rect.width >= rect.height * 1.8) {
+        quickCards.push(card);
+      }
       const primary = [...card.querySelectorAll("button,a[href]")].find((candidate) =>
         candidate instanceof HTMLElement &&
         candidate.getAttribute("data-testid") !== "play-button" &&
@@ -232,6 +238,7 @@
       '[data-testid="action-bar"] button',
       '[data-testid="player-controls"] button:not([disabled])',
       '[data-testid="general-controls"] button:not([disabled])',
+      '[data-encore-id="chip"]',
       '[data-testid="login-button"]',
       `#${SIGNIN_ID} button`
     ].join(",")).forEach((element) => {
@@ -240,7 +247,14 @@
       }
     });
 
+    document.querySelectorAll('[data-testid="rich-title-row-shelf-header"]').forEach((header) => {
+      const links = [...header.querySelectorAll("a[href]")];
+      const showAll = links.length > 1 ? links.at(-1) : null;
+      if (showAll instanceof HTMLElement && isRendered(showAll)) targets.push(showAll);
+    });
+
     syncAttribute(CARD_ATTRIBUTE, cards);
+    syncAttribute(QUICK_ATTRIBUTE, quickCards);
     syncAttribute(TRACK_ATTRIBUTE, tracks);
     syncAttribute(TARGET_ATTRIBUTE, targets);
   };

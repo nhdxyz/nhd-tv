@@ -87,7 +87,15 @@
     const activeNavigation = available.find((element) => element.getAttribute("aria-current") === "page");
     if (direction === "up" && activeNavigation) return activeNavigation;
     const content = available.filter((element) => element.closest("#nhdtv-spotify-tv-nav") === null);
-    const pool = content.length > 0 ? content : available;
+    const media = content.filter((element) => {
+      const frame = frameFor(element);
+      return frame.matches([
+        "[data-nhdtv-spotify-card]",
+        "[data-nhdtv-spotify-track]",
+        '[data-encore-id="chip"]'
+      ].join(","));
+    });
+    const pool = media.length > 0 ? media : content.length > 0 ? content : available;
     return [...pool].sort((left, right) => {
       const a = frameFor(left).getBoundingClientRect();
       const b = frameFor(right).getBoundingClientRect();

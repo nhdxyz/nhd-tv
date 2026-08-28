@@ -20,11 +20,14 @@ export interface SpotifyPlaybackSnapshot {
   artist: string | null;
   artworkUrl: string | null;
   durationSeconds: number | null;
+  playbackState: SpotifyPlaybackState;
   playing: boolean;
   positionSeconds: number | null;
   signedIn: boolean;
   title: string | null;
 }
+
+export type SpotifyPlaybackState = "ended" | "paused" | "playing" | "unknown";
 
 function boundedText(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -53,18 +56,32 @@ export function qualifySpotifyPlaybackSnapshot(
     isAllowedArtworkUrl(snapshot.artworkUrl, artworkHosts)
     ? snapshot.artworkUrl
     : null;
+  const album = boundedText(snapshot.album);
+  const artist = boundedText(snapshot.artist);
+  const title = boundedText(snapshot.title);
+  const playing = snapshot.playing === true;
+  const hasMediaIdentity = title !== null || artist !== null;
+  const playbackState: SpotifyPlaybackState = !hasMediaIdentity
+    ? "unknown"
+    : playing
+      ? "playing"
+      : durationSeconds !== null && rawPosition !== null && durationSeconds > 0 &&
+          rawPosition >= durationSeconds - 0.5
+        ? "ended"
+        : "paused";
 
   return {
-    album: boundedText(snapshot.album),
-    artist: boundedText(snapshot.artist),
+    album,
+    artist,
     artworkUrl,
     durationSeconds,
-    playing: snapshot.playing === true,
+    playbackState,
+    playing,
     positionSeconds: rawPosition === null || durationSeconds === null
       ? rawPosition
       : Math.min(rawPosition, durationSeconds),
     signedIn: snapshot.signedIn === true,
-    title: boundedText(snapshot.title)
+    title
   };
 }
 

@@ -17,6 +17,21 @@ export interface QualifiedPlaybackSnapshot {
   url: string;
 }
 
+export type LivePlaybackState = "ended" | "paused" | "playing" | "unknown";
+
+/**
+ * A URL-free view of the largest visible video. Unlike QualifiedPlaybackSnapshot,
+ * this intentionally does not enforce Continue Watching's duration or engagement
+ * thresholds so voice queries can describe new, short, and live media.
+ */
+export interface LivePlaybackSnapshot {
+  currentTime: number | null;
+  duration: number | null;
+  playbackState: LivePlaybackState;
+  subtitle: string | null;
+  title: string | null;
+}
+
 interface RawPlaybackSnapshot {
   artworkUrl?: unknown;
   currentTime?: unknown;
@@ -31,6 +46,18 @@ interface RawPlaybackSnapshot {
   visibleArea?: unknown;
 }
 
+interface RawLivePlaybackSnapshot {
+  currentTime?: unknown;
+  duration?: unknown;
+  ended?: unknown;
+  hasError?: unknown;
+  paused?: unknown;
+  readyState?: unknown;
+  subtitle?: unknown;
+  title?: unknown;
+  visibleArea?: unknown;
+}
+
 function boundedText(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -42,6 +69,67 @@ function boundedText(value: unknown): string | null {
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function playbackMetadata(
+  rawTitle: unknown,
+  rawSubtitle: unknown
+): { subtitle: string | null; title: string | null } {
+  const boundedTitle = boundedText(rawTitle);
+  let subtitle = boundedText(rawSubtitle);
+  let title = boundedTitle;
+
+  if (subtitle !== null && title === subtitle) {
+    subtitle = null;
+  } else if (subtitle !== null && title?.includes(subtitle)) {
+    title = title
+      .replace(subtitle, "")
+      .replace(/^[\s:·|–—-]+|[\s:·|–—-]+$/g, "")
+      .trim() || null;
+  }
+
+  return { subtitle, title };
+}
+
+export function qualifyLivePlaybackSnapshot(value: unknown): LivePlaybackSnapshot | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const snapshot = value as RawLivePlaybackSnapshot;
+  if (
+    !finiteNumber(snapshot.visibleArea) ||
+    snapshot.visibleArea < MINIMUM_VISIBLE_VIDEO_AREA ||
+    snapshot.hasError === true
+  ) {
+    return null;
+  }
+
+  const currentTime = finiteNumber(snapshot.currentTime) && snapshot.currentTime >= 0
+    ? snapshot.currentTime
+    : null;
+  const duration = finiteNumber(snapshot.duration) && snapshot.duration > 0
+    ? snapshot.duration
+    : null;
+  const { subtitle, title } = playbackMetadata(snapshot.title, snapshot.subtitle);
+  const readyState = finiteNumber(snapshot.readyState) ? snapshot.readyState : 0;
+  const playbackState: LivePlaybackState = snapshot.ended === true
+    ? "ended"
+    : snapshot.paused === true
+      ? "paused"
+      : snapshot.paused === false && readyState >= 2
+        ? "playing"
+        : "unknown";
+
+  return {
+    currentTime: currentTime === null || duration === null
+      ? currentTime
+      : Math.min(currentTime, duration),
+    duration,
+    playbackState,
+    subtitle,
+    title
+  };
 }
 
 export function qualifyPlaybackSnapshot(value: unknown): QualifiedPlaybackSnapshot | null {
@@ -67,18 +155,7 @@ export function qualifyPlaybackSnapshot(value: unknown): QualifiedPlaybackSnapsh
     return null;
   }
 
-  const rawTitle = boundedText(snapshot.title) ?? "";
-  let subtitle = boundedText(snapshot.subtitle);
-  let title = rawTitle;
-
-  if (subtitle !== null && title === subtitle) {
-    subtitle = null;
-  } else if (subtitle !== null && title.includes(subtitle)) {
-    title = title
-      .replace(subtitle, "")
-      .replace(/^[\s:·|–—-]+|[\s:·|–—-]+$/g, "")
-      .trim();
-  }
+  const metadata = playbackMetadata(snapshot.title, snapshot.subtitle);
 
   const artworkUrl = typeof snapshot.artworkUrl === "string"
     ? snapshot.artworkUrl
@@ -89,10 +166,72 @@ export function qualifyPlaybackSnapshot(value: unknown): QualifiedPlaybackSnapsh
     currentTime: Math.min(snapshot.currentTime, snapshot.duration),
     duration: snapshot.duration,
     ended: snapshot.ended === true,
-    subtitle,
-    title,
+    subtitle: metadata.subtitle,
+    title: metadata.title ?? "",
     url: snapshot.url
   };
+}
+
+export function buildLivePlaybackSnapshotScript(
+  playback: NonNullable<ServiceDefinition["playback"]>,
+  serviceName = ""
+): string {
+  const titleSelectors = JSON.stringify(playback.titleSelectors);
+  const subtitleSelectors = JSON.stringify(playback.subtitleSelectors);
+  const normalizedServiceName = JSON.stringify(serviceName.trim().toLocaleLowerCase());
+
+  return `(() => {
+    const visibleArea = (video) => {
+      const style = getComputedStyle(video);
+      const rect = video.getBoundingClientRect();
+      const width = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
+      const height = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+      return style.display === "none" || style.visibility === "hidden" || Number(style.opacity) <= 0.05
+        ? 0
+        : width * height;
+    };
+    const candidate = [...document.querySelectorAll("video")]
+      .map((video) => ({ area: visibleArea(video), video }))
+      .filter(({ area, video }) => area >= ${MINIMUM_VISIBLE_VIDEO_AREA} && video.error === null)
+      .sort((left, right) => right.area - left.area)[0];
+    if (candidate === undefined) return null;
+    const video = candidate.video;
+    const readText = (selectors) => {
+      for (const selector of selectors) {
+        try {
+          const element = document.querySelector(selector);
+          const value = element instanceof HTMLMetaElement ? element.content : element?.textContent;
+          if (typeof value === "string" && value.trim().length > 0) {
+            return value.replace(/\\s+/g, " ").trim();
+          }
+        } catch {}
+      }
+      return "";
+    };
+    const activation = globalThis[${JSON.stringify(PLAYBACK_ACTIVATION_KEY)}];
+    const recentActivation = activation &&
+      typeof activation === "object" &&
+      Number.isFinite(activation.updatedAt) &&
+      Date.now() - activation.updatedAt <= ${PLAYBACK_ACTIVATION_MAX_AGE_MS}
+      ? activation
+      : null;
+    const selectorTitle = readText(${titleSelectors});
+    const activationTitle = typeof recentActivation?.title === "string" ? recentActivation.title : "";
+    const title = selectorTitle.trim().toLocaleLowerCase() === ${normalizedServiceName} && activationTitle
+      ? activationTitle
+      : selectorTitle || activationTitle;
+    return {
+      currentTime: Number.isFinite(video.currentTime) ? video.currentTime : null,
+      duration: Number.isFinite(video.duration) ? video.duration : null,
+      ended: video.ended,
+      hasError: video.error !== null,
+      paused: video.paused,
+      readyState: video.readyState,
+      subtitle: readText(${subtitleSelectors}),
+      title,
+      visibleArea: candidate.area
+    };
+  })()`;
 }
 
 export function buildPlaybackSnapshotScript(

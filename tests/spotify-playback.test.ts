@@ -21,6 +21,7 @@ describe("Spotify playback bridge", () => {
       artist: "Cloonee, Prospa",
       artworkUrl: "https://i.scdn.co/image/cover",
       durationSeconds: 181,
+      playbackState: "playing",
       playing: true,
       positionSeconds: 181,
       signedIn: true,
@@ -33,6 +34,28 @@ describe("Spotify playback bridge", () => {
       positionSeconds: -1
     }, ["i.scdn.co"])?.artworkUrl).toBeNull();
     expect(qualifySpotifyPlaybackSnapshot(null, ["i.scdn.co"])).toBeNull();
+  });
+
+  it("normalizes paused, ended, and empty-player state", () => {
+    expect(qualifySpotifyPlaybackSnapshot({
+      artist: "Artist",
+      durationSeconds: 180,
+      playing: false,
+      positionSeconds: 30,
+      title: "Track"
+    }, [])?.playbackState).toBe("paused");
+    expect(qualifySpotifyPlaybackSnapshot({
+      artist: "Artist",
+      durationSeconds: 180,
+      playing: false,
+      positionSeconds: 180,
+      title: "Track"
+    }, [])?.playbackState).toBe("ended");
+    expect(qualifySpotifyPlaybackSnapshot({
+      durationSeconds: null,
+      playing: false,
+      positionSeconds: null
+    }, [])?.playbackState).toBe("unknown");
   });
 
   it("reads semantic Now Playing fields without account or API access", () => {

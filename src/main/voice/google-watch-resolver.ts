@@ -12,6 +12,7 @@ const PANEL_TIMEOUT_MS = 12_000;
 const REDIRECT_TIMEOUT_MS = 4_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const GOOGLE_COOLDOWN_MS = 5 * 60 * 1_000;
+const MAX_CONCURRENT_REDIRECT_REQUESTS = 4;
 const PROVIDER_BODY_HOST_PATTERN = new RegExp([
   "(?:netflix|youtube|amazon|primevideo|hulu|disneyplus|max|hbomax|sling|peacocktv|paramountplus)",
   "(?:\\\\u002e|\\\\x2e|\\.)com",
@@ -363,6 +364,27 @@ function responseContainsProviderData(body: string): boolean {
     PROVIDER_BODY_HOST_PATTERN.test(body);
 }
 
+async function mapWithBoundedConcurrency<T, U>(
+  values: readonly T[],
+  concurrency: number,
+  operation: (value: T, index: number) => Promise<U>,
+  signal?: AbortSignal
+): Promise<U[]> {
+  const results = new Array<U>(values.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < values.length) {
+      signal?.throwIfAborted();
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await operation(values[index]!, index);
+    }
+  };
+  const workerCount = Math.min(values.length, Math.max(1, Math.floor(concurrency)));
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
 function extractionScript(rootExpression: string): string {
   return `(() => {
     const root = ${rootExpression};
@@ -683,7 +705,7 @@ export class GoogleWatchResolver {
     return expanded === true;
   }
 
-  async #resolveCandidate(
+  async #resolveCandidateRequest(
     candidateUrl: string,
     signal?: AbortSignal
   ): Promise<string | null> {
@@ -718,6 +740,26 @@ export class GoogleWatchResolver {
         // Some /goto links require a hidden navigation rather than a raw redirect.
       }
     }
+
+    return null;
+  }
+
+  async #resolveCandidateNavigation(
+    candidateUrl: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
+    signal?.throwIfAborted();
+    let candidate: URL;
+    try {
+      candidate = new URL(candidateUrl);
+    } catch {
+      return null;
+    }
+    if (
+      candidate.protocol !== "https:" ||
+      !["google.com", "www.google.com"].includes(candidate.hostname) ||
+      candidate.pathname !== "/goto"
+    ) return null;
 
     const resolverWindow = this.#resolverWindow;
     if (resolverWindow === null || resolverWindow.isDestroyed()) return null;
@@ -761,6 +803,14 @@ export class GoogleWatchResolver {
     });
   }
 
+  async #resolveCandidate(
+    candidateUrl: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
+    return await this.#resolveCandidateRequest(candidateUrl, signal) ??
+      this.#resolveCandidateNavigation(candidateUrl, signal);
+  }
+
   async #offers(
     panel: ExtractedWatchPanel,
     preferredProviderNames: readonly string[],
@@ -777,10 +827,21 @@ export class GoogleWatchResolver {
       }),
       preferredProviderNames
     );
+    const requestResults = stopAfterPreferredOffer
+      ? null
+      : await mapWithBoundedConcurrency(
+        candidates,
+        MAX_CONCURRENT_REDIRECT_REQUESTS,
+        (candidate) => this.#resolveCandidateRequest(candidate.href, signal),
+        signal
+      );
     let resolvedCount = 0;
-    for (const candidate of candidates) {
+    for (const [candidateIndex, candidate] of candidates.entries()) {
       signal?.throwIfAborted();
-      const resolvedUrl = await this.#resolveCandidate(candidate.href, signal);
+      const resolvedUrl = requestResults === null
+        ? await this.#resolveCandidate(candidate.href, signal)
+        : requestResults[candidateIndex] ??
+          await this.#resolveCandidateNavigation(candidate.href, signal);
       signal?.throwIfAborted();
       if (resolvedUrl === null) continue;
       const offer = googleWatchOfferFromUrl(resolvedUrl, candidate.label);
@@ -820,7 +881,7 @@ export class GoogleWatchResolver {
     const before = await this.#sessionRequest(sourceUrl, signal);
     let panel = before.hasData ? await this.#extractRequestBody(before.body) : null;
     signal?.throwIfAborted();
-    let offerResolution: GoogleWatchOfferResolution = panel === null
+    let offerResolution: GoogleWatchOfferResolution = panel === null || requireCompleteOffers
       ? { candidateCount: 0, offers: [], resolvedCount: 0, stoppedEarly: false }
       : await this.#offers(
         panel,

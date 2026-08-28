@@ -5,15 +5,22 @@ import type {
 } from "../src/main/voice/google-watch-cache";
 
 const electron = vi.hoisted(() => {
-  const behavior = { extractionResult: undefined as unknown };
+  const behavior = {
+    extractionResult: undefined as unknown | ((script: string) => unknown)
+  };
   const fetch = vi.fn();
   const windows: FakeBrowserWindow[] = [];
 
   class FakeWebContents {
     destroyed = false;
-    executeJavaScript = vi.fn(() => behavior.extractionResult === undefined
-      ? new Promise<never>(() => undefined)
-      : Promise.resolve(behavior.extractionResult));
+    executeJavaScript = vi.fn((script: string) => {
+      const configured = typeof behavior.extractionResult === "function"
+        ? behavior.extractionResult(script)
+        : behavior.extractionResult;
+      return configured === undefined
+        ? new Promise<never>(() => undefined)
+        : Promise.resolve(configured);
+    });
     isDestroyed = vi.fn(() => this.destroyed);
     on = vi.fn();
     removeListener = vi.fn();
@@ -121,6 +128,68 @@ beforeEach(() => {
 });
 
 describe("Google watch resolver cancellation", () => {
+  it("resolves complete warmed-session provider redirects concurrently", async () => {
+    const locations = new Map([
+      ["netflix", "https://www.netflix.com/watch/70196252"],
+      ["youtube", "https://www.youtube.com/watch?v=abcdefghijk"],
+      ["prime", "https://www.primevideo.com/detail/example-id"],
+      ["hulu", "https://www.hulu.com/movie/example-id"]
+    ]);
+    const panel = {
+      candidateLinks: [...locations.keys()].map((id) => ({
+        href: `https://www.google.com/goto?id=${id}`,
+        label: `${id} Subscription`
+      })),
+      episodeMetadataCandidates: [],
+      resolvedSubtitle: null,
+      resolvedTitle: "Breaking Bad"
+    };
+    electron.behavior.extractionResult = (script: string) => {
+      if (script.includes("captcha:")) return { captcha: false, watch: true };
+      if (script.includes("const button =")) return false;
+      return panel;
+    };
+    let activeRedirects = 0;
+    let maxActiveRedirects = 0;
+    let redirectRequestCount = 0;
+    electron.fetch.mockImplementation(async (input: string) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/goto") {
+        redirectRequestCount += 1;
+        activeRedirects += 1;
+        maxActiveRedirects = Math.max(maxActiveRedirects, activeRedirects);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        activeRedirects -= 1;
+        return new Response(null, {
+          headers: { location: locations.get(url.searchParams.get("id") ?? "") ?? "" },
+          status: 302
+        });
+      }
+      return new Response("<div>Where to watch netflix.com</div>", { status: 200 });
+    });
+    const save = vi.fn();
+    const resolver = new GoogleWatchResolver({
+      cache: {
+        getFresh: vi.fn(() => null),
+        invalidate: vi.fn(),
+        save
+      } as unknown as GoogleWatchCache
+    });
+
+    await expect(resolver.resolve(lookup, { completeOffers: true })).resolves.toMatchObject({
+      offers: expect.arrayContaining([
+        expect.objectContaining({ providerName: "Netflix" }),
+        expect.objectContaining({ providerName: "YouTube" }),
+        expect.objectContaining({ providerName: "Amazon Prime Video" }),
+        expect.objectContaining({ providerName: "Hulu" })
+      ]),
+      offersComplete: true
+    });
+    expect(maxActiveRedirects).toBe(4);
+    expect(redirectRequestCount).toBe(4);
+    expect(save).toHaveBeenCalledOnce();
+  });
+
   it("invalidates a fresh cache row whose resolved title does not match", async () => {
     electron.fetch.mockResolvedValue(new Response("", { status: 429 }));
     const invalidate = vi.fn();

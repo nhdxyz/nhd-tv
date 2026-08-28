@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   googleWatchLookupFromIntent,
+  googleWatchMetadataForLookup,
   googleWatchOfferFromUrl,
   googleWatchSearchUrl
 } from "../src/main/voice/google-watch-resolver";
@@ -71,8 +72,51 @@ describe("Google watch resolver boundary", () => {
       episodeNumber: 3,
       mediaType: "episode",
       queryText: "Breaking Bad season 1 episode 3",
+      requestedTitle: "Breaking Bad",
       seasonNumber: 1
     });
+  });
+
+  it("never treats a generated episode query as verified result metadata", () => {
+    const lookup = googleWatchLookupFromIntent(intent({
+      episode: 4,
+      mediaType: "episode",
+      season: 1,
+      title: "Breaking Bad"
+    }), "US");
+    expect(googleWatchMetadataForLookup(lookup, {
+      episodeMetadataCandidates: [
+        "Breaking Bad season 1 episode 4",
+        "Breaking Bad: Season 1, Episode 4"
+      ],
+      resolvedSubtitle: "Breaking Bad season 1 episode 4",
+      resolvedTitle: "Cancer Man"
+    })).toEqual({
+      resolvedSubtitle: "Breaking Bad: Season 1, Episode 4",
+      resolvedTitle: "Breaking Bad"
+    });
+    expect(googleWatchMetadataForLookup(lookup, {
+      resolvedSubtitle: "Breaking Bad season 1 episode 4",
+      resolvedTitle: "Breaking Bad season 1 episode 4"
+    })).toEqual({ resolvedSubtitle: null, resolvedTitle: null });
+    expect(googleWatchMetadataForLookup(lookup, {
+      resolvedSubtitle: "S1 E4 — Cancer Man",
+      resolvedTitle: "Breaking Bad"
+    })).toEqual({
+      resolvedSubtitle: "S1 E4 — Cancer Man",
+      resolvedTitle: "Breaking Bad"
+    });
+  });
+
+  it("keeps a plain show title that legitimately matches its query", () => {
+    const lookup = googleWatchLookupFromIntent(intent({
+      mediaType: "show",
+      title: "Breaking Bad"
+    }), "US");
+    expect(googleWatchMetadataForLookup(lookup, {
+      resolvedSubtitle: null,
+      resolvedTitle: "Breaking Bad"
+    })).toEqual({ resolvedSubtitle: null, resolvedTitle: "Breaking Bad" });
   });
 
   it("allows only known HTTPS provider destinations", () => {
@@ -88,5 +132,14 @@ describe("Google watch resolver boundary", () => {
       .toBeNull();
     expect(googleWatchOfferFromUrl("https://netflix.com.evil.test/watch/1", "Netflix"))
       .toBeNull();
+    expect(googleWatchOfferFromUrl(
+      "https://www.primevideo.com/detail/example-id",
+      "Amazon Prime Video Subscription"
+    )).toMatchObject({
+      providerContentId: "example-id",
+      providerName: "Amazon Prime Video"
+    });
+    expect(googleWatchOfferFromUrl("https://play.max.com/video/watch/example-id", "Max"))
+      .toMatchObject({ providerName: "Max" });
   });
 });

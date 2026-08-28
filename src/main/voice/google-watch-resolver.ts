@@ -10,6 +10,13 @@ const MAX_GOOGLE_RESPONSE_BYTES = 5 * 1024 * 1024;
 const PANEL_TIMEOUT_MS = 12_000;
 const REDIRECT_TIMEOUT_MS = 4_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const PROVIDER_BODY_HOST_PATTERN = new RegExp([
+  "(?:netflix|youtube|amazon|primevideo|hulu|disneyplus|max|peacocktv|paramountplus)",
+  "(?:\\\\u002e|\\\\x2e|\\.)com",
+  "|tv(?:\\\\u002e|\\\\x2e|\\.)apple(?:\\\\u002e|\\\\x2e|\\.)com",
+  "|play(?:\\\\u002e|\\\\x2e|\\.)google(?:\\\\u002e|\\\\x2e|\\.)com",
+  "|athome(?:\\\\u002e|\\\\x2e|\\.)fandango(?:\\\\u002e|\\\\x2e|\\.)com"
+].join(""), "i");
 
 const PROVIDER_NAMES: ReadonlyMap<string, string> = new Map([
   ["www.netflix.com", "Netflix"],
@@ -21,15 +28,19 @@ const PROVIDER_NAMES: ReadonlyMap<string, string> = new Map([
   ["athome.fandango.com", "Fandango"],
   ["www.amazon.com", "Amazon Prime Video"],
   ["amazon.com", "Amazon Prime Video"],
+  ["www.primevideo.com", "Amazon Prime Video"],
+  ["primevideo.com", "Amazon Prime Video"],
   ["www.hulu.com", "Hulu"],
   ["www.disneyplus.com", "Disney+"],
   ["www.max.com", "Max"],
+  ["play.max.com", "Max"],
   ["www.peacocktv.com", "Peacock"],
   ["www.paramountplus.com", "Paramount+"]
 ]);
 
 interface ExtractedWatchPanel {
   candidateLinks: Array<{ href: string; label: string }>;
+  episodeMetadataCandidates: string[];
   resolvedSubtitle: string | null;
   resolvedTitle: string | null;
 }
@@ -39,6 +50,7 @@ export interface GoogleWatchLookup {
   episodeNumber: number | null;
   mediaType: string;
   queryText: string;
+  requestedTitle: string;
   seasonNumber: number | null;
 }
 
@@ -125,7 +137,73 @@ export function googleWatchLookupFromIntent(
     episodeNumber: intent.episode,
     mediaType: intent.mediaType,
     queryText: `${intent.title}${episodeSuffix}`,
+    requestedTitle: intent.title,
     seasonNumber: intent.season
+  };
+}
+
+function normalizedMetadataText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("en-US");
+}
+
+/**
+ * Removes metadata that merely repeats a generated Google query. A query echo
+ * is not independent evidence that Google resolved the requested movie or
+ * episode, and trusting it can launch a different title or episode directly.
+ */
+export function googleWatchMetadataForLookup(
+  lookup: Pick<
+    GoogleWatchLookup,
+    "episodeNumber" | "queryText" | "requestedTitle" | "seasonNumber"
+  >,
+  metadata: Pick<ExtractedWatchPanel, "resolvedSubtitle" | "resolvedTitle"> & {
+    episodeMetadataCandidates?: readonly string[];
+  }
+): Pick<ExtractedWatchPanel, "resolvedSubtitle" | "resolvedTitle"> {
+  const queryText = normalizedMetadataText(lookup.queryText);
+  const queryAddsDisambiguation = queryText !== normalizedMetadataText(lookup.requestedTitle);
+  const verified = (value: string | null): string | null => {
+    const candidate = value?.replace(/\s+/g, " ").trim() ?? "";
+    if (candidate.length === 0) return null;
+    return queryAddsDisambiguation && normalizedMetadataText(candidate) === queryText
+      ? null
+      : candidate;
+  };
+  if (lookup.seasonNumber !== null && lookup.episodeNumber !== null) {
+    const structuredEpisode = [...(metadata.episodeMetadataCandidates ?? [])]
+      .reverse()
+      .flatMap((candidate) => {
+        if (normalizedMetadataText(candidate) === queryText) return [];
+        const match = new RegExp(
+          `^(.+?)\\s*:\\s*season\\s*0*${lookup.seasonNumber}` +
+          `\\s*,?\\s*episode\\s*0*${lookup.episodeNumber}(?:\\D|$)`,
+          "i"
+        ).exec(candidate);
+        if (match === null) return [];
+        const title = match[1]?.replace(/\s+/g, " ").trim() ?? "";
+        return title.length === 0
+          ? []
+          : [{ resolvedSubtitle: candidate, resolvedTitle: title }];
+      })[0];
+    if (structuredEpisode !== undefined) return structuredEpisode;
+  }
+  return {
+    resolvedSubtitle: verified(metadata.resolvedSubtitle),
+    resolvedTitle: verified(metadata.resolvedTitle)
+  };
+}
+
+function verifiedCachedResult(
+  result: GoogleWatchResult,
+  lookup: GoogleWatchLookup
+): GoogleWatchResult {
+  return {
+    ...result,
+    ...googleWatchMetadataForLookup(lookup, result)
   };
 }
 
@@ -138,7 +216,7 @@ function providerContentId(url: URL): string | null {
   if (url.hostname === "tv.apple.com") {
     return url.pathname.match(/\/(umc\.cmc\.[^/?]+)/)?.[1] ?? null;
   }
-  if (url.hostname.endsWith("amazon.com")) {
+  if (url.hostname.endsWith("amazon.com") || url.hostname.endsWith("primevideo.com")) {
     return url.pathname.match(/\/detail\/([^/?]+)/)?.[1] ?? null;
   }
   return url.pathname.split("/").filter(Boolean).at(-1) ?? null;
@@ -177,7 +255,7 @@ export function googleWatchOfferFromUrl(
 
 function responseContainsProviderData(body: string): boolean {
   return /Where.{0,24}to.{0,24}watch/i.test(body) &&
-    /netflix(?:\\u002e|\\x2e|\.)com|tv(?:\\u002e|\\x2e|\.)apple(?:\\u002e|\\x2e|\.)com|athome(?:\\u002e|\\x2e|\.)fandango(?:\\u002e|\\x2e|\.)com/i.test(body);
+    PROVIDER_BODY_HOST_PATTERN.test(body);
 }
 
 function extractionScript(rootExpression: string): string {
@@ -198,11 +276,17 @@ function extractionScript(rootExpression: string): string {
         !/^(search results|web results|videos|images|top stories|cast|ask anything in ai mode)$/i.test(text));
     const lines = [...root.querySelectorAll('body *:not(style):not(script):not(noscript)')]
       .filter((element) => element.children.length === 0)
+      .filter((element) => (element.compareDocumentPosition(watchList) & 4) !== 0)
       .map((element) => normalize(element.textContent))
       .filter((text) => text && text.length <= 240);
     return {
       candidateLinks,
-      resolvedSubtitle: lines.find((line) => /season\\s+\\d+.*episode\\s+\\d+/i.test(line)) ?? null,
+      episodeMetadataCandidates: lines.filter((line) =>
+        /season\\s+\\d+.*episode\\s+\\d+|\\bs\\s*\\d+\\s*e\\s*\\d+\\b/i.test(line)
+      ),
+      resolvedSubtitle: lines.find((line) =>
+        /season\\s+\\d+.*episode\\s+\\d+|\\bs\\s*\\d+\\s*e\\s*\\d+\\b/i.test(line)
+      ) ?? null,
       resolvedTitle: headings.at(-1) ?? null
     };
   })()`;
@@ -221,6 +305,11 @@ function parsedExtraction(value: unknown): ExtractedWatchPanel | null {
   }).slice(0, 20);
   return {
     candidateLinks,
+    episodeMetadataCandidates: Array.isArray(candidate.episodeMetadataCandidates)
+      ? candidate.episodeMetadataCandidates.filter((line): line is string =>
+        typeof line === "string"
+      ).map((line) => line.slice(0, 240)).slice(0, 40)
+      : [],
     resolvedSubtitle: typeof candidate.resolvedSubtitle === "string"
       ? candidate.resolvedSubtitle.slice(0, 240)
       : null,
@@ -300,7 +389,9 @@ export class GoogleWatchResolver {
     const countryCode = normalizedCountry(lookup.countryCode);
     const completeOffers = options.completeOffers === true;
     const fresh = this.#cache.getFresh(lookup.queryText, countryCode);
-    if (fresh !== null && (!completeOffers || fresh.offersComplete)) return fresh;
+    if (fresh !== null && (!completeOffers || fresh.offersComplete)) {
+      return verifiedCachedResult(fresh, lookup);
+    }
 
     const resolution = Symbol("google-watch-resolution");
     const task = this.#sequence.catch(() => undefined).then(async () => {
@@ -309,7 +400,7 @@ export class GoogleWatchResolver {
       try {
         const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
         if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
-          return secondFresh;
+          return verifiedCachedResult(secondFresh, lookup);
         }
         await this.warm(signal);
         return await this.#resolveUncached(
@@ -583,6 +674,7 @@ export class GoogleWatchResolver {
     }
 
     const fetchedAt = new Date();
+    const metadata = googleWatchMetadataForLookup(lookup, panel);
     const result: GoogleWatchResult = {
       countryCode: lookup.countryCode,
       episodeNumber: lookup.episodeNumber,
@@ -595,8 +687,8 @@ export class GoogleWatchResolver {
       renderMs,
       requestAfterRenderHasData,
       requestBeforeRenderHasData: before.hasData,
-      resolvedSubtitle: panel.resolvedSubtitle,
-      resolvedTitle: panel.resolvedTitle ?? lookup.queryText,
+      resolvedSubtitle: metadata.resolvedSubtitle,
+      resolvedTitle: metadata.resolvedTitle,
       retrievalMode,
       seasonNumber: lookup.seasonNumber,
       source: "google-search",

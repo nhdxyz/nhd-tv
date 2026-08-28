@@ -58,6 +58,7 @@ const lookup = {
   episodeNumber: null,
   mediaType: "show",
   queryText: "Breaking Bad",
+  requestedTitle: "Breaking Bad",
   seasonNumber: null
 };
 

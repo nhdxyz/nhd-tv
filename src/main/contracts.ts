@@ -243,6 +243,10 @@ export interface HostStatus {
   navigation: {
     lastBlocked: NavigationDiagnostic | null;
   };
+  playback: {
+    active: boolean;
+    backgrounded: boolean;
+  };
   runtime: {
     chrome: string;
     electron: string;

@@ -50,6 +50,9 @@ describe("TV catalog layout", () => {
     expect(css).toContain('.catalog-card[data-service-id="spotify"]');
     expect(css).toContain('.service-logo[data-brand="spotify"]');
     expect(css).toContain('.search-result-card[data-service-id="spotify"]');
+    expect(html).toContain('class="spotify-home-player"');
+    expect(css).toContain(".spotify-home-copy");
+    expect(css).toContain(".spotify-home-transport");
   });
 
   it("loads Spotify's dedicated TV Mode extension", () => {

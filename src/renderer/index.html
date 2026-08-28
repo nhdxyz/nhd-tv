@@ -151,6 +151,47 @@
           </div>
         </section>
 
+        <section
+          class="spotify-home-player"
+          id="spotify-home-player"
+          data-active="false"
+          data-playing="false"
+          aria-labelledby="spotify-home-title"
+          hidden
+        >
+          <div class="spotify-home-brand" id="spotify-home-brand" aria-hidden="true"></div>
+          <div class="spotify-home-copy">
+            <p class="eyebrow">Spotify on Home</p>
+            <h2 id="spotify-home-title">Keep the music going.</h2>
+            <p id="spotify-home-status" aria-live="polite">
+              Choose music in Spotify, then press Home to control it here.
+            </p>
+          </div>
+          <div class="spotify-home-transport" data-nav-group="spotify-home-transport">
+            <button id="spotify-home-previous" type="button" aria-label="Previous Spotify track" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5h2v14H5V5Zm3.5 7 10-6v12l-10-6Z"></path>
+              </svg>
+            </button>
+            <button class="spotify-home-play" id="spotify-home-play" type="button" aria-label="Play Spotify" disabled>
+              <svg class="spotify-home-play-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m8 5 11 7-11 7V5Z"></path>
+              </svg>
+              <svg class="spotify-home-pause-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"></path>
+              </svg>
+            </button>
+            <button id="spotify-home-next" type="button" aria-label="Next Spotify track" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M17 5h2v14h-2V5ZM5.5 6l10 6-10 6V6Z"></path>
+              </svg>
+            </button>
+          </div>
+          <button class="spotify-home-open" id="spotify-home-open" type="button">
+            Open Spotify
+          </button>
+        </section>
+
         <section class="rail continue-rail" aria-labelledby="continue-title">
           <div class="section-heading">
             <h2 id="continue-title">Continue Watching</h2>

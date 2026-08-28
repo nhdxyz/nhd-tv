@@ -177,6 +177,13 @@ const elements = {
   searchProviderSection: requireElement<HTMLElement>("#search-provider-section", "search-provider-section"),
   searchResultCount: requireElement<HTMLSpanElement>("#search-result-count", "search-result-count"),
   searchResults: requireElement<HTMLDivElement>("#search-results", "search-results"),
+  spotifyHomeBrand: requireElement<HTMLDivElement>("#spotify-home-brand", "spotify-home-brand"),
+  spotifyHomeNext: requireElement<HTMLButtonElement>("#spotify-home-next", "spotify-home-next"),
+  spotifyHomeOpen: requireElement<HTMLButtonElement>("#spotify-home-open", "spotify-home-open"),
+  spotifyHomePlay: requireElement<HTMLButtonElement>("#spotify-home-play", "spotify-home-play"),
+  spotifyHomePlayer: requireElement<HTMLElement>("#spotify-home-player", "spotify-home-player"),
+  spotifyHomePrevious: requireElement<HTMLButtonElement>("#spotify-home-previous", "spotify-home-previous"),
+  spotifyHomeStatus: requireElement<HTMLParagraphElement>("#spotify-home-status", "spotify-home-status"),
   settingsRemoteButton: requireElement<HTMLButtonElement>("#settings-remote-button", "settings-remote-button"),
   settingsRemoteCopy: requireElement<HTMLElement>("#settings-remote-copy", "settings-remote-copy"),
   soundToggle: requireElement<HTMLButtonElement>("#sound-toggle", "sound-toggle"),
@@ -200,6 +207,7 @@ const elements = {
 
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
+let currentHostStatus: HostStatus | null = null;
 let currentServiceRecovery: ServiceRecoveryRequest | null = null;
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let catalogSearchTimer: number | null = null;
@@ -233,6 +241,35 @@ function showFeedback(message: string): void {
     elements.feedback.textContent = "";
     feedbackTimer = null;
   }, 4_000);
+}
+
+function renderSpotifyHomePlayer(): void {
+  const enabled = enabledServiceIds.has("spotify");
+  elements.spotifyHomePlayer.hidden = !enabled;
+  if (!enabled) return;
+
+  if (elements.spotifyHomeBrand.childElementCount === 0) {
+    elements.spotifyHomeBrand.append(createServiceMark("spotify", "Spotify"));
+  }
+
+  const backgrounded = currentHostStatus?.activeServiceId === "spotify" &&
+    currentHostStatus.playback.backgrounded;
+  const playing = backgrounded && currentHostStatus?.playback.active === true;
+  elements.spotifyHomePlayer.dataset.active = String(backgrounded);
+  elements.spotifyHomePlayer.dataset.playing = String(playing);
+  elements.spotifyHomePrevious.disabled = !backgrounded;
+  elements.spotifyHomePlay.disabled = !backgrounded;
+  elements.spotifyHomeNext.disabled = !backgrounded;
+  elements.spotifyHomePlay.setAttribute(
+    "aria-label",
+    playing ? "Pause Spotify" : "Play Spotify"
+  );
+  elements.spotifyHomeOpen.textContent = backgrounded ? "Return to Spotify" : "Open Spotify";
+  elements.spotifyHomeStatus.textContent = backgrounded
+    ? playing
+      ? "Playing in the background · use the remote controls without leaving Home."
+      : "Paused in the background · press Play whenever you are ready."
+    : "Choose music in Spotify, then press Home to keep it playing and control it here.";
 }
 
 function renderNetworkState(): void {
@@ -294,6 +331,7 @@ function hideQuitServicePreview(): void {
 }
 
 function renderStatus(status: HostStatus): void {
+  currentHostStatus = status;
   if (status.activeServiceId === null) {
     if (elements.quitDialog.open) {
       elements.quitDialog.close();
@@ -315,6 +353,7 @@ function renderStatus(status: HostStatus): void {
   elements.displayCopy.textContent = status.display.count === 1
     ? `${status.display.label} · only display connected`
     : `${status.display.label} · ${status.display.count} displays connected`;
+  renderSpotifyHomePlayer();
   const serviceProcess = status.diagnostics.serviceRenderer;
   const gpuProcess = status.diagnostics.gpuProcess;
   const lastBlocked = status.navigation.lastBlocked;
@@ -385,6 +424,7 @@ function applyLocalAppState(state: LocalAppState): void {
     : "Off · ordinary YouTube";
   elements.youtubeTvScaleCopy.textContent =
     `${state.devicePreferences.youtubeTvScale[0]?.toUpperCase() ?? "S"}${state.devicePreferences.youtubeTvScale.slice(1)}`;
+  renderSpotifyHomePlayer();
 }
 
 async function saveProfilePreferences(): Promise<void> {
@@ -682,6 +722,34 @@ async function openService(serviceId: string, serviceName: string): Promise<void
     showFeedback(error instanceof Error ? error.message : String(error));
   }
 }
+
+async function sendSpotifyHomeAction(
+  action: "fast-forward" | "play-pause" | "rewind",
+  feedback: string
+): Promise<void> {
+  try {
+    if (await window.nhd.sendInputAction(action)) {
+      showFeedback(feedback);
+    } else {
+      showFeedback("Spotify is not ready for that control yet.");
+    }
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  }
+}
+
+elements.spotifyHomePrevious.addEventListener("click", () => {
+  void sendSpotifyHomeAction("rewind", "Previous track sent to Spotify.");
+});
+elements.spotifyHomePlay.addEventListener("click", () => {
+  void sendSpotifyHomeAction("play-pause", "Playback control sent to Spotify.");
+});
+elements.spotifyHomeNext.addEventListener("click", () => {
+  void sendSpotifyHomeAction("fast-forward", "Next track sent to Spotify.");
+});
+elements.spotifyHomeOpen.addEventListener("click", () => {
+  void openService("spotify", "Spotify");
+});
 
 function serviceTile(service: ServiceSummary): HTMLButtonElement {
   const button = document.createElement("button");

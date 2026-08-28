@@ -629,6 +629,7 @@ export class ServiceHost {
   readonly #onSystemVolume: SystemVolumeListener;
   #activeDefinition: ServiceDefinition | null = null;
   #ambientDisplayVisible = false;
+  #backgrounded = false;
   #htmlFullscreen = false;
   #lastBlockedNavigation: NavigationDiagnostic | null = null;
   #popupWindow: BrowserWindow | null = null;
@@ -680,6 +681,10 @@ export class ServiceHost {
     return this.#playbackActive;
   }
 
+  get isBackgrounded(): boolean {
+    return this.#backgrounded;
+  }
+
   get isHtmlFullscreen(): boolean {
     return this.#htmlFullscreen;
   }
@@ -716,7 +721,7 @@ export class ServiceHost {
     }
 
     this.#ambientDisplayVisible = true;
-    if (view !== null && !view.webContents.isDestroyed()) {
+    if (view !== null && !view.webContents.isDestroyed() && !this.#backgrounded) {
       this.#window.contentView.removeChildView(view);
       this.#window.webContents.focus();
     }
@@ -733,7 +738,8 @@ export class ServiceHost {
     if (
       view !== null &&
       !view.webContents.isDestroyed() &&
-      !this.#quitPromptVisible
+      !this.#quitPromptVisible &&
+      !this.#backgrounded
     ) {
       this.#window.contentView.addChildView(view);
       this.#resize();
@@ -748,6 +754,17 @@ export class ServiceHost {
       definition.allowedSubdomainHosts
     )) {
       throw new Error(`Initial service URL is outside the ${definition.name} boundary.`);
+    }
+
+    if (
+      this.#backgrounded &&
+      this.#activeDefinition?.id === definition.id &&
+      this.#view !== null &&
+      !this.#view.webContents.isDestroyed() &&
+      initialUrl === definition.startUrl
+    ) {
+      this.restoreFromHome();
+      return;
     }
 
     await this.closeWithCheckpoint();
@@ -768,6 +785,7 @@ export class ServiceHost {
     const view = new WebContentsView({
       webPreferences: {
         allowRunningInsecureContent: false,
+        backgroundThrottling: definition.id !== "spotify",
         contextIsolation: true,
         devTools: process.argv.includes("--devtools"),
         nodeIntegration: false,
@@ -1061,6 +1079,7 @@ export class ServiceHost {
 
     this.#view = view;
     this.#activeDefinition = definition;
+    this.#backgrounded = false;
     this.#window.contentView.addChildView(view);
     this.#resize();
     view.webContents.focus();
@@ -1101,7 +1120,8 @@ export class ServiceHost {
     const view = this.#view;
     const viewWasAttached = view !== null &&
       !this.#quitPromptVisible &&
-      !this.#ambientDisplayVisible;
+      !this.#ambientDisplayVisible &&
+      !this.#backgrounded;
 
     if (this.#playbackTimer !== null) {
       clearInterval(this.#playbackTimer);
@@ -1120,6 +1140,7 @@ export class ServiceHost {
     this.#view = null;
     this.#activeDefinition = null;
     this.#ambientDisplayVisible = false;
+    this.#backgrounded = false;
     this.#playbackActive = false;
     this.#pointerSnapKey = null;
     this.#popupWindow = null;
@@ -1161,6 +1182,45 @@ export class ServiceHost {
       delay(350)
     ]).catch(() => undefined);
     this.close();
+  }
+
+  returnHomeInBackground(): boolean {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (
+      view === null ||
+      definition?.id !== "spotify" ||
+      view.webContents.isDestroyed() ||
+      this.#quitPromptVisible ||
+      this.#htmlFullscreen ||
+      (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
+    ) {
+      return false;
+    }
+
+    if (!this.#backgrounded) {
+      this.#window.contentView.removeChildView(view);
+      this.#backgrounded = true;
+      this.#pointerSnapKey = null;
+    }
+    this.#window.focus();
+    this.#window.webContents.focus();
+    this.#onStateChanged(definition.id);
+    return true;
+  }
+
+  restoreFromHome(): boolean {
+    const view = this.#view;
+    if (!this.#backgrounded || view === null || view.webContents.isDestroyed()) {
+      return false;
+    }
+
+    this.#backgrounded = false;
+    this.#window.contentView.addChildView(view);
+    this.#resize();
+    view.webContents.focus();
+    this.#onStateChanged(this.activeServiceId);
+    return true;
   }
 
   async prepareForSuspend(): Promise<void> {
@@ -1363,6 +1423,10 @@ export class ServiceHost {
       return false;
     }
 
+    if (this.#backgrounded && !isMediaAction(action)) {
+      return false;
+    }
+
     if (action === "back") {
       return this.requestBack();
     }
@@ -1400,6 +1464,7 @@ export class ServiceHost {
       view === null ||
       definition === null ||
       view.webContents.isDestroyed() ||
+      this.#backgrounded ||
       (input.phase !== "hide" && (
         this.#quitPromptVisible ||
         (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
@@ -1471,6 +1536,7 @@ export class ServiceHost {
       definition === null ||
       definition.remoteTextEntrySelectors.length === 0 ||
       view.webContents.isDestroyed() ||
+      this.#backgrounded ||
       this.#quitPromptVisible ||
       (this.#popupWindow !== null && !this.#popupWindow.isDestroyed())
     ) {
@@ -1916,7 +1982,9 @@ export class ServiceHost {
 
     const keyCode = nativeMediaKeyCode(action, this.#activeDefinition?.id ?? null);
     this.#window.focus();
-    view.webContents.focus();
+    if (!this.#backgrounded) {
+      view.webContents.focus();
+    }
     this.#replayingInput = true;
 
     try {

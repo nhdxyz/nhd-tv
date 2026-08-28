@@ -376,6 +376,10 @@ function hostStatus(): HostStatus {
     navigation: {
       lastBlocked: serviceHost?.lastBlockedNavigation ?? null
     },
+    playback: {
+      active: serviceHost?.isPlaybackActive ?? false,
+      backgrounded: serviceHost?.isBackgrounded ?? false
+    },
     runtime: {
       chrome: process.versions.chrome ?? "unknown",
       electron: process.versions.electron ?? "unknown",
@@ -702,7 +706,9 @@ function remoteControlContext(): RemoteControlContext {
   return {
     activeServiceId,
     activeServiceName,
-    searchLabel: definition?.search === null || definition === null
+    searchLabel: serviceHost?.isBackgrounded === true ||
+      definition?.search === null ||
+      definition === null
       ? "Search NHD-TV"
       : `Search ${activeServiceName}`
   };
@@ -731,7 +737,7 @@ async function handleRemoteSearch(query: string): Promise<void> {
   }
   markAmbientActivity();
   const destination = resolveRemoteSearchDestination(
-    serviceHost?.activeServiceId ?? null,
+    serviceHost?.isBackgrounded === true ? null : serviceHost?.activeServiceId ?? null,
     query
   );
   if (destination === null) {
@@ -743,7 +749,9 @@ async function handleRemoteSearch(query: string): Promise<void> {
     return;
   }
 
-  await serviceHost?.closeWithCheckpoint();
+  if (serviceHost?.isBackgrounded !== true) {
+    await serviceHost?.closeWithCheckpoint();
+  }
 
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.remoteSearchRequested, destination.query);
@@ -786,8 +794,23 @@ async function handleRemoteAction(action: RemoteAction): Promise<RemoteActionOut
       return { detail: "Close the app prompt before using playback controls", handled: false };
     }
 
+    if (serviceHost.isBackgrounded) {
+      if (isMediaAction(action)) {
+        return { handled: await serviceHost.sendRemoteAction(action) };
+      }
+      if (mainWindow !== null && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_CHANNELS.remoteAction, action);
+      }
+      return { handled: true };
+    }
+
     if (action === "home") {
-      await serviceHost.closeWithCheckpoint();
+      if (!serviceHost.returnHomeInBackground()) {
+        await serviceHost.closeWithCheckpoint();
+      }
+      if (mainWindow !== null && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
+      }
       return { handled: true };
     }
 
@@ -814,6 +837,7 @@ async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePoi
   if (
     serviceHost !== null &&
     serviceHost.activeServiceId !== null &&
+    !serviceHost.isBackgrounded &&
     (input.phase === "hide" || !serviceHost.isQuitPromptVisible)
   ) {
     const result = await serviceHost.sendRemotePointer(input);
@@ -860,6 +884,7 @@ async function handleRemoteText(input: RemoteTextInput): Promise<boolean> {
   if (
     serviceHost !== null &&
     serviceHost.activeServiceId !== null &&
+    !serviceHost.isBackgrounded &&
     !serviceHost.isQuitPromptVisible
   ) {
     return serviceHost.sendRemoteText(input);

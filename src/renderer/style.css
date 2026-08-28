@@ -1048,6 +1048,168 @@ summary:focus-visible {
   opacity: 0.58;
 }
 
+.spotify-home-player {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto minmax(16rem, 1fr) auto auto;
+  align-items: center;
+  gap: clamp(1rem, 2vw, 2rem);
+  min-height: 7.5rem;
+  margin-top: -0.15rem;
+  padding: 1rem 1.1rem 1rem 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(30 215 96 / 25%);
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(circle at 7% 25%, rgb(30 215 96 / 22%), transparent 10rem),
+    linear-gradient(105deg, rgb(10 24 15 / 98%), rgb(13 17 15 / 98%) 52%, rgb(8 10 9 / 98%));
+  box-shadow: inset 0 1px rgb(255 255 255 / 7%), 0 1.4rem 3.5rem rgb(0 0 0 / 26%);
+}
+
+.spotify-home-player::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 62%, rgb(30 215 96 / 5%));
+  content: "";
+  pointer-events: none;
+}
+
+.spotify-home-player[data-active="true"] {
+  border-color: rgb(30 215 96 / 48%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 9%),
+    0 0 0 1px rgb(30 215 96 / 7%),
+    0 1.5rem 4rem rgb(0 0 0 / 32%);
+}
+
+.spotify-home-brand,
+.spotify-home-copy,
+.spotify-home-transport,
+.spotify-home-open {
+  position: relative;
+  z-index: 1;
+}
+
+.spotify-home-brand {
+  display: grid;
+  width: 4.75rem;
+  height: 4.75rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1.15rem;
+  background: rgb(0 0 0 / 24%);
+}
+
+.spotify-home-brand .service-logo,
+.spotify-home-brand .service-monogram {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+.spotify-home-copy {
+  min-width: 0;
+}
+
+.spotify-home-copy .eyebrow {
+  color: #1ed760;
+}
+
+.spotify-home-copy h2 {
+  margin: 0.18rem 0 0;
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  letter-spacing: -0.035em;
+}
+
+.spotify-home-copy p:last-child {
+  overflow: hidden;
+  margin: 0.25rem 0 0;
+  color: #aeb8b1;
+  font-size: clamp(0.84rem, 1.05vw, 1rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotify-home-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.spotify-home-transport button {
+  display: grid;
+  width: 3.15rem;
+  height: 3.15rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+
+.spotify-home-transport button:disabled {
+  opacity: 0.34;
+}
+
+.spotify-home-transport button:not(:disabled):hover,
+.spotify-home-transport button:not(:disabled):focus-visible {
+  border-color: #fff;
+  background: rgb(255 255 255 / 16%);
+  box-shadow: 0 0 0 0.28rem rgb(255 255 255 / 10%);
+  transform: scale(1.06);
+}
+
+.spotify-home-transport button svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: currentColor;
+}
+
+.spotify-home-transport .spotify-home-play {
+  width: 4rem;
+  height: 4rem;
+  border-color: transparent;
+  background: #1ed760;
+  color: #061008;
+  box-shadow: 0 0.8rem 2.2rem rgb(30 215 96 / 18%);
+}
+
+.spotify-home-transport .spotify-home-play:not(:disabled):hover,
+.spotify-home-transport .spotify-home-play:not(:disabled):focus-visible {
+  background: #32e675;
+  box-shadow: 0 0 0 0.3rem rgb(30 215 96 / 20%), 0 1rem 2.5rem rgb(30 215 96 / 22%);
+}
+
+.spotify-home-pause-icon,
+.spotify-home-player[data-playing="true"] .spotify-home-play-icon {
+  display: none;
+}
+
+.spotify-home-player[data-playing="true"] .spotify-home-pause-icon {
+  display: block;
+}
+
+.spotify-home-open {
+  min-height: 3.2rem;
+  padding: 0 1.25rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.spotify-home-open:hover,
+.spotify-home-open:focus-visible {
+  border-color: #fff;
+  background: #fff;
+  color: #071009;
+  box-shadow: 0 0 0 0.28rem rgb(255 255 255 / 12%);
+  transform: translateY(-0.1rem);
+}
+
 .rail {
   position: relative;
   z-index: 1;
@@ -2971,6 +3133,16 @@ h2 {
     grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
   }
 
+  .spotify-home-player {
+    grid-template-columns: auto minmax(12rem, 1fr) auto;
+  }
+
+  .spotify-home-open {
+    grid-column: 2 / 4;
+    justify-self: end;
+    margin-top: -0.45rem;
+  }
+
   .settings-details {
     grid-template-columns: 1fr;
   }
@@ -2998,6 +3170,10 @@ h2 {
 
   .featured-art {
     min-height: 13.5rem;
+  }
+
+  .spotify-home-player {
+    min-height: 6.75rem;
   }
 
   .rail {

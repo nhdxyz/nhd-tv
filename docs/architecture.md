@@ -103,6 +103,8 @@ Device preferences share the versioned local-state document but are not profile-
 
 The ambient display is a host-owned idle policy rendered by the trusted shell. It activates only when both application input and Electron's system-idle signal have exceeded the selected delay, the main window is visible, and no service reports active playback. The host temporarily detaches the live service view instead of navigating or destroying it, so any session and page state remain intact. Keyboard, pointer, remote, resume, unlock, or service-state activity dismisses the overlay; the first wake input is consumed so it cannot also operate the underlying service.
 
+Spotify may remain alive as the single background audio renderer when the user invokes the ordinary Home action. Its view is detached rather than navigated or destroyed, and the shell receives only the service id plus active/backgrounded booleans. Native media actions continue to flow to Spotify, while D-pad, search, text, and precision-pointer input return to the trusted Home shell. Reopening Spotify reattaches the same view and preserves its queue; opening another service or using Force Home closes it through the normal checkpoint path.
+
 ## Search boundary
 
 Search adapters declare an allowlisted HTTPS search page and optionally a query parameter. The main process normalizes a maximum 120-character query, constructs the destination URL, and reuses the service's isolated partition. The query is not retained in application history or diagnostics. Services without a safe documented query parameter open their own search page instead.

@@ -16,7 +16,7 @@ The desktop preview attempted to open playback in another small window. Spotify-
 
 The extension is loaded only into Spotify's persistent service partition. On `open.spotify.com` it adds:
 
-- a 96-pixel television navigation bar with Home, Search, Your Library, and account access;
+- a compact television navigation bar with Home, Search, Your Library, and account access;
 - a signed-out entry screen with one large **Sign in to Spotify** target;
 - full-width recommendation shelves built from Spotify's own cards and data;
 - larger detail heroes, track rows, action controls, and a persistent bottom player;
@@ -24,6 +24,12 @@ The extension is loaded only into Spotify's persistent service partition. On `op
 - reduced-motion support and responsive television safe margins.
 
 The provider's DOM remains the source of truth. Stable semantic attributes such as `data-encore-id="card"` and documented `data-testid` values are annotated instead of copying catalog data or injecting a replacement player. Annotation changes are diffed so the mutation observer settles rather than continuously rewriting the page.
+
+## Playback from NHD-TV Home
+
+The ordinary Home action backgrounds an open Spotify view instead of destroying it. Audio and Spotify's queue stay in the isolated persistent renderer, while the trusted NHD-TV shell regains focus and shows a compact Spotify panel with Previous, Play/Pause, Next, and Return to Spotify controls. Those buttons use the same normalized native-key route as the physical controller and phone remote; the shell does not call Spotify APIs or reproduce the queue.
+
+Only Spotify receives this background-audio behavior. Opening another app closes the background Spotify renderer through the existing checkpoint path, while Force Home remains an explicit escape hatch that closes it immediately. The ambient display remains blocked while Spotify reports active playback.
 
 The account page receives CSS-only ten-foot sizing plus a narrow remote-navigation annotation script. Spotify still owns every field, submission, identity decision, error, CAPTCHA, and redirect. NHD-TV never reads or fills credentials. Phone-remote text entry continues to reject login, email, username, password, payment, and other sensitive fields.
 
@@ -61,6 +67,7 @@ The promoted cookie receives a maximum 30-day expiration and stays inside Spotif
 - Signed in: confirm personalized shortcuts and several provider recommendation shelves render without the desktop sidebar or Open/Install App actions.
 - Browse: move through at least three shelves, then use Home, Search, and Your Library. Confirm one focus move per press and bounded repeat while held.
 - Playback: start a track and confirm the same window displays an active bottom player whose time advances; test play/pause and previous/next from the remote.
+- Home playback: while a track is playing, press Home and confirm audio continues, the Spotify Home panel reports Playing, and Previous, Play/Pause, Next, and Return to Spotify work from the remote.
 - Persistence: close NHD-TV normally, relaunch, and confirm Spotify opens signed in. Repeat after an operating-system restart on the Windows release target.
 - Logout/clear: log out through Spotify, then verify the sign-in screen returns. Separately verify NHD-TV's confirmed **Clear data** action removes the Spotify session without changing the local app lineup.
 

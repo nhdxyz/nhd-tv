@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   captureVoiceExecutionScope,
+  removedEnabledServiceIds,
   revalidateVoiceCandidateServiceIds,
   type VoiceExecutionProfileState
 } from "../src/main/voice/voice-execution-scope";
@@ -17,6 +18,17 @@ function state(
 }
 
 describe("voice execution profile scope", () => {
+  it("identifies only removed service authority", () => {
+    expect(removedEnabledServiceIds(
+      ["netflix", "youtube", "netflix"],
+      ["spotify", "netflix"]
+    )).toEqual(["youtube"]);
+    expect(removedEnabledServiceIds(
+      ["netflix", "youtube"],
+      ["youtube", "netflix", "spotify"]
+    )).toEqual([]);
+  });
+
   it("removes services disabled while discovery is in flight", () => {
     const scope = captureVoiceExecutionScope(state());
 

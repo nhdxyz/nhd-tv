@@ -20,6 +20,14 @@ export function captureVoiceExecutionScope(
   };
 }
 
+export function removedEnabledServiceIds(
+  previousServiceIds: readonly string[],
+  nextServiceIds: readonly string[]
+): string[] {
+  const next = new Set(nextServiceIds);
+  return [...new Set(previousServiceIds)].filter((serviceId) => !next.has(serviceId));
+}
+
 /**
  * Revalidates a media command against the same profile generation that created
  * it. Lineup changes may only remove candidates from the original plan; a

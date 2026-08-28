@@ -88,6 +88,24 @@ describe("local profile state", () => {
     expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(7);
   });
 
+  it("previews normalized preferences without mutating the active profile", async () => {
+    const { store } = await testStore();
+    const before = store.snapshot();
+
+    expect(store.previewPreferences({
+      enabledServiceIds: ["youtube", "unknown", "youtube"],
+      favoriteServiceIds: ["unknown", "youtube"],
+      serviceOrder: ["unknown"],
+      voicePlaybackMode: "automatic"
+    })).toEqual({
+      enabledServiceIds: ["youtube"],
+      favoriteServiceIds: ["youtube"],
+      serviceOrder: ["youtube"],
+      voicePlaybackMode: "automatic"
+    });
+    expect(store.snapshot()).toEqual(before);
+  });
+
   it("persists a profile-scoped recent-app list independently of viewing history", async () => {
     const { filePath, store } = await testStore();
     await store.recordServiceLaunch("netflix");

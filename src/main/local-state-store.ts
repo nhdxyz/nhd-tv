@@ -338,14 +338,19 @@ export class LocalStateStore {
   }
 
   async updatePreferences(value: unknown): Promise<LocalAppState> {
-    const preferences = profilePreferences(
+    const preferences = this.previewPreferences(value);
+    this.#state.preferences[this.#state.activeProfileId] = preferences;
+    await this.#persist();
+    return this.snapshot();
+  }
+
+  /** Normalizes profile preferences without mutating or persisting state. */
+  previewPreferences(value: unknown): ProfilePreferences {
+    return profilePreferences(
       value,
       this.#knownServiceIds,
       this.#defaultEnabledServiceIds
     );
-    this.#state.preferences[this.#state.activeProfileId] = preferences;
-    await this.#persist();
-    return this.snapshot();
   }
 
   async updateDevicePreferences(value: unknown): Promise<LocalAppState> {

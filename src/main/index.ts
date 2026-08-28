@@ -121,6 +121,7 @@ import {
   type VoiceExecutionProfileState,
   type VoiceExecutionScope
 } from "./voice/voice-execution-scope";
+import { VoiceProfilePreferenceCoordinator } from "./voice/voice-profile-preference-coordinator";
 import {
   answerCurrentMediaQuestion,
   type VoiceCurrentMediaSnapshot
@@ -216,6 +217,8 @@ let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
 let voiceContextStore: VoiceContextStore | null = null;
+let voiceProfilePreferenceCoordinator: VoiceProfilePreferenceCoordinator | null = null;
+let voiceLineupUpdateInProgress = false;
 let currentVoicePresentation = createVoicePresentationState("hidden");
 let currentVoiceCommandId: string | null = null;
 let activeVoiceProcessingCommandId: string | null = null;
@@ -1368,6 +1371,13 @@ async function handleRemoteAction(
 }
 
 function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
+  if (voiceLineupUpdateInProgress) {
+    return {
+      available: false,
+      busy: true,
+      detail: "Updating the enabled services on this TV."
+    };
+  }
   const state = localStateStore?.snapshot();
   if (state === undefined || !state.devicePreferences.voiceControlEnabled) {
     return {
@@ -2437,28 +2447,12 @@ function registerIpc(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.updateProfilePreferences,
-    async (event, preferences: ProfilePreferences) => {
+    (event, preferences: ProfilePreferences) => {
       validateShellSender(event.senderFrame?.url ?? "");
-      if (localStateStore === null) {
+      if (localStateStore === null || voiceProfilePreferenceCoordinator === null) {
         throw new Error("Local profile state is not ready.");
       }
-
-      // A lineup or routing preference is TV-owned authorization state. Revoke
-      // every slow voice stage before mutating it so an earlier check can never
-      // launch or control a service after this update takes effect.
-      serviceHost?.beginOperation();
-      googleWatchResolver?.cancelActive();
-      phoneRemote?.cancelActiveVoiceOperation();
-
-      const state = await localStateStore.updatePreferences(preferences);
-      const activeServiceId = serviceHost?.activeServiceId ?? null;
-      if (
-        activeServiceId !== null &&
-        !state.preferences.enabledServiceIds.includes(activeServiceId)
-      ) {
-        await serviceHost?.closeWithCheckpoint();
-      }
-      return state;
+      return voiceProfilePreferenceCoordinator.update(preferences);
     }
   );
 
@@ -2902,6 +2896,23 @@ app.whenReady().then(async () => {
     onTranscript: presentPhoneVoiceTranscript,
     understand: (clip, signal, onTranscript) =>
       understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)
+  });
+  voiceProfilePreferenceCoordinator = new VoiceProfilePreferenceCoordinator({
+    beginServiceBarrier: () => serviceHost?.beginOperation(),
+    cancelDiscovery: () => googleWatchResolver?.cancelActive(),
+    cancelVoice: () => {
+      phoneRemote?.cancelActiveVoiceOperation();
+    },
+    closeActiveService: async (operation) => {
+      await serviceHost?.closeWithCheckpoint(undefined, operation);
+    },
+    getActiveServiceId: () => serviceHost?.activeServiceId ?? null,
+    getCurrentPreferences: () => localStateStore!.snapshot().preferences,
+    previewPreferences: (preferences) => localStateStore!.previewPreferences(preferences),
+    setAuthorityUpdateInProgress: (inProgress) => {
+      voiceLineupUpdateInProgress = inProgress;
+    },
+    updatePreferences: (preferences) => localStateStore!.updatePreferences(preferences)
   });
   setCustomServiceManifests(localStateStore.snapshot().customServices);
   await initializeContinueWatchingForProfile(

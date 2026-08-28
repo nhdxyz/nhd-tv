@@ -63,6 +63,7 @@ export interface PhoneRemoteServerOptions {
     TailscaleSecureRemoteResult |
     Promise<TailscaleSecureRemoteResult>;
   onGetContext: () => RemoteControlContext | Promise<RemoteControlContext>;
+  onGetVoiceStatus?: () => PhoneRemoteVoiceStatus | Promise<PhoneRemoteVoiceStatus>;
   onGetRecentServices: () =>
     readonly RemoteServiceShortcut[] |
     Promise<readonly RemoteServiceShortcut[]>;
@@ -70,14 +71,23 @@ export interface PhoneRemoteServerOptions {
   onSearch: (query: string) => void | Promise<void>;
   onStatusChanged: (status: RemoteStatus) => void;
   onText: (input: RemoteTextInput) => boolean | Promise<boolean>;
+  onConfirmVoice?: (confirmationId: string) =>
+    PhoneRemoteVoiceResult |
+    Promise<PhoneRemoteVoiceResult>;
   onVoice?: (clip: VoiceAudioClip) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
 
 export interface PhoneRemoteVoiceResult {
+  confirmationId?: string;
   detail: string;
   outcome: "completed" | "confirmation-required" | "failed";
   transcript?: string;
+}
+
+export interface PhoneRemoteVoiceStatus {
+  available: boolean;
+  detail: string;
 }
 
 export interface VoiceUploadMetadata {
@@ -261,6 +271,7 @@ export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #onAction: PhoneRemoteServerOptions["onAction"];
   readonly #onGetContext: PhoneRemoteServerOptions["onGetContext"];
+  readonly #onGetVoiceStatus: PhoneRemoteServerOptions["onGetVoiceStatus"];
   readonly #onPointer: PhoneRemoteServerOptions["onPointer"];
   readonly #onPrepareSecureAccess: PhoneRemoteServerOptions["onPrepareSecureAccess"];
   readonly #onGetRecentServices: PhoneRemoteServerOptions["onGetRecentServices"];
@@ -268,6 +279,7 @@ export class PhoneRemoteServer {
   readonly #onSearch: PhoneRemoteServerOptions["onSearch"];
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   readonly #onText: PhoneRemoteServerOptions["onText"];
+  readonly #onConfirmVoice: PhoneRemoteServerOptions["onConfirmVoice"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
@@ -288,6 +300,7 @@ export class PhoneRemoteServer {
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
     this.#onGetContext = options.onGetContext;
+    this.#onGetVoiceStatus = options.onGetVoiceStatus;
     this.#onGetRecentServices = options.onGetRecentServices;
     this.#onLaunchService = options.onLaunchService;
     this.#onPointer = options.onPointer;
@@ -295,6 +308,7 @@ export class PhoneRemoteServer {
     this.#onSearch = options.onSearch;
     this.#onStatusChanged = options.onStatusChanged;
     this.#onText = options.onText;
+    this.#onConfirmVoice = options.onConfirmVoice;
     this.#onVoice = options.onVoice;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
@@ -555,7 +569,11 @@ export class PhoneRemoteServer {
         this.#onGetRecentServices(),
         this.#onGetContext()
       ]);
-      writeJson(response, 200, { context, services: [...services].slice(0, 3) });
+      writeJson(response, 200, {
+        context,
+        services: [...services].slice(0, 3),
+        voice: await this.#voiceStatus(request)
+      });
       return;
     }
 
@@ -761,7 +779,11 @@ export class PhoneRemoteServer {
         return;
       }
 
-      writeJson(response, 200, { context: await this.#onGetContext(), ok: true });
+      writeJson(response, 200, {
+        context: await this.#onGetContext(),
+        ok: true,
+        voice: await this.#voiceStatus(request)
+      });
       return;
     }
 
@@ -780,8 +802,9 @@ export class PhoneRemoteServer {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
         return;
       }
-      if (this.#onVoice === undefined) {
-        writeJson(response, 503, { error: "Voice control is not available yet" });
+      const voiceStatus = await this.#voiceStatus(request);
+      if (!voiceStatus.available || this.#onVoice === undefined) {
+        writeJson(response, 503, { error: voiceStatus.detail });
         return;
       }
       const now = Date.now();
@@ -803,6 +826,43 @@ export class PhoneRemoteServer {
       } finally {
         this.#voiceInFlight = false;
       }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/confirm") {
+      if (
+        !isSameOriginPost(request, this.#remoteOrigin) ||
+        !secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)
+      ) {
+        writeJson(response, 403, { error: "Voice confirmation rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      if (this.#onConfirmVoice === undefined) {
+        writeJson(response, 503, { error: "Voice confirmation is unavailable" });
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      if (
+        body === null ||
+        Object.keys(body).some((key) => key !== "confirmationId") ||
+        typeof body.confirmationId !== "string" ||
+        !/^[A-Za-z0-9_-]{16,128}$/.test(body.confirmationId)
+      ) {
+        writeJson(response, 400, { error: "A valid voice confirmation is required" });
+        return;
+      }
+      const result = await this.#onConfirmVoice(body.confirmationId);
+      writeJson(response, result.outcome === "failed" ? 422 : 200, result);
       return;
     }
 
@@ -833,6 +893,19 @@ export class PhoneRemoteServer {
 
   #publishStatus(): void {
     this.#onStatusChanged(this.status);
+  }
+
+  async #voiceStatus(request: IncomingMessage): Promise<PhoneRemoteVoiceStatus> {
+    if (!secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)) {
+      return {
+        available: false,
+        detail: "Voice control requires the secure Tailscale remote."
+      };
+    }
+    return await this.#onGetVoiceStatus?.() ?? {
+      available: false,
+      detail: "Voice control is not configured for this build."
+    };
   }
 
   #acceptCommand(): boolean {

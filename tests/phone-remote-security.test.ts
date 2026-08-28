@@ -108,6 +108,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('await jsonRequest("/api/heartbeat"');
     expect(REMOTE_JS).toContain('setInterval(() => void sendHeartbeat(), 10_000)');
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", disconnectRemote)');
+    expect(serverSource).toContain('url.pathname === "/api/voice/confirm"');
+    expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
+    expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
   });
 
   it("uses a minimalist circular directional surface without selectable arrow copy", () => {

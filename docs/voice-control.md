@@ -23,23 +23,24 @@ The app owns only Tailscale HTTPS port `8443`. It does not reset Tailscale Serve
 - Press and hold the center microphone button.
 - Speak for 150 milliseconds to about 19.5 seconds. The phone stops slightly before the server's 20-second ceiling so recorder scheduling cannot turn a valid hold into an over-limit upload.
 - Release to send the command.
-- The phone shows listening, processing, confirmation, success, and sanitized error states.
+- Before opening the microphone, the phone acquires a five-second TV-wide reservation. A competing phone is disabled and told that voice control is already in use; an abandoned reservation expires without muting the TV.
+- The phone shows listening, processing, confirmation, success, and sanitized error states. While a command or confirmed playback is still processing, the initiating phone also gets a Cancel button.
 - The television mirrors Listening and Understanding, then shows the finalized transcript before the result. The current file-transcription path does not claim word-by-word live partials.
 - The browser stream and recording chunks are stopped and released immediately after upload.
 - Recordings and transcripts are not written to browser storage or the local database.
 
-The upload boundary accepts only an approved controller over the exact active HTTPS origin. It allowlists supported audio MIME types, caps recordings at 8 MB and 20 seconds, applies a 15-second body-upload deadline, permits one in-flight command, and rate-limits consecutive commands. Each hold gets an ephemeral command ID bound to the paired controller. A first-wins in-memory lease rejects reordered events and prevents a second phone or late cancellation from replacing the active command's TV feedback. Abandoned listening leases expire shortly after the maximum recording window. The complete transcription, interpretation, discovery, and provider operation has a server-owned 120-second deadline; confirmed playback has a 60-second deadline. Either deadline aborts in-progress hidden navigation, publishes a terminal TV error, and releases the shared voice lease even if an underlying provider stops responding. Confirmation tokens remain bound to that controller and command, and confirmation playback reacquires the same one-command lease. Cancel invalidates only that exact pending confirmation, while any newly accepted voice upload supersedes older pending confirmations across all phones. IDs and lease state are never persisted.
+The upload boundary accepts only an approved controller over the exact active HTTPS origin. It allowlists supported audio MIME types, caps recordings at 8 MB and 20 seconds, applies a 15-second body-upload deadline, permits one in-flight command, and rate-limits consecutive commands. Each hold gets an ephemeral command ID bound to the paired controller. A first-wins in-memory lease rejects reordered events and prevents a second phone or late cancellation from replacing the active command's TV feedback. Reservations expire after five seconds and abandoned listening leases expire shortly after the maximum recording window. The complete transcription, interpretation, discovery, and provider operation has a 50-second application deadline inside a 60-second server hard limit; confirmed playback has a 32-second application deadline inside the same hard limit. Either deadline aborts in-progress hidden navigation, publishes a terminal TV error, and releases the shared voice lease even if an underlying provider stops responding. The processing Cancel action is bound to the exact operation and initiating controller; it cannot cancel another phone's work or a later command, and it cannot undo a provider action that finished before cancellation was observed. Confirmation tokens remain bound to that controller and command, and confirmation playback reacquires the same one-command lease. Cancel on a pending confirmation invalidates only that exact choice, while any newly accepted voice upload supersedes older pending confirmations across all phones. IDs and lease state are never persisted.
 
 ## Command path
 
-1. [`gpt-4o-mini-transcribe`](https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe) transcribes English audio.
+1. [`gpt-transcribe`](https://developers.openai.com/api/docs/models/gpt-transcribe) transcribes English audio after the phone releases the push-to-talk button.
 2. The Responses API converts the transcript to a strict, closed JSON schema.
 3. NHD-TV validates the schema and builds its own deterministic command plan.
 4. The model cannot provide URLs, selectors, service IDs, or executable code.
 5. TV controls go through the existing remote action router.
 6. Media commands go through NHD-TV's provider and subscription rules.
 
-The current intent model default is [`gpt-5.6-luna`](https://developers.openai.com/api/docs/models/gpt-5.6-luna), a cost-sensitive Responses API model with Structured Outputs support. Both model names are isolated in the main-process client so they can be changed without altering the phone protocol.
+The current intent model default is [`gpt-5.6-luna`](https://developers.openai.com/api/docs/models/gpt-5.6-luna), a cost-sensitive Responses API model with Structured Outputs support. Intent extraction uses `reasoning.effort: none` because this is a bounded latency-sensitive classification task, while NHD-TV performs deterministic validation and execution. Both model names are isolated in the main-process client so they can be changed without altering the phone protocol.
 
 The finalized transcript is reported as soon as transcription completes, before intent interpretation finishes, and remains readable on the TV for a short minimum interval. True word-by-word captions would be a separate Realtime transcription upgrade using a streaming model such as [`gpt-live-transcribe`](https://developers.openai.com/api/docs/models/gpt-live-transcribe); it is not simulated by the current UI.
 
@@ -47,11 +48,11 @@ The finalized transcript is reported as soon as transcription completes, before 
 
 ### Ambiguity and multiple services
 
-NHD-TV never lets the model choose a URL or silently treat every enabled app as a subscription offer. For an exact movie, show, or episode available from several providers, selection follows this order:
+NHD-TV never lets the model choose a URL or silently treat every enabled app as a subscription offer. For an exact movie, show, or episode, provider selection follows these rules:
 
-1. an explicitly named provider such as Netflix or Disney+;
-2. the active profile's visible TV-lineup order;
-3. Google's offer order within the selected provider.
+1. an explicitly named enabled provider such as Netflix or Disney+ is used;
+2. one eligible enabled offer can be selected directly;
+3. several eligible enabled offers are shown as numbered TV choices and require an explicit selection.
 
 Only subscription and free offers may launch. Price-bearing rent/buy offers are reported but never opened automatically. A sparse, price-free Google label is treated as subscribed only for subscription-only Netflix and Disney+ destinations; an unlabeled YouTube movie is not. The provider list and order are recalculated when a 30-second phone confirmation is tapped, so switching profiles or disabling a service cannot use stale permissions.
 
@@ -59,9 +60,13 @@ Confirmation choices expire visibly after 30 seconds. A network-interrupted Play
 
 Before a direct provider URL opens, the normalized Google panel title must equal the requested title after harmless labels such as “movie” or “series” are removed. An exact episode also requires visible matching season and episode coordinates. A mismatch falls back to the provider's own search rather than claiming playback succeeded.
 
-Underspecified commands such as “play it” or “put that on” return a retry message and perform no navigation. Spoken release years, editions, languages, countries, and remake qualifiers remain part of the search title.
+Follow-ups such as “play it,” “put that on,” “where can I watch it,” a displayed numbered provider choice, or “Netflix instead” resolve only from fresh, structured TV-wide context for the active profile. The context stores media identity, provider identity, current playback state, displayed candidates, and verified action metadata in memory; it never stores audio, transcripts, URLs, or cookies. Missing, expired, ambiguous, cross-profile, or provider-incompatible references return a retry message and perform no navigation. Spoken release years, editions, languages, countries, and remake qualifiers remain part of the search title.
+
+Read-only questions such as “what am I watching,” “what episode is this,” “what song is this,” “how far into this am I,” “what's the runtime,” “how much longer,” and “when will this end” use a fresh provider observation and never trigger search or navigation. Finish-time answers require actively playing media plus an observed playback rate; paused, ended, stale, and rate-unknown state is reported instead of producing a false clock estimate. Playback follow-ups include bounded relative and absolute seeking, restart, next/previous item, Netflix intro/recap controls, provider ad-skip controls, captions on/off, fullscreen enter/exit, exact playback speed, and explicit Spotify shuffle/repeat states. Speed accepts only 0.5×, 0.75×, 1×, 1.25×, or 1.5× on a trusted Netflix/YouTube playback URL with a finite video, then waits for settled DOM read-back before reporting success. Spotify shuffle and repeat use exact provider state attributes, re-query React-replaced controls, stop repeated/unsupported state cycles, and require a stable requested state before reporting success. Each action uses a fixed provider-owned selector set or the active media element; arbitrary selectors and executable model output never cross into a service page.
 
 A bare exact title such as “Apollo 13” is treated as a play request. In confirmation mode it still waits for approval on the phone; an explicit “open” request never auto-plays.
+
+Provider-owned destinations use a separate closed command path. YouTube Subscriptions, YouTube Library, and Spotify Library map to three compiled-in, allowlisted URLs; the model can choose only `library` or `subscriptions` plus a provider hint. Generic “my library” uses an active capable provider or the only enabled capable provider, and asks the user to name Spotify or YouTube when both are enabled and neither is active. The enabled lineup and route allowlist are checked again immediately before navigation, and success requires the provider to finish on the requested canonical origin and path rather than a sign-in, consent, or home redirect.
 
 ### Open-ended recommendations
 
@@ -80,14 +85,15 @@ Movies, shows, titles, and exact episodes use a private-project Google Where to 
 - A hidden, sandboxed, persistent Electron session is warmed in the background.
 - A cookie-backed Google search request is attempted first.
 - If the request does not contain usable provider data—or a complete provider list is required—the hidden page renders and expands the Where to watch panel.
-- Google redirect links are resolved through an allowlisted HTTPS provider map.
+- Google redirect links are resolved concurrently through a bounded allowlisted HTTPS provider map; the browser-render fallback remains serialized to protect the warmed session.
 - Direct Netflix `/watch/…` links are sanitized again through the existing Netflix navigation policy before opening.
 - A provider is eligible for launch only if its mapped service is enabled in the active profile.
+- Each media command is bound to the profile generation that created it. Slow discovery continually intersects its original candidates with the live lineup, so switching profiles fails closed, disabling a service removes its authority, and a newly enabled service cannot join an in-flight command.
 - Purchase and rental providers are reported with available price text, but are not treated as subscriptions or automatically launched.
 - Netflix's profile gate selects the active local profile name when it is available, with a bounded normal-profile fallback.
-- A show-level Play request prefers Netflix Resume/Continue, then Play. An explicit season and episode selects only that exact episode and never falls through to a generic Resume control.
+- A show-level Play request prefers Netflix Resume/Continue, then Play. An explicit season and episode selects only that exact episode and never falls through to a generic Resume control. Observed episode coordinates are retained in short-lived TV context for safe follow-up questions.
 - Playback controls are scoped to an exact-title detail surface or a trusted Netflix content ID, preventing an unrelated Continue Watching button from starting the wrong title.
-- Successful play waits for actual provider playback and fullscreen verification. If a provider fullscreen button ignores a synthetic click, NHD-TV sends one bounded keyboard fallback and verifies again.
+- Successful video play waits for actual provider playback and attempts verified fullscreen. If a provider fullscreen button ignores a synthetic click, NHD-TV sends one bounded keyboard fallback and verifies again. Verified playback that remains windowed is reported as playing with a fullscreen caveat rather than as full success or a false playback failure.
 
 Google markup and internal requests are not a supported public API and can change or present an automated-traffic page. The adapter returns a sanitized failure and falls back to the enabled provider's own search page when possible.
 
@@ -97,7 +103,7 @@ Songs, artists, albums, and playlists route to Spotify's provider-owned search. 
 
 ### YouTube
 
-Videos and channels route to YouTube's provider-owned search. A YouTuber/profile request prioritizes dedicated channel result cards and exact normalized channel names or handles. Video requests rank exact titles and require the named creator's byline; a shorter prefix or fan upload that merely mentions the creator in its title is skipped. A one-character transcription correction such as “Cody Co” → “Cody Ko” is allowed only at equal length. “Latest video” searches only for the creator, adds NHD-TV's fixed upload-date token, and opens the first visible result whose channel byline matches. Play requests wait for video playback and fullscreen verification; otherwise results stay open and the phone reports the failure honestly. YouTube still owns playback, authentication, ads, and availability.
+Videos and channels route to YouTube's provider-owned search. A YouTuber/profile request prioritizes dedicated channel result cards and exact normalized channel names or handles. Video requests rank exact titles and require the named creator's byline; a shorter prefix or fan upload that merely mentions the creator in its title is skipped. A one-character transcription correction such as “Cody Co” → “Cody Ko” is allowed only at equal length. “Latest video” searches only for the creator, adds NHD-TV's fixed upload-date token, skips Shorts, and opens the first visible full-video result whose channel byline matches. Play requests verify actual video playback and then make a bounded fullscreen attempt; windowed playback and playback failure are reported distinctly. YouTube still owns playback, authentication, ads, and availability.
 
 ## Local discovery cache
 
@@ -112,6 +118,13 @@ Google results are stored in `voice-watch-results.sqlite` under Electron's user-
 
 The `discovery_export` SQLite view is intentionally flat and export-ready. A future Settings action can export that view or use the same rows to seed an independent API. The cache stores provider discovery metadata only; it does not store audio, transcripts, OpenAI credentials, or provider cookies.
 
+To test the private Google adapter without touching the main app's Netflix, YouTube, or Spotify sessions, run the isolated warmed-session probe. Omit `--complete` to exercise the fast request-first Play path; include it to force complete provider expansion for a Where-to-watch response. Probe rows stay under the git-ignored `.cache/google-watch-probe` directory.
+
+```sh
+pnpm exec electron scripts/probe-google-watch-session.mjs "Breaking Bad season 1 episode 3"
+pnpm exec electron scripts/probe-google-watch-session.mjs "Breaking Bad season 1 episode 3" --complete
+```
+
 ## Verification
 
 Without an API key, verify startup, settings, Tailscale routing, microphone gating, local cache creation, and all mocked tests. No live OpenAI request is made.
@@ -125,11 +138,17 @@ pnpm build
 After adding a key, qualify these commands on a paired iPhone in both confirmation modes:
 
 - “Pause” and “volume up”
+- “Set volume to 20 percent” and “set volume to zero”
+- “What am I watching?”, “How far into this am I?”, “What's the runtime?”, and “How much longer?”
+- “Rewind 30 seconds”, “skip intro”, “turn captions on”, and “go fullscreen”
+- “Play this at one-and-a-half speed” and “back to normal speed”
+- “Turn shuffle on”, “repeat this song”, “repeat everything”, and “turn repeat off”
 - “Play Apollo 13”
 - “Play Breaking Bad season 1 episode 3”
 - “Where can I watch Apollo 13?”
 - “Play Stronger by Kanye West”
 - “Open Kanye West on Spotify”
+- “Open my Spotify library” and “Go to my YouTube subscriptions”
 - “Play the Outdoor Boys latest video”
 - “Go to the Outdoor Boys channel”
 - “Show me a tense action movie with a clever lead”
@@ -137,8 +156,10 @@ After adding a key, qualify these commands on a paired iPhone in both confirmati
 - “Play Moana on Disney Plus”
 - “Play Dune 2021”
 
-Also verify that “play it” performs no navigation, a YouTube fan upload is not selected for a named creator, a rent/buy offer is not launched, and changing profiles while a confirmation is visible causes the current profile's provider lineup to be re-evaluated.
+Also verify a safe two-turn follow-up such as “Where can I watch Apollo 13?” → “the first one,” then verify that “play it” with no prior target performs no navigation. Confirm that a YouTube fan upload is not selected for a named creator, a rent/buy offer is not launched, expired or cross-profile context is rejected, and changing profiles or disabling a service during a slow provider lookup fails closed before the stale result can authorize playback.
 
-With two paired phones, begin a hold on one phone and then try the other. The first gesture should retain the TV presentation, the second upload should report busy, and its late cancellation must not hide the first command's transcript or result. In confirmation mode, verify that a confirmation cannot be used by the other phone, that Cancel invalidates the pending choice, and that a busy confirmation can be retried after the active command completes.
+With two paired phones, begin a hold on one phone and then try the other. The first phone should reserve voice before opening its microphone; the second should show Voice in use and must not start recording. The first gesture should retain the TV presentation, and a late cancellation from the losing phone must not hide the first command's transcript or result. Both phones should share the same active-profile media context after the first command completes. In confirmation mode, verify that a confirmation cannot be used by the other phone, that tap or spoken Cancel invalidates the pending choice, that a bare spoken Yes on the owning phone executes once, and that a busy confirmation can be retried after the active command completes.
+
+During one intentionally slow lookup, tap the processing Cancel button on the initiating phone. It should return to “hold to correct,” release the TV-wide busy state, and allow an immediate corrected command; the second phone must not be able to cancel that operation.
 
 Check that a normal exit removes only the NHD-TV `8443` Serve route, that an unrelated `443` route remains unchanged, and that restarting creates a new short-lived pairing URL.

@@ -40,7 +40,8 @@ export const IPC_CHANNELS = {
   spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
-  updateProfilePreferences: "nhd:profile:preferences:update"
+  updateProfilePreferences: "nhd:profile:preferences:update",
+  voicePresentationChanged: "nhd:voice:presentation:changed"
 } as const;
 
 export const MEDIA_ACTIONS = [
@@ -229,6 +230,21 @@ export type OpenAiCredentialState =
 export interface OpenAiCredentialStatus {
   detail: string;
   state: OpenAiCredentialState;
+}
+
+export type VoicePresentationPhase =
+  | "error"
+  | "hidden"
+  | "listening"
+  | "success"
+  | "transcript"
+  | "understanding";
+
+/** Ephemeral UI state. It must never be written to profile or device storage. */
+export interface VoicePresentationState {
+  detail: string | null;
+  phase: VoicePresentationPhase;
+  transcript: string | null;
 }
 
 export interface CustomServiceManifest {

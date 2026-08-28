@@ -12,7 +12,8 @@ import {
   type ServiceRecoveryMode,
   type ServiceRecoveryRequest,
   type ServiceSummary,
-  type SpotifyPlaybackPresentation
+  type SpotifyPlaybackPresentation,
+  type VoicePresentationState
 } from "../main/contracts";
 import {
   isMediaAction,
@@ -26,6 +27,7 @@ import {
   findDirectionalTarget,
   type SpatialDirection
 } from "./spatial-navigation";
+import { voicePresentationCopy } from "./voice-presentation";
 
 type AppView = "apps" | "home" | "settings" | "store";
 
@@ -227,6 +229,9 @@ const elements = {
   voiceRegionForm: requireElement<HTMLFormElement>("#voice-region-form", "voice-region-form"),
   voiceRegionInput: requireElement<HTMLInputElement>("#voice-region-input", "voice-region-input"),
   voiceRemoveKey: requireElement<HTMLButtonElement>("#voice-remove-key", "voice-remove-key"),
+  voicePresentation: requireElement<HTMLElement>("#voice-presentation", "voice-presentation"),
+  voicePresentationCopy: requireElement<HTMLElement>("#voice-presentation-copy", "voice-presentation-copy"),
+  voicePresentationLabel: requireElement<HTMLElement>("#voice-presentation-label", "voice-presentation-label"),
   voiceSettingsButton: requireElement<HTMLButtonElement>("#voice-settings-button", "voice-settings-button"),
   voiceSettingsCopy: requireElement<HTMLElement>("#voice-settings-copy", "voice-settings-copy"),
   widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status"),
@@ -265,6 +270,7 @@ let spotifyNowPlayingOpen = false;
 let currentView: AppView = "home";
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
+let voicePresentationFailsafeTimer: number | null = null;
 let featuredContinueItemId: string | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
@@ -288,6 +294,32 @@ function showFeedback(message: string): void {
     elements.feedback.textContent = "";
     feedbackTimer = null;
   }, 4_000);
+}
+
+function renderVoicePresentation(presentation: VoicePresentationState): void {
+  if (voicePresentationFailsafeTimer !== null) {
+    window.clearTimeout(voicePresentationFailsafeTimer);
+    voicePresentationFailsafeTimer = null;
+  }
+
+  const hidden = presentation.phase === "hidden";
+  const copy = voicePresentationCopy(presentation);
+  elements.voicePresentation.dataset.phase = presentation.phase;
+  elements.voicePresentationLabel.textContent = copy.label;
+  elements.voicePresentationCopy.textContent = copy.copy;
+  elements.voicePresentation.hidden = hidden;
+
+  if (!hidden) {
+    // Main owns the normal phase timing. This renderer-only timeout prevents a
+    // stale overlay if the event sequence is interrupted; it stores no transcript.
+    voicePresentationFailsafeTimer = window.setTimeout(() => {
+      elements.voicePresentation.hidden = true;
+      elements.voicePresentation.dataset.phase = "hidden";
+      elements.voicePresentationLabel.textContent = "AI Voice";
+      elements.voicePresentationCopy.textContent = "";
+      voicePresentationFailsafeTimer = null;
+    }, 75_000);
+  }
 }
 
 function renderSpotifyHomePlayer(): void {
@@ -2761,6 +2793,7 @@ window.nhd.onRemoteAction(handleShellRemoteAction);
 window.nhd.onRemotePrecisionMoved(() => navigationSounds.playMove());
 window.nhd.onRemoteSearchRequested((query) => openSearchDialog(query, true));
 window.nhd.onRemoteStatusChanged(renderRemoteStatus);
+window.nhd.onVoicePresentationChanged(renderVoicePresentation);
 window.nhd.onServiceRecoveryRequested(showServiceRecovery);
 window.nhd.onServiceQuitRequested((request) => {
   if (request.backgroundDataUrl === null) {

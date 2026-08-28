@@ -28,6 +28,7 @@ export interface VoiceCommandSessionOptions {
     Promise<VoiceCommandExecutionResult>;
   getContext: () => VoiceCommandContext | Promise<VoiceCommandContext>;
   now?: () => number;
+  onTranscript?: (transcript: string) => void;
   randomToken?: () => string;
   understand: (clip: VoiceAudioClip, signal?: AbortSignal) =>
     { intent: VoiceIntent; transcript: string } |
@@ -66,6 +67,7 @@ export class VoiceCommandSession {
   readonly #execute: VoiceCommandSessionOptions["execute"];
   readonly #getContext: VoiceCommandSessionOptions["getContext"];
   readonly #now: () => number;
+  readonly #onTranscript: NonNullable<VoiceCommandSessionOptions["onTranscript"]>;
   readonly #pending = new Map<string, PendingConfirmation>();
   readonly #randomToken: () => string;
   readonly #understand: VoiceCommandSessionOptions["understand"];
@@ -74,6 +76,7 @@ export class VoiceCommandSession {
     this.#execute = options.execute;
     this.#getContext = options.getContext;
     this.#now = options.now ?? Date.now;
+    this.#onTranscript = options.onTranscript ?? (() => undefined);
     this.#randomToken = options.randomToken ?? (() => randomBytes(24).toString("base64url"));
     this.#understand = options.understand;
   }
@@ -84,6 +87,7 @@ export class VoiceCommandSession {
   ): Promise<VoiceCommandSessionResult> {
     this.#removeExpired();
     const { intent, transcript } = await this.#understand(clip, signal);
+    this.#onTranscript(transcript);
     const plan = planVoiceCommand(intent, await this.#getContext());
 
     if (plan.kind === "resolve-media" && plan.confirmationRequired) {

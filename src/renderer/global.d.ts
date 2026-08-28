@@ -12,7 +12,8 @@ import type {
   ServiceRecoveryRequest,
   ServiceQuitRequest,
   ServiceSummary,
-  SpotifyPlaybackPresentation
+  SpotifyPlaybackPresentation,
+  VoicePresentationState
 } from "../main/contracts";
 
 declare global {
@@ -48,6 +49,9 @@ declare global {
       onRemoteStatusChanged: (callback: (status: RemoteStatus) => void) => void;
       onSpotifyPlaybackChanged: (
         callback: (presentation: SpotifyPlaybackPresentation) => void
+      ) => void;
+      onVoicePresentationChanged: (
+        callback: (presentation: VoicePresentationState) => void
       ) => void;
       onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void) => void;
       onServiceRecoveryRequested: (

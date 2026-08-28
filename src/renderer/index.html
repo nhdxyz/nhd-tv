@@ -69,6 +69,24 @@
       <small>Connected apps and show search may be unavailable.</small>
     </aside>
 
+    <aside
+      class="voice-presentation"
+      id="voice-presentation"
+      data-phase="hidden"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      hidden
+    >
+      <span class="voice-presentation-signal" aria-hidden="true">
+        <i></i><i></i><i></i>
+      </span>
+      <span class="voice-presentation-content">
+        <small id="voice-presentation-label">AI Voice</small>
+        <strong id="voice-presentation-copy">Listening…</strong>
+      </span>
+    </aside>
+
     <section class="ambient-display" id="ambient-display" aria-label="Ambient display" hidden>
       <img class="spotify-ambient-backdrop" id="spotify-ambient-backdrop" alt="" hidden />
       <div class="ambient-stage" id="ambient-stage" data-anchor="top-left" data-clock-style="digital">

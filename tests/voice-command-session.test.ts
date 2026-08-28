@@ -35,6 +35,33 @@ function context(playbackMode: "automatic" | "confirm" = "confirm") {
 }
 
 describe("voice command session", () => {
+  it("publishes the final transcript before planning and execution", async () => {
+    const sequence: string[] = [];
+    const session = new VoiceCommandSession({
+      execute: async () => {
+        sequence.push("execute");
+        return { detail: "Playing", handled: true };
+      },
+      getContext: () => {
+        sequence.push("context");
+        return context("automatic");
+      },
+      onTranscript: (transcript) => sequence.push(`transcript:${transcript}`),
+      understand: async () => ({
+        intent: mediaIntent(),
+        transcript: "play breaking bad"
+      })
+    });
+
+    await session.process(clip);
+
+    expect(sequence).toEqual([
+      "transcript:play breaking bad",
+      "context",
+      "execute"
+    ]);
+  });
+
   it("executes control commands without confirmation", async () => {
     const execute = vi.fn(async () => ({ detail: "Volume sent", handled: true }));
     const session = new VoiceCommandSession({

@@ -74,9 +74,12 @@ export interface PhoneRemoteServerOptions {
   onConfirmVoice?: (confirmationId: string) =>
     PhoneRemoteVoiceResult |
     Promise<PhoneRemoteVoiceResult>;
+  onVoiceActivity?: (activity: PhoneRemoteVoiceActivity) => void | Promise<void>;
   onVoice?: (clip: VoiceAudioClip) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
+
+export type PhoneRemoteVoiceActivity = "cancelled" | "listening" | "understanding";
 
 export interface PhoneRemoteVoiceResult {
   confirmationId?: string;
@@ -93,6 +96,21 @@ export interface PhoneRemoteVoiceStatus {
 export interface VoiceUploadMetadata {
   durationMs: number;
   mimeType: string;
+}
+
+export function parsePhoneRemoteVoiceActivity(
+  value: Record<string, unknown> | null
+): PhoneRemoteVoiceActivity | null {
+  if (
+    value === null ||
+    Object.keys(value).some((key) => key !== "phase") ||
+    (value.phase !== "cancelled" &&
+      value.phase !== "listening" &&
+      value.phase !== "understanding")
+  ) {
+    return null;
+  }
+  return value.phase;
 }
 
 export function shouldAutoApprovePairing(
@@ -280,6 +298,7 @@ export class PhoneRemoteServer {
   readonly #onStatusChanged: PhoneRemoteServerOptions["onStatusChanged"];
   readonly #onText: PhoneRemoteServerOptions["onText"];
   readonly #onConfirmVoice: PhoneRemoteServerOptions["onConfirmVoice"];
+  readonly #onVoiceActivity: PhoneRemoteServerOptions["onVoiceActivity"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   #expiresAt: number | null = null;
@@ -309,6 +328,7 @@ export class PhoneRemoteServer {
     this.#onStatusChanged = options.onStatusChanged;
     this.#onText = options.onText;
     this.#onConfirmVoice = options.onConfirmVoice;
+    this.#onVoiceActivity = options.onVoiceActivity;
     this.#onVoice = options.onVoice;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
@@ -784,6 +804,45 @@ export class PhoneRemoteServer {
         ok: true,
         voice: await this.#voiceStatus(request)
       });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/activity") {
+      if (
+        !isSameOriginPost(request, this.#remoteOrigin) ||
+        !secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)
+      ) {
+        writeJson(response, 403, { error: "Voice activity rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      if (!this.#authorize(token)) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+
+      const activity = parsePhoneRemoteVoiceActivity(await readJsonBody(request));
+      if (activity === null) {
+        writeJson(response, 400, { error: "A valid voice activity phase is required" });
+        return;
+      }
+      if (this.#onVoiceActivity === undefined) {
+        writeJson(response, 503, { error: "Voice activity is unavailable" });
+        return;
+      }
+      if (activity !== "cancelled") {
+        const voiceStatus = await this.#voiceStatus(request);
+        if (!voiceStatus.available) {
+          writeJson(response, 503, { error: voiceStatus.detail });
+          return;
+        }
+      }
+      await this.#onVoiceActivity(activity);
+      writeJson(response, 200, { ok: true });
       return;
     }
 

@@ -34,6 +34,8 @@ import {
   type ServiceRecoveryMode,
   type ServiceRecoveryRequest,
   type SpotifyPlaybackPresentation,
+  type VoicePresentationPhase,
+  type VoicePresentationState,
   type WidevineState
 } from "./contracts";
 import {
@@ -57,6 +59,7 @@ import {
 import { isMediaAction } from "./media-actions";
 import {
   PhoneRemoteServer,
+  type PhoneRemoteVoiceActivity,
   type PhoneRemoteVoiceResult,
   type PhoneRemoteVoiceStatus
 } from "./remote/phone-remote-server";
@@ -110,6 +113,9 @@ import {
   watchAvailabilityDetail
 } from "./voice/google-watch-selection";
 import { applyYouTubeLatestSort } from "./voice/voice-provider-automation";
+import {
+  createVoicePresentationState
+} from "./voice/voice-presentation";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
@@ -118,6 +124,9 @@ const MAX_CACHED_ARTWORK_BYTES = 3 * 1024 * 1024;
 const MAX_CATALOG_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CATALOG_CACHE_MS = 15 * 60 * 1_000;
+const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
+const VOICE_RESULT_DISPLAY_MS = 4_500;
+const VOICE_UNDERSTANDING_TIMEOUT_MS = 70_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
   "#store-search"
@@ -151,6 +160,8 @@ let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
+let voicePresentationTimer: NodeJS.Timeout | null = null;
+let voicePresentationVersion = 0;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
 let ambientDisplayPreview = false;
@@ -469,6 +480,84 @@ function publishRemoteStatus(status: RemoteStatus): void {
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_CHANNELS.remoteStatusChanged, status);
   }
+}
+
+function publishVoicePresentation(presentation: VoicePresentationState): void {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_CHANNELS.voicePresentationChanged, presentation);
+  }
+}
+
+function clearVoicePresentationTimer(): void {
+  if (voicePresentationTimer !== null) {
+    clearTimeout(voicePresentationTimer);
+    voicePresentationTimer = null;
+  }
+}
+
+function showVoicePresentation(
+  phase: VoicePresentationPhase,
+  values: { detail?: unknown; transcript?: unknown } = {},
+  clearAfterMs?: number
+): number {
+  clearVoicePresentationTimer();
+  const version = ++voicePresentationVersion;
+  publishVoicePresentation(createVoicePresentationState(phase, values));
+
+  if (clearAfterMs !== undefined) {
+    voicePresentationTimer = setTimeout(() => {
+      if (version !== voicePresentationVersion) return;
+      voicePresentationTimer = null;
+      voicePresentationVersion += 1;
+      publishVoicePresentation(createVoicePresentationState("hidden"));
+    }, clearAfterMs);
+  }
+  return version;
+}
+
+function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
+  if (activity === "cancelled") {
+    showVoicePresentation("hidden");
+    return;
+  }
+
+  markAmbientActivity();
+  if (activity === "listening") {
+    showVoicePresentation(
+      "listening",
+      { detail: "Listening…" },
+      VOICE_ACTIVITY_TIMEOUT_MS
+    );
+    return;
+  }
+  showVoicePresentation(
+    "understanding",
+    { detail: "Understanding…" },
+    VOICE_UNDERSTANDING_TIMEOUT_MS
+  );
+}
+
+function voiceResultDetail(result: PhoneRemoteVoiceResult): string {
+  return result.outcome === "confirmation-required"
+    ? `Confirm on your phone — ${result.detail}`
+    : result.detail;
+}
+
+function presentPhoneVoiceTranscript(transcript: string): void {
+  showVoicePresentation(
+    "transcript",
+    { detail: "You said", transcript },
+    VOICE_UNDERSTANDING_TIMEOUT_MS
+  );
+}
+
+function presentPhoneVoiceResult(result: PhoneRemoteVoiceResult): void {
+  const phase: VoicePresentationPhase = result.outcome === "failed" ? "error" : "success";
+  showVoicePresentation(
+    phase,
+    { detail: voiceResultDetail(result) },
+    VOICE_RESULT_DISPLAY_MS
+  );
 }
 
 function publishContinueWatching(): void {
@@ -1163,23 +1252,47 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
 
 async function handleRemoteVoice(clip: VoiceAudioClip): Promise<PhoneRemoteVoiceResult> {
   if (!remoteVoiceStatus().available || voiceCommandSession === null) {
-    return { detail: remoteVoiceStatus().detail, outcome: "failed" };
+    const result: PhoneRemoteVoiceResult = {
+      detail: remoteVoiceStatus().detail,
+      outcome: "failed"
+    };
+    presentPhoneVoiceResult(result);
+    return result;
   }
+  presentPhoneVoiceActivity("understanding");
   try {
-    return await voiceCommandSession.process(clip);
+    const result = await voiceCommandSession.process(clip);
+    presentPhoneVoiceResult(result);
+    return result;
   } catch (error) {
-    return voiceFailure(error);
+    const result = voiceFailure(error);
+    presentPhoneVoiceResult(result);
+    return result;
   }
 }
 
 async function confirmRemoteVoice(confirmationId: string): Promise<PhoneRemoteVoiceResult> {
   if (voiceCommandSession === null) {
-    return { detail: "Voice control is still starting.", outcome: "failed" };
+    const result: PhoneRemoteVoiceResult = {
+      detail: "Voice control is still starting.",
+      outcome: "failed"
+    };
+    presentPhoneVoiceResult(result);
+    return result;
   }
+  showVoicePresentation(
+    "understanding",
+    { detail: "Starting your choice…" },
+    VOICE_UNDERSTANDING_TIMEOUT_MS
+  );
   try {
-    return await voiceCommandSession.confirm(confirmationId);
+    const result = await voiceCommandSession.confirm(confirmationId);
+    presentPhoneVoiceResult(result);
+    return result;
   } catch (error) {
-    return voiceFailure(error);
+    const result = voiceFailure(error);
+    presentPhoneVoiceResult(result);
+    return result;
   }
 }
 
@@ -1752,6 +1865,7 @@ async function createMainWindow(): Promise<void> {
     onStatusChanged: publishRemoteStatus,
     onText: handleRemoteText,
     onConfirmVoice: confirmRemoteVoice,
+    onVoiceActivity: presentPhoneVoiceActivity,
     onVoice: handleRemoteVoice,
     shouldAutoApproveFirstRemote: () =>
       localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
@@ -1783,6 +1897,8 @@ async function createMainWindow(): Promise<void> {
     const watchResolverToDestroy = googleWatchResolver;
 
     stopAmbientDisplayMonitor();
+    clearVoicePresentationTimer();
+    voicePresentationVersion += 1;
     googleWatchCache = null;
     googleWatchResolver = null;
     phoneRemote = null;
@@ -1851,6 +1967,7 @@ app.whenReady().then(async () => {
   voiceCommandSession = new VoiceCommandSession({
     execute: executeVoiceCommandPlan,
     getContext: voiceCommandContext,
+    onTranscript: presentPhoneVoiceTranscript,
     understand: (clip, signal) => openAiVoiceClient.understand(clip, signal)
   });
   setCustomServiceManifests(localStateStore.snapshot().customServices);

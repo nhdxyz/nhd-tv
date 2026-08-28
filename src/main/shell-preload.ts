@@ -13,7 +13,8 @@ import type {
   ServiceRecoveryRequest,
   ServiceQuitRequest,
   ServiceSummary,
-  SpotifyPlaybackPresentation
+  SpotifyPlaybackPresentation,
+  VoicePresentationState
 } from "./contracts";
 
 // Sandboxed preloads receive a restricted `require` implementation and must not
@@ -61,8 +62,37 @@ const IPC_CHANNELS = {
   spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
   updateDevicePreferences: "nhd:device:preferences:update",
-  updateProfilePreferences: "nhd:profile:preferences:update"
+  updateProfilePreferences: "nhd:profile:preferences:update",
+  voicePresentationChanged: "nhd:voice:presentation:changed"
 } as const;
+
+const VOICE_PRESENTATION_PHASES = new Set([
+  "error",
+  "hidden",
+  "listening",
+  "success",
+  "transcript",
+  "understanding"
+]);
+
+function isBoundedNullableText(value: unknown, maximumLength: number): boolean {
+  return value === null || (
+    typeof value === "string" &&
+    value.length <= maximumLength &&
+    !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value)
+  );
+}
+
+function isVoicePresentationState(value: unknown): value is VoicePresentationState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<VoicePresentationState>;
+  return typeof candidate.phase === "string" &&
+    VOICE_PRESENTATION_PHASES.has(candidate.phase) &&
+    isBoundedNullableText(candidate.detail, 280) &&
+    isBoundedNullableText(candidate.transcript, 320) &&
+    (candidate.phase === "transcript" || candidate.transcript === null) &&
+    (candidate.phase !== "hidden" || (candidate.detail === null && candidate.transcript === null));
+}
 
 contextBridge.exposeInMainWorld("nhd", {
   addCustomService: (name: string, startUrl: string): Promise<LocalAppState> =>
@@ -143,6 +173,16 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.on(
       IPC_CHANNELS.spotifyPlaybackChanged,
       (_event, presentation: SpotifyPlaybackPresentation) => callback(presentation)
+    );
+  },
+  onVoicePresentationChanged: (
+    callback: (presentation: VoicePresentationState) => void
+  ): void => {
+    ipcRenderer.on(
+      IPC_CHANNELS.voicePresentationChanged,
+      (_event, presentation: unknown) => {
+        if (isVoicePresentationState(presentation)) callback(presentation);
+      }
     );
   },
   onServiceQuitRequested: (callback: (request: ServiceQuitRequest) => void): void => {

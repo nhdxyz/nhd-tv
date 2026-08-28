@@ -219,7 +219,7 @@ let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
 let voiceContextStore: VoiceContextStore | null = null;
 let voiceProfilePreferenceCoordinator: VoiceProfilePreferenceCoordinator | null = null;
-let voiceLineupUpdateInProgress = false;
+let voiceAuthorityUpdateInProgress = false;
 let currentVoicePresentation = createVoicePresentationState("hidden");
 let currentVoiceCommandId: string | null = null;
 let activeVoiceProcessingCommandId: string | null = null;
@@ -550,12 +550,17 @@ async function initializeContinueWatchingForProfile(
 async function activateProfile(
   operation: () => Promise<LocalAppState>
 ): Promise<LocalAppState> {
-  await serviceHost?.closeWithCheckpoint();
-  const state = await operation();
-  voiceContextStore?.setActiveProfile(state.activeProfileId);
-  await initializeContinueWatchingForProfile(state.activeProfileId);
-  publishContinueWatching();
-  return state;
+  const coordinator = voiceProfilePreferenceCoordinator;
+  if (coordinator === null) {
+    throw new Error("Local profile authority is not ready.");
+  }
+  return coordinator.changeProfile(async () => {
+    const state = await operation();
+    voiceContextStore?.setActiveProfile(state.activeProfileId);
+    await initializeContinueWatchingForProfile(state.activeProfileId);
+    publishContinueWatching();
+    return state;
+  });
 }
 
 type AppMetric = ReturnType<typeof app.getAppMetrics>[number];
@@ -1372,7 +1377,7 @@ async function handleRemoteAction(
 }
 
 function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
-  if (voiceLineupUpdateInProgress) {
+  if (voiceAuthorityUpdateInProgress) {
     return {
       available: false,
       busy: true,
@@ -2435,7 +2440,11 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC_CHANNELS.removeCustomService, async (event, serviceId: unknown) => {
     validateShellSender(event.senderFrame?.url ?? "");
-    if (localStateStore === null || typeof serviceId !== "string") {
+    if (
+      localStateStore === null ||
+      voiceProfilePreferenceCoordinator === null ||
+      typeof serviceId !== "string"
+    ) {
       throw new Error("That custom service does not exist.");
     }
 
@@ -2444,13 +2453,15 @@ function registerIpc(): void {
       throw new Error("That custom service does not exist.");
     }
 
-    if (serviceHost?.activeServiceId === serviceId) {
-      await serviceHost.closeWithCheckpoint();
-    }
-    await session.fromPartition(definition.partition, { cache: true }).clearStorageData();
-    const state = await localStateStore.removeCustomService(serviceId);
-    setCustomServiceManifests(state.customServices);
-    return state;
+    return voiceProfilePreferenceCoordinator.removeService(
+      serviceId,
+      () => session.fromPartition(definition.partition, { cache: true }).clearStorageData(),
+      async () => {
+        const state = await localStateStore!.removeCustomService(serviceId);
+        setCustomServiceManifests(state.customServices);
+        return state;
+      }
+    );
   });
 
   ipcMain.handle(IPC_CHANNELS.createProfile, async (event, name: unknown) => {
@@ -2916,6 +2927,17 @@ app.whenReady().then(async () => {
   });
   voiceCommandSession = new VoiceCommandSession({
     execute: executeVoiceCommandPlan,
+    getAuthorityKey: () => {
+      if (voiceAuthorityUpdateInProgress) return null;
+      const state = voiceExecutionProfileState();
+      return state === null
+        ? null
+        : JSON.stringify([
+            state.activeProfileId,
+            state.profileRevision,
+            [...new Set(state.enabledServiceIds)].sort()
+          ]);
+    },
     getContext: voiceCommandContext,
     onTranscript: presentPhoneVoiceTranscript,
     understand: (clip, signal, onTranscript) =>
@@ -2923,6 +2945,8 @@ app.whenReady().then(async () => {
   });
   voiceProfilePreferenceCoordinator = new VoiceProfilePreferenceCoordinator({
     beginServiceBarrier: () => serviceHost?.beginOperation(),
+    cancelConfirmations: () =>
+      phoneRemote?.cancelPendingVoiceConfirmations() ?? Promise.resolve(),
     cancelDiscovery: () => googleWatchResolver?.cancelActive(),
     cancelVoice: () => {
       phoneRemote?.cancelActiveVoiceOperation();
@@ -2933,8 +2957,17 @@ app.whenReady().then(async () => {
     getActiveServiceId: () => serviceHost?.activeServiceId ?? null,
     getCurrentPreferences: () => localStateStore!.snapshot().preferences,
     previewPreferences: (preferences) => localStateStore!.previewPreferences(preferences),
+    resumeVoiceAuthority: (token) => {
+      phoneRemote?.resumeVoiceAuthority(token);
+    },
     setAuthorityUpdateInProgress: (inProgress) => {
-      voiceLineupUpdateInProgress = inProgress;
+      voiceAuthorityUpdateInProgress = inProgress;
+    },
+    suspendVoiceAuthority: () => {
+      if (phoneRemote === null) {
+        throw new Error("Phone voice authority is not ready.");
+      }
+      return phoneRemote.suspendVoiceAuthority();
     },
     updatePreferences: (preferences) => localStateStore!.updatePreferences(preferences)
   });

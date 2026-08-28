@@ -43,13 +43,16 @@ function coordinatorOptions(overrides: Partial<VoiceProfilePreferenceCoordinator
   let current = preferences(["netflix", "youtube"]);
   const options: VoiceProfilePreferenceCoordinatorOptions = {
     beginServiceBarrier: vi.fn(() => ({ generation: 2 })),
+    cancelConfirmations: vi.fn(async () => undefined),
     cancelDiscovery: vi.fn(),
     cancelVoice: vi.fn(),
     closeActiveService: vi.fn(async () => undefined),
     getActiveServiceId: vi.fn(() => null),
     getCurrentPreferences: vi.fn(() => current),
     previewPreferences: vi.fn((value) => value as ProfilePreferences),
+    resumeVoiceAuthority: vi.fn(),
     setAuthorityUpdateInProgress: vi.fn(),
+    suspendVoiceAuthority: vi.fn(() => ({ generation: 1 })),
     updatePreferences: vi.fn(async (next) => {
       current = next;
       return state(next);
@@ -69,13 +72,21 @@ describe("voice profile preference coordinator", () => {
         return { generation: 4 };
       },
       cancelDiscovery: () => events.push("cancel-discovery"),
+      cancelConfirmations: async () => {
+        events.push("cancel-confirmations");
+      },
       cancelVoice: () => events.push("cancel-voice"),
       closeActiveService: async () => {
         events.push("close");
         activeServiceId = null;
       },
       getActiveServiceId: () => activeServiceId,
+      resumeVoiceAuthority: () => events.push("resume"),
       setAuthorityUpdateInProgress: (inProgress) => events.push(inProgress ? "lock" : "unlock"),
+      suspendVoiceAuthority: () => {
+        events.push("suspend");
+        return { generation: 8 };
+      },
       updatePreferences: async (next) => {
         events.push("update");
         return state(next);
@@ -87,11 +98,15 @@ describe("voice profile preference coordinator", () => {
 
     expect(events).toEqual([
       "lock",
+      "suspend",
       "barrier",
       "cancel-discovery",
       "cancel-voice",
+      "cancel-confirmations",
       "close",
+      "barrier",
       "update",
+      "resume",
       "unlock"
     ]);
   });
@@ -109,7 +124,9 @@ describe("voice profile preference coordinator", () => {
 
     expect(options.beginServiceBarrier).not.toHaveBeenCalled();
     expect(options.cancelDiscovery).not.toHaveBeenCalled();
+    expect(options.cancelConfirmations).not.toHaveBeenCalled();
     expect(options.cancelVoice).not.toHaveBeenCalled();
+    expect(options.suspendVoiceAuthority).not.toHaveBeenCalled();
     expect(options.updatePreferences).toHaveBeenCalledWith(next);
   });
 
@@ -140,15 +157,22 @@ describe("voice profile preference coordinator", () => {
   it("serializes overlapping remove and re-add updates in invocation order", async () => {
     let current = preferences(["netflix", "youtube"]);
     let releaseFirst!: () => void;
+    let markFirstStarted!: () => void;
     const firstPersistence = new Promise<void>((resolve) => {
       releaseFirst = resolve;
+    });
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
     });
     const updates: string[][] = [];
     const options = coordinatorOptions({
       getCurrentPreferences: () => current,
       updatePreferences: async (next) => {
         updates.push([...next.enabledServiceIds]);
-        if (updates.length === 1) await firstPersistence;
+        if (updates.length === 1) {
+          markFirstStarted();
+          await firstPersistence;
+        }
         current = next;
         return state(next);
       }
@@ -157,7 +181,7 @@ describe("voice profile preference coordinator", () => {
 
     const remove = coordinator.update(preferences(["netflix"]));
     const reAdd = coordinator.update(preferences(["netflix", "youtube"]));
-    await Promise.resolve();
+    await firstStarted;
     expect(updates).toEqual([["netflix"]]);
 
     releaseFirst();
@@ -177,5 +201,81 @@ describe("voice profile preference coordinator", () => {
     );
     expect(options.updatePreferences).not.toHaveBeenCalled();
     expect(options.setAuthorityUpdateInProgress).toHaveBeenLastCalledWith(false);
+  });
+
+  it("serializes a profile change through the same closed voice boundary", async () => {
+    const events: string[] = [];
+    let activeServiceId: string | null = "netflix";
+    const options = coordinatorOptions({
+      beginServiceBarrier: () => {
+        events.push("barrier");
+        return { generation: events.length };
+      },
+      cancelDiscovery: () => events.push("cancel-discovery"),
+      cancelConfirmations: async () => {
+        events.push("cancel-confirmations");
+      },
+      cancelVoice: () => events.push("cancel-voice"),
+      closeActiveService: async () => {
+        events.push("close");
+        activeServiceId = null;
+      },
+      getActiveServiceId: () => activeServiceId,
+      resumeVoiceAuthority: () => events.push("resume"),
+      setAuthorityUpdateInProgress: () => undefined,
+      suspendVoiceAuthority: () => {
+        events.push("suspend");
+        return { generation: 2 };
+      }
+    });
+    const coordinator = new VoiceProfilePreferenceCoordinator(options);
+
+    await coordinator.changeProfile(async () => {
+      events.push("profile");
+      return state(preferences(["youtube"]));
+    });
+
+    expect(events).toEqual([
+      "suspend",
+      "barrier",
+      "cancel-discovery",
+      "cancel-voice",
+      "cancel-confirmations",
+      "close",
+      "barrier",
+      "profile",
+      "resume"
+    ]);
+  });
+
+  it("rechecks a custom service after asynchronous partition cleanup", async () => {
+    const events: string[] = [];
+    let activeServiceId: string | null = null;
+    const options = coordinatorOptions({
+      beginServiceBarrier: () => {
+        events.push("barrier");
+        return { generation: events.length };
+      },
+      closeActiveService: async () => {
+        events.push("close");
+        activeServiceId = null;
+      },
+      getActiveServiceId: () => activeServiceId
+    });
+    const coordinator = new VoiceProfilePreferenceCoordinator(options);
+
+    await coordinator.removeService(
+      "custom-one",
+      async () => {
+        events.push("clear");
+        activeServiceId = "custom-one";
+      },
+      async () => {
+        events.push("remove");
+        return state(preferences(["netflix", "youtube"]));
+      }
+    );
+
+    expect(events).toEqual(["barrier", "clear", "barrier", "close", "remove"]);
   });
 });

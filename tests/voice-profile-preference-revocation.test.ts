@@ -23,8 +23,15 @@ describe("voice profile-preference revocation", () => {
   });
 
   it("blocks new voice uploads while removed authority is being committed", () => {
-    expect(source).toContain("if (voiceLineupUpdateInProgress)");
-    expect(initialization).toContain("voiceLineupUpdateInProgress = inProgress");
+    expect(source).toContain("if (voiceAuthorityUpdateInProgress)");
+    expect(initialization).toContain("voiceAuthorityUpdateInProgress = inProgress");
     expect(initialization).toContain("closeWithCheckpoint(undefined, operation)");
+    expect(initialization).toContain("phoneRemote.suspendVoiceAuthority()");
+    expect(initialization).toContain("phoneRemote?.resumeVoiceAuthority(token)");
+  });
+
+  it("serializes profile changes and custom-service removal through the same boundary", () => {
+    expect(source).toContain("coordinator.changeProfile(async () =>");
+    expect(source).toContain("voiceProfilePreferenceCoordinator.removeService(");
   });
 });

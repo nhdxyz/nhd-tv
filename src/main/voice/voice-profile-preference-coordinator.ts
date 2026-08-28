@@ -1,16 +1,20 @@
 import type { LocalAppState, ProfilePreferences } from "../contracts";
+import type { VoiceAuthoritySuspensionToken } from "../remote/voice-authority-gate";
 import type { ServiceOperationToken } from "../service-operation-owner";
 import { removedEnabledServiceIds } from "./voice-execution-scope";
 
 export interface VoiceProfilePreferenceCoordinatorOptions {
   beginServiceBarrier: () => ServiceOperationToken | undefined;
+  cancelConfirmations: () => Promise<void>;
   cancelDiscovery: () => void;
   cancelVoice: () => void;
   closeActiveService: (operation: ServiceOperationToken | undefined) => Promise<void>;
   getActiveServiceId: () => string | null;
   getCurrentPreferences: () => ProfilePreferences;
   previewPreferences: (value: unknown) => ProfilePreferences;
+  resumeVoiceAuthority: (token: VoiceAuthoritySuspensionToken) => void;
   setAuthorityUpdateInProgress: (inProgress: boolean) => void;
+  suspendVoiceAuthority: () => VoiceAuthoritySuspensionToken;
   updatePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;
 }
 
@@ -27,7 +31,32 @@ export class VoiceProfilePreferenceCoordinator {
   }
 
   update(value: unknown): Promise<LocalAppState> {
-    const execution = this.#sequence.then(() => this.#update(value));
+    return this.#enqueue(() => this.#update(value));
+  }
+
+  changeProfile(operation: () => Promise<LocalAppState>): Promise<LocalAppState> {
+    return this.#enqueue(() => this.#withRevokedAuthority({
+      closeEveryService: true,
+      commit: operation,
+      removedServiceIds: this.#options.getCurrentPreferences().enabledServiceIds
+    }));
+  }
+
+  removeService(
+    serviceId: string,
+    prepare: () => Promise<void>,
+    commit: () => Promise<LocalAppState>
+  ): Promise<LocalAppState> {
+    return this.#enqueue(() => this.#withRevokedAuthority({
+      closeEveryService: false,
+      commit,
+      prepare,
+      removedServiceIds: [serviceId]
+    }));
+  }
+
+  #enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const execution = this.#sequence.then(operation);
     this.#sequence = execution.then(() => undefined, () => undefined);
     return execution;
   }
@@ -46,30 +75,67 @@ export class VoiceProfilePreferenceCoordinator {
       return this.#options.updatePreferences(nextPreferences);
     }
 
-    const removed = new Set(removedServiceIds);
+    return this.#withRevokedAuthority({
+      closeEveryService: false,
+      commit: () => this.#options.updatePreferences(nextPreferences),
+      removedServiceIds
+    });
+  }
+
+  async #withRevokedAuthority(options: {
+    closeEveryService: boolean;
+    commit: () => Promise<LocalAppState>;
+    prepare?: () => Promise<void>;
+    removedServiceIds: readonly string[];
+  }): Promise<LocalAppState> {
+    const removed = new Set(options.removedServiceIds);
     this.#options.setAuthorityUpdateInProgress(true);
+    const suspension = this.#options.suspendVoiceAuthority();
     try {
-      // Supersede the provider operation before aborting the phone signal. This
-      // prevents an old abort callback from closing a still-enabled provider.
-      const barrier = this.#options.beginServiceBarrier();
+      let barrier = this.#options.beginServiceBarrier();
       this.#options.cancelDiscovery();
       this.#options.cancelVoice();
+      await this.#options.cancelConfirmations();
+      await this.#closeForbiddenService(removed, options.closeEveryService, barrier);
 
-      const activeServiceId = this.#options.getActiveServiceId();
-      if (activeServiceId !== null && removed.has(activeServiceId)) {
-        await this.#options.closeActiveService(barrier);
+      if (options.prepare !== undefined) {
+        await options.prepare();
       }
 
-      const remainingActiveServiceId = this.#options.getActiveServiceId();
-      if (remainingActiveServiceId !== null && removed.has(remainingActiveServiceId)) {
-        throw new Error("A disabled service could not be closed safely.");
-      }
+      // A non-voice shell action can supersede the first barrier during an
+      // asynchronous preparation (such as clearing a custom partition).
+      // Re-establish ownership and close once more immediately before commit.
+      barrier = this.#options.beginServiceBarrier();
+      await this.#closeForbiddenService(removed, options.closeEveryService, barrier);
 
       // LocalStateStore mutates its in-memory snapshot before awaiting disk I/O,
       // so this must remain the final step after any removed view is gone.
-      return await this.#options.updatePreferences(nextPreferences);
+      return await options.commit();
     } finally {
+      this.#options.resumeVoiceAuthority(suspension);
       this.#options.setAuthorityUpdateInProgress(false);
+    }
+  }
+
+  async #closeForbiddenService(
+    removed: ReadonlySet<string>,
+    closeEveryService: boolean,
+    barrier: ServiceOperationToken | undefined
+  ): Promise<void> {
+    const activeServiceId = this.#options.getActiveServiceId();
+    if (
+      activeServiceId !== null &&
+      (closeEveryService || removed.has(activeServiceId))
+    ) {
+      await this.#options.closeActiveService(barrier);
+    }
+
+    const remainingActiveServiceId = this.#options.getActiveServiceId();
+    if (
+      remainingActiveServiceId !== null &&
+      (closeEveryService || removed.has(remainingActiveServiceId))
+    ) {
+      throw new Error("A revoked service could not be closed safely.");
     }
   }
 }

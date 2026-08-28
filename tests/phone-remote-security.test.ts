@@ -64,6 +64,26 @@ describe("phone remote boundary", () => {
     }, null)).toBe(false);
   });
 
+  it("gates activity, uploads, and confirmations during TV authority changes", () => {
+    const voiceStatusStart = serverSource.indexOf("async #voiceStatus(");
+    const voiceStatus = serverSource.slice(
+      voiceStatusStart,
+      serverSource.indexOf("#acceptCommand(", voiceStatusStart)
+    );
+    const confirmation = serverSource.slice(
+      serverSource.indexOf('url.pathname === "/api/voice/confirm"'),
+      serverSource.indexOf('url.pathname === "/api/voice/cancel"')
+    );
+    const gateCheck = confirmation.indexOf("this.#voiceAuthorityGate.suspended");
+    const operationBegin = confirmation.indexOf("this.#voiceOperations.begin(");
+
+    expect(serverSource).toContain("suspendVoiceAuthority()");
+    expect(serverSource).toContain("resumeVoiceAuthority(");
+    expect(voiceStatus.match(/this\.#voiceAuthorityGate\.suspended/g)?.length).toBe(2);
+    expect(gateCheck).toBeGreaterThan(-1);
+    expect(operationBegin).toBeGreaterThan(gateCheck);
+  });
+
   it("accepts only bounded audio uploads from the exact secure origin", () => {
     const secureOrigin = "https://living-room.example.ts.net:8443";
     const validHeaders = {

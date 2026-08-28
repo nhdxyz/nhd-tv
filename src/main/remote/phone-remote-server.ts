@@ -33,6 +33,10 @@ import {
   type VoiceActivityEvent
 } from "./voice-activity-lease";
 import {
+  VoiceAuthorityGate,
+  type VoiceAuthoritySuspensionToken
+} from "./voice-authority-gate";
+import {
   VoiceOperationCancelledError,
   VoiceOperationRegistry,
   type VoiceOperationHandle
@@ -514,6 +518,7 @@ export async function runVoiceOperationWithDeadline<T>(
 
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
+  readonly #voiceAuthorityGate = new VoiceAuthorityGate();
   readonly #voiceActivityLease = new VoiceActivityLease();
   readonly #voiceOperations = new VoiceOperationRegistry();
   readonly #pendingVoiceConfirmations = new Map<string, PendingVoiceConfirmationBinding>();
@@ -709,9 +714,22 @@ export class PhoneRemoteServer {
     return this.#voiceOperations.cancelActive() !== null;
   }
 
+  cancelPendingVoiceConfirmations(): Promise<void> {
+    return this.#cancelAllVoiceConfirmations();
+  }
+
+  suspendVoiceAuthority(): VoiceAuthoritySuspensionToken {
+    return this.#voiceAuthorityGate.suspend();
+  }
+
+  resumeVoiceAuthority(token: VoiceAuthoritySuspensionToken): boolean {
+    return this.#voiceAuthorityGate.resume(token);
+  }
+
   async stop(): Promise<void> {
     this.#manager.revokeAll();
     this.#voiceActivityLease.reset();
+    this.#voiceAuthorityGate.reset();
     this.#voiceOperations.reset();
     this.#pendingVoiceConfirmations.clear();
     this.#voiceConfirmationReplays.clear();
@@ -1354,6 +1372,13 @@ export class PhoneRemoteServer {
         writeJson(response, 400, { error: "A valid voice confirmation is required" });
         return;
       }
+      if (this.#voiceAuthorityGate.suspended) {
+        writeJson(response, 409, {
+          code: "voice_authority_suspended",
+          error: "The TV is updating its active profile or enabled services"
+        });
+        return;
+      }
       const deferredConfirmationId = this.#deferredDisconnectConfirmationIds.get(controllerId);
       const disconnecting = this.#disconnectingControllers.has(controllerId);
       const replay = this.#voiceConfirmationReplays.get(confirmationId, controllerId);
@@ -1780,11 +1805,25 @@ export class PhoneRemoteServer {
         detail: "Voice control requires the secure Tailscale remote."
       };
     }
+    if (this.#voiceAuthorityGate.suspended) {
+      return {
+        available: false,
+        busy: true,
+        detail: "The TV is updating its active profile or enabled services."
+      };
+    }
     const status = await this.#onGetVoiceStatus?.() ?? {
       available: false,
       busy: false,
       detail: "Voice control is not configured for this build."
     };
+    if (this.#voiceAuthorityGate.suspended) {
+      return {
+        available: false,
+        busy: true,
+        detail: "The TV is updating its active profile or enabled services."
+      };
+    }
     return {
       ...status,
       busy: this.#voiceOperations.busy ||

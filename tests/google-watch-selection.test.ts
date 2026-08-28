@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail
 } from "../src/main/voice/google-watch-selection";
+import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
 import type { GoogleWatchResult } from "../src/main/voice/google-watch-cache";
 
 const result: GoogleWatchResult = {
@@ -41,6 +43,21 @@ const result: GoogleWatchResult = {
   sourceUrl: "https://www.google.com/search?q=Apollo+13",
   warmMs: 200
 };
+
+function intent(overrides: Partial<VoiceMediaIntent> = {}): VoiceMediaIntent {
+  return {
+    action: "play",
+    creator: null,
+    episode: null,
+    kind: "media",
+    mediaType: "movie",
+    providerHint: null,
+    recency: null,
+    season: null,
+    title: "Apollo 13",
+    ...overrides
+  };
+}
 
 describe("Google watch selection", () => {
   it("launches only an enabled mapped provider", () => {
@@ -114,5 +131,56 @@ describe("Google watch selection", () => {
     };
     expect(selectEnabledWatchOffer(disneyResult, ["disney-plus", "netflix"]))
       .toMatchObject({ serviceId: "disney-plus" });
+  });
+
+  it("accepts price-free subscription-only providers with sparse Google labels", () => {
+    expect(selectEnabledWatchOffer({
+      ...result,
+      offers: [{
+        ...result.offers[1]!,
+        monetizationType: null,
+        rawLabel: "Netflix"
+      }]
+    }, ["netflix"])).toMatchObject({ serviceId: "netflix" });
+  });
+
+  it("verifies title identity before using a direct provider URL", () => {
+    expect(googleWatchResultMatchesIntent(result, intent())).toBe(true);
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedTitle: "Apollo 18"
+    }, intent())).toBe(false);
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedTitle: "Dune: Prophecy"
+    }, intent({ title: "Dune" }))).toBe(false);
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedTitle: "Apollo 13 movie"
+    }, intent())).toBe(true);
+  });
+
+  it("requires exact visible episode coordinates before direct playback", () => {
+    const episodeIntent = intent({
+      episode: 3,
+      mediaType: "episode",
+      season: 1,
+      title: "Breaking Bad"
+    });
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedSubtitle: "Season 1, Episode 3 — And the Bag's in the River",
+      resolvedTitle: "Breaking Bad"
+    }, episodeIntent)).toBe(true);
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedSubtitle: "S1 E4 — Cancer Man",
+      resolvedTitle: "Breaking Bad"
+    }, episodeIntent)).toBe(false);
+    expect(googleWatchResultMatchesIntent({
+      ...result,
+      resolvedSubtitle: null,
+      resolvedTitle: "Breaking Bad"
+    }, episodeIntent)).toBe(false);
   });
 });

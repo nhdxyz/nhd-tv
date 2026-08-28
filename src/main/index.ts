@@ -105,6 +105,7 @@ import {
   googleWatchLookupFromIntent
 } from "./voice/google-watch-resolver";
 import {
+  googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail
 } from "./voice/google-watch-selection";
@@ -1041,6 +1042,9 @@ async function executeGoogleWatchPlan(
   let result = await resolver.resolve(lookup, {
     completeOffers: plan.intent.action === "lookup"
   });
+  if (!googleWatchResultMatchesIntent(result, plan.intent)) {
+    throw new Error("Google watch discovery returned a different title or episode.");
+  }
   if (plan.intent.action === "lookup") {
     return {
       detail: watchAvailabilityDetail(result, plan.candidateServiceIds),
@@ -1051,6 +1055,9 @@ async function executeGoogleWatchPlan(
   let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
   if (selected === null && !result.offersComplete) {
     result = await resolver.resolve(lookup, { completeOffers: true });
+    if (!googleWatchResultMatchesIntent(result, plan.intent)) {
+      throw new Error("Google watch discovery changed title or episode while expanding offers.");
+    }
     selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
   }
   if (selected === null) {

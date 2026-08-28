@@ -4,6 +4,7 @@ import {
   googleWatchLookupFromIntent,
   googleWatchMetadataForLookup,
   googleWatchOfferFromUrl,
+  googleWatchOfferResolutionIsComplete,
   prioritizeGoogleWatchCandidates,
   googleWatchSearchUrl
 } from "../src/main/voice/google-watch-resolver";
@@ -201,5 +202,23 @@ describe("Google watch resolver boundary", () => {
     ];
     expect(prioritizeGoogleWatchCandidates(candidates, ["Disney+", "Netflix"]))
       .toEqual([candidates[2], candidates[1], candidates[0]]);
+  });
+
+  it("marks an expanded offer list complete only when every candidate resolved", () => {
+    expect(googleWatchOfferResolutionIsComplete({
+      candidateCount: 8,
+      resolvedCount: 8,
+      stoppedEarly: false
+    })).toBe(true);
+    expect(googleWatchOfferResolutionIsComplete({
+      candidateCount: 8,
+      resolvedCount: 7,
+      stoppedEarly: false
+    })).toBe(false);
+    expect(googleWatchOfferResolutionIsComplete({
+      candidateCount: 8,
+      resolvedCount: 1,
+      stoppedEarly: true
+    })).toBe(false);
   });
 });

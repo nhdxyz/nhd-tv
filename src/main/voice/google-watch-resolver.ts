@@ -68,6 +68,13 @@ interface GoogleWatchResolutionOptions {
   signal?: AbortSignal;
 }
 
+interface GoogleWatchOfferResolution {
+  candidateCount: number;
+  offers: GoogleWatchOffer[];
+  resolvedCount: number;
+  stoppedEarly: boolean;
+}
+
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -260,6 +267,16 @@ function isPreferredLaunchableOffer(
   return offer.monetizationType === null &&
     offer.priceText === null &&
     (offer.providerName === "Netflix" || offer.providerName === "Disney+");
+}
+
+export function googleWatchOfferResolutionIsComplete(
+  resolution: Pick<
+    GoogleWatchOfferResolution,
+    "candidateCount" | "resolvedCount" | "stoppedEarly"
+  >
+): boolean {
+  return !resolution.stoppedEarly &&
+    resolution.resolvedCount === resolution.candidateCount;
 }
 
 function providerContentId(url: URL): string | null {
@@ -701,30 +718,48 @@ export class GoogleWatchResolver {
     preferredProviderNames: readonly string[],
     stopAfterPreferredOffer: boolean,
     signal?: AbortSignal
-  ): Promise<GoogleWatchOffer[]> {
+  ): Promise<GoogleWatchOfferResolution> {
     const offers: GoogleWatchOffer[] = [];
     const seen = new Set<string>();
     const candidates = prioritizeGoogleWatchCandidates(
-      panel.candidateLinks,
+      panel.candidateLinks.filter((candidate) => {
+        if (seen.has(candidate.href)) return false;
+        seen.add(candidate.href);
+        return true;
+      }),
       preferredProviderNames
     );
+    let resolvedCount = 0;
     for (const candidate of candidates) {
       signal?.throwIfAborted();
-      if (seen.has(candidate.href)) continue;
-      seen.add(candidate.href);
       const resolvedUrl = await this.#resolveCandidate(candidate.href, signal);
       signal?.throwIfAborted();
       if (resolvedUrl === null) continue;
       const offer = googleWatchOfferFromUrl(resolvedUrl, candidate.label);
+      if (offer !== null) {
+        resolvedCount += 1;
+      }
       if (offer !== null && !offers.some((existing) => existing.watchUrl === offer.watchUrl)) {
         offers.push(offer);
         if (
           stopAfterPreferredOffer &&
           isPreferredLaunchableOffer(offer, preferredProviderNames)
-        ) return offers;
+        ) {
+          return {
+            candidateCount: candidates.length,
+            offers,
+            resolvedCount,
+            stoppedEarly: true
+          };
+        }
       }
     }
-    return offers;
+    return {
+      candidateCount: candidates.length,
+      offers,
+      resolvedCount,
+      stoppedEarly: false
+    };
   }
 
   async #resolveUncached(
@@ -737,12 +772,15 @@ export class GoogleWatchResolver {
     const before = await this.#sessionRequest(sourceUrl, signal);
     let panel = before.hasData ? await this.#extractRequestBody(before.body) : null;
     signal?.throwIfAborted();
-    let offers = panel === null ? [] : await this.#offers(
-      panel,
-      preferredProviderNames,
-      !requireCompleteOffers,
-      signal
-    );
+    let offerResolution: GoogleWatchOfferResolution = panel === null
+      ? { candidateCount: 0, offers: [], resolvedCount: 0, stoppedEarly: false }
+      : await this.#offers(
+        panel,
+        preferredProviderNames,
+        !requireCompleteOffers,
+        signal
+      );
+    let offers = offerResolution.offers;
     let renderMs: number | null = null;
     let requestAfterRenderHasData = false;
     let offersComplete = false;
@@ -758,13 +796,16 @@ export class GoogleWatchResolver {
       panel = await this.#extractRendered();
       signal?.throwIfAborted();
       renderMs = Date.now() - renderStartedAt;
-      offers = panel === null ? [] : await this.#offers(
-        panel,
-        preferredProviderNames,
-        !requireCompleteOffers,
-        signal
-      );
-      offersComplete = true;
+      offerResolution = panel === null
+        ? { candidateCount: 0, offers: [], resolvedCount: 0, stoppedEarly: false }
+        : await this.#offers(
+          panel,
+          preferredProviderNames,
+          !requireCompleteOffers,
+          signal
+        );
+      offers = offerResolution.offers;
+      offersComplete = googleWatchOfferResolutionIsComplete(offerResolution);
       const after = await this.#sessionRequest(sourceUrl, signal);
       requestAfterRenderHasData = after.hasData;
       retrievalMode = after.hasData

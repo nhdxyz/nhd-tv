@@ -970,11 +970,14 @@ export const REMOTE_JS = `(() => {
       typeof navigator.mediaDevices.getUserMedia === "function" &&
       supportedVoiceMimeType !== null;
     const ready = remoteEnabled && voiceAvailable && browserReady;
+    const awaitingConfirmation = pendingVoiceConfirmation !== null;
     const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
-    voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult;
+    voiceButton.disabled = !ready || voiceProcessing || awaitingConfirmation;
     voiceButton.classList.toggle("is-processing", voiceProcessing);
     voiceHelp.textContent = awaitingSubmittedResult
       ? "Check the playback result before starting another voice command."
+      : awaitingConfirmation
+        ? "Choose Play or Cancel before starting another voice command."
       : !window.isSecureContext
       ? "Voice requires the secure Tailscale QR code."
       : supportedVoiceMimeType === null

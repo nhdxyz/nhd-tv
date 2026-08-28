@@ -180,7 +180,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
     expect(REMOTE_JS).toContain("submitted: true");
     expect(REMOTE_JS).toContain(
-      "voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult"
+      "voiceButton.disabled = !ready || voiceProcessing || awaitingConfirmation"
+    );
+    expect(REMOTE_JS).toContain(
+      "Choose Play or Cancel before starting another voice command."
     );
     expect(REMOTE_JS).toContain(
       "Check the playback result before starting another voice command."

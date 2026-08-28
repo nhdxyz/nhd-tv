@@ -74,7 +74,11 @@ import {
   getServiceSummaries,
   setCustomServiceManifests
 } from "./service-registry";
-import { ServiceHost, type PlaybackObservation } from "./service-host";
+import {
+  ServiceHost,
+  type CurrentMediaSnapshot,
+  type PlaybackObservation
+} from "./service-host";
 import type { ServiceOperationToken } from "./service-operation-owner";
 import type { SpotifyPlaybackSnapshot } from "./spotify-playback";
 import {
@@ -100,6 +104,15 @@ import type {
   VoiceCommandPlan
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
+import {
+  VoiceContextStore,
+  type VoiceLiveMediaSnapshot,
+  type VoiceMediaType as VoiceContextMediaType
+} from "./voice/voice-context-store";
+import {
+  answerCurrentMediaQuestion,
+  type VoiceCurrentMediaSnapshot
+} from "./voice/voice-current-media";
 import {
   isVoiceDiscoveryIntent,
   resolveVoiceMediaDestination,
@@ -177,6 +190,7 @@ let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
+let voiceContextStore: VoiceContextStore | null = null;
 let currentVoicePresentation = createVoicePresentationState("hidden");
 let currentVoiceCommandId: string | null = null;
 let activeVoiceProcessingCommandId: string | null = null;
@@ -357,7 +371,92 @@ function stopAmbientDisplayMonitor(): void {
   dismissAmbientDisplay();
 }
 
+function voiceContextMediaType(snapshot: CurrentMediaSnapshot): VoiceContextMediaType {
+  if (snapshot.mediaKind === "audio") return "song";
+  if (snapshot.serviceId === "youtube") return "video";
+  return snapshot.subtitle === null ? "movie" : "episode";
+}
+
+function syncVoiceContextFromServiceHost(): void {
+  const store = voiceContextStore;
+  if (store === null) return;
+
+  const activeProfileId = localStateStore?.snapshot().activeProfileId ?? null;
+  if (store.snapshot().activeProfileId !== activeProfileId) {
+    store.setActiveProfile(activeProfileId);
+  }
+
+  const current = serviceHost?.currentMediaSnapshot ?? null;
+  const serviceId = serviceHost?.activeServiceId ?? null;
+  const definition = serviceId === null ? null : getServiceDefinition(serviceId);
+  const activeService = store.snapshot().activeService;
+  if (activeService?.id !== serviceId) {
+    store.setActiveService(definition === null
+      ? null
+      : { id: definition.id, name: definition.name });
+  }
+
+  const revisions = store.revisions();
+  if (current === null) {
+    if (store.snapshot().liveMedia !== null) store.clearMedia(revisions);
+    return;
+  }
+
+  store.observeMedia({
+    capabilities: [],
+    durationSeconds: current.durationSeconds,
+    fullscreen: current.fullscreen,
+    identity: {
+      album: current.album,
+      artist: current.artist,
+      creator: current.serviceId === "youtube" ? current.subtitle : null,
+      seriesTitle: current.mediaKind === "video" && current.subtitle !== null
+        ? current.title
+        : null,
+      subtitle: current.subtitle,
+      title: current.title
+    },
+    mediaType: voiceContextMediaType(current),
+    observedAt: current.observedAt,
+    playbackStatus: current.playbackState,
+    positionSeconds: current.positionSeconds
+  }, revisions);
+}
+
+function currentMediaSnapshotFromVoiceContext(
+  snapshot: VoiceLiveMediaSnapshot | null
+): VoiceCurrentMediaSnapshot | null {
+  if (snapshot === null) return null;
+  const audioTypes: readonly VoiceContextMediaType[] = [
+    "album",
+    "playlist",
+    "podcast-episode",
+    "song"
+  ];
+  const playbackState = snapshot.playbackStatus === "ended" ||
+    snapshot.playbackStatus === "paused" ||
+    snapshot.playbackStatus === "playing"
+    ? snapshot.playbackStatus
+    : "unknown";
+  return {
+    album: snapshot.identity.album,
+    artist: snapshot.identity.artist,
+    backgrounded: serviceHost?.isBackgrounded ?? false,
+    durationSeconds: snapshot.durationSeconds,
+    fullscreen: snapshot.fullscreen === true,
+    mediaKind: audioTypes.includes(snapshot.mediaType) ? "audio" : "video",
+    observedAt: snapshot.observedAt,
+    playbackState,
+    positionSeconds: snapshot.positionSeconds,
+    serviceId: snapshot.service.id,
+    serviceName: snapshot.service.name,
+    subtitle: snapshot.identity.subtitle,
+    title: snapshot.identity.title
+  };
+}
+
 function handleServiceStateChanged(): void {
+  syncVoiceContextFromServiceHost();
   const playbackActive = serviceHost?.isPlaybackActive ?? false;
   if (playbackActive || (lastServicePlaybackActive && !playbackActive)) {
     markAmbientActivity();
@@ -413,6 +512,7 @@ async function activateProfile(
 ): Promise<LocalAppState> {
   await serviceHost?.closeWithCheckpoint();
   const state = await operation();
+  voiceContextStore?.setActiveProfile(state.activeProfileId);
   await initializeContinueWatchingForProfile(state.activeProfileId);
   publishContinueWatching();
   return state;
@@ -759,6 +859,7 @@ async function fetchSpotifyArtworkDataUrl(artworkUrl: string): Promise<string | 
 }
 
 function handleSpotifyPlayback(snapshot: SpotifyPlaybackSnapshot | null): void {
+  syncVoiceContextFromServiceHost();
   spotifyArtworkSourceUrl = snapshot?.artworkUrl ?? null;
   spotifyPlaybackPresentation = snapshot === null
     ? {
@@ -1033,6 +1134,7 @@ async function searchCatalog(value: unknown): Promise<readonly CatalogSearchResu
 }
 
 async function handlePlaybackObservation(observation: PlaybackObservation): Promise<void> {
+  syncVoiceContextFromServiceHost();
   if (
     continueWatchingStore === null ||
     process.argv.includes("--netflix-smoke-test") ||
@@ -1389,6 +1491,13 @@ async function executeVoiceCommandPlanCore(
     const result = await systemVolumeController.setMuted(plan.muted);
     signal?.throwIfAborted();
     return result;
+  }
+  if (plan.kind === "query-current-media") {
+    syncVoiceContextFromServiceHost();
+    return answerCurrentMediaQuestion(
+      plan.action,
+      currentMediaSnapshotFromVoiceContext(voiceContextStore?.snapshot().liveMedia ?? null)
+    );
   }
   const operation = serviceHost?.beginOperation();
   if (plan.kind === "remote-action") {
@@ -2295,6 +2404,8 @@ app.whenReady().then(async () => {
       .map((service) => service.id)
   );
   await localStateStore.initialize();
+  voiceContextStore = new VoiceContextStore();
+  voiceContextStore.setActiveProfile(localStateStore.snapshot().activeProfileId);
   googleWatchCache = new GoogleWatchCache(
     path.join(app.getPath("userData"), "voice-watch-results.sqlite")
   );

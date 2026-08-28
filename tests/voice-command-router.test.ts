@@ -60,6 +60,32 @@ describe("voice command planning", () => {
     });
   });
 
+  it("routes current-media questions without provider navigation", () => {
+    expect(planVoiceCommand({ action: "identity", kind: "current-media" }, context)).toEqual({
+      action: "identity",
+      kind: "query-current-media"
+    });
+    expect(planVoiceCommand({ action: "episode", kind: "current-media" }, context)).toEqual({
+      action: "episode",
+      kind: "query-current-media"
+    });
+    expect(planVoiceCommand({ action: "song", kind: "current-media" }, context)).toEqual({
+      action: "song",
+      kind: "query-current-media"
+    });
+    expect(planVoiceCommand({
+      action: "time-remaining",
+      kind: "current-media"
+    }, context)).toEqual({
+      action: "time-remaining",
+      kind: "query-current-media"
+    });
+    expect(planVoiceCommand({ action: "end-time", kind: "current-media" }, context)).toEqual({
+      action: "end-time",
+      kind: "query-current-media"
+    });
+  });
+
   it("routes track skipping only through Spotify's semantic controls", () => {
     expect(planVoiceCommand({ action: "next-track", kind: "control" }, {
       ...context,

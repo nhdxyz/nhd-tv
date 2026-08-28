@@ -2,6 +2,7 @@ import type { RemoteAction, VoicePlaybackMode } from "../contracts";
 import type {
   VoiceAppIntent,
   VoiceControlAction,
+  VoiceCurrentMediaIntent,
   VoiceIntent,
   VoiceMediaIntent,
   VoiceProviderHint
@@ -27,6 +28,7 @@ export interface VoiceCommandContext {
 
 export type VoiceCommandPlan =
   | { action: RemoteAction; kind: "remote-action" }
+  | { action: VoiceCurrentMediaIntent["action"]; kind: "query-current-media" }
   | { detail: string; handled?: boolean; kind: "no-op" }
   | { kind: "close-service" }
   | { kind: "launch-service"; serviceId: string; serviceName: string }
@@ -216,6 +218,9 @@ export function planVoiceCommand(
     };
   }
   if (intent.kind === "app") return appPlan(intent, context);
+  if (intent.kind === "current-media") {
+    return { action: intent.action, kind: "query-current-media" };
+  }
   return intent.kind === "control"
     ? controlPlan(intent.action, context)
     : mediaPlan(intent, context);

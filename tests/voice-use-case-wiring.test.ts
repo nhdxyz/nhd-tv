@@ -28,4 +28,13 @@ describe("voice use-case execution wiring", () => {
     expect(execution).toContain("Searched ${definition.name} for ${destination.query}.");
     expect(execution).toContain("I couldn't verify where ${plan.intent.title} is available");
   });
+
+  it("answers current-media questions from the shared live context without navigation", () => {
+    const query = execution.indexOf('plan.kind === "query-current-media"');
+    const operation = execution.indexOf("serviceHost?.beginOperation()");
+    expect(query).toBeGreaterThan(-1);
+    expect(execution).toContain("syncVoiceContextFromServiceHost()");
+    expect(execution).toContain("answerCurrentMediaQuestion(");
+    expect(query).toBeLessThan(operation);
+  });
 });

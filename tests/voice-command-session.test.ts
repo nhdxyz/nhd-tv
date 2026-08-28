@@ -84,6 +84,35 @@ describe("voice command session", () => {
     now += 31_000;
   });
 
+  it("revalidates the active profile and enabled services when confirmation is tapped", async () => {
+    let currentContext = context("confirm");
+    const execute = vi.fn(async () => ({ detail: "Checked current profile", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => currentContext,
+      randomToken: () => "confirmation_token_profile",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({
+      outcome: "confirmation-required"
+    });
+    currentContext = {
+      ...context("automatic"),
+      enabledServiceIds: [],
+      serviceOrder: []
+    };
+    await expect(session.confirm("confirmation_token_profile")).resolves.toMatchObject({
+      outcome: "completed"
+    });
+    expect(execute).toHaveBeenLastCalledWith(expect.objectContaining({
+      candidateServiceIds: [],
+      confirmationRequired: false,
+      kind: "resolve-media",
+      launchAllowed: false
+    }));
+  });
+
   it("expires confirmations and executes automatic playback directly", async () => {
     let now = 1_000;
     const execute = vi.fn(async () => ({ detail: "Opening episode", handled: true }));

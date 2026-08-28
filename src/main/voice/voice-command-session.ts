@@ -36,7 +36,7 @@ export interface VoiceCommandSessionOptions {
 
 interface PendingConfirmation {
   expiresAt: number;
-  plan: VoiceCommandPlan;
+  intent: VoiceMediaIntent;
 }
 
 function normalizedConfirmationId(value: unknown): string | null {
@@ -98,7 +98,7 @@ export class VoiceCommandSession {
       }
       this.#pending.set(confirmationId, {
         expiresAt: this.#now() + CONFIRMATION_TTL_MS,
-        plan: { ...plan, confirmationRequired: false }
+        intent: plan.intent
       });
       return {
         confirmationId,
@@ -123,7 +123,12 @@ export class VoiceCommandSession {
     }
 
     this.#pending.delete(confirmationId);
-    return this.#executePlan(pending.plan);
+    const freshPlan = planVoiceCommand(pending.intent, await this.#getContext());
+    return this.#executePlan(
+      freshPlan.kind === "resolve-media"
+        ? { ...freshPlan, confirmationRequired: false }
+        : freshPlan
+    );
   }
 
   async #executePlan(

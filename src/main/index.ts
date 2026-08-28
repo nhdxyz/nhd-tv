@@ -112,8 +112,9 @@ import {
   type VoiceMediaType as VoiceContextMediaType
 } from "./voice/voice-context-store";
 import {
-  recordVoiceMediaIntentContext,
-  resolveVoiceContextIntent
+  beginVoiceMediaIntentContext,
+  resolveVoiceContextIntent,
+  settleVoiceMediaIntentContext
 } from "./voice/voice-context-resolver";
 import {
   captureVoiceExecutionScope,
@@ -2067,6 +2068,8 @@ async function executeVoiceCommandPlan(
     googleWatchResolver?.cancelActive();
   };
   signal?.addEventListener("abort", cancelNavigation, { once: true });
+  const contextStore = voiceContextStore;
+  let contextAttempt: ReturnType<typeof beginVoiceMediaIntentContext> | null = null;
   try {
     let executionScope: VoiceExecutionScope | undefined;
     if (plan.kind === "resolve-media") {
@@ -2074,33 +2077,53 @@ async function executeVoiceCommandPlan(
       const profileState = voiceExecutionProfileState();
       if (profileState === null) return voiceExecutionProfileChangedResult();
       executionScope = captureVoiceExecutionScope(profileState);
+      if (contextStore !== null) {
+        contextAttempt = beginVoiceMediaIntentContext(contextStore, plan.intent);
+      }
     }
-    const result = plan.kind === "resolve-media"
-      ? await runVoiceStageWithDeadline(
-          (mediaSignal) => executeVoiceCommandPlanCore(
-            plan,
-            mediaSignal,
-            executionScope
-          ),
-          {
-            onTimeout: cancelTimedOutVoiceWork,
-            signal,
-            timeoutMessage: "Finding or starting that title took too long. Try again.",
-            timeoutMs: VOICE_MEDIA_EXECUTION_TIMEOUT_MS
-          }
-        )
-      : await executeVoiceCommandPlanCore(plan, signal, executionScope);
-    signal?.throwIfAborted();
-    if (
-      plan.kind === "resolve-media" &&
-      result.handled &&
-      voiceContextStore !== null
-    ) {
-      recordVoiceMediaIntentContext(voiceContextStore, plan.intent, {
-        preserveCandidates: (result.choices?.length ?? 0) > 0
-      });
+    try {
+      const result = plan.kind === "resolve-media"
+        ? await runVoiceStageWithDeadline(
+            (mediaSignal) => executeVoiceCommandPlanCore(
+              plan,
+              mediaSignal,
+              executionScope
+            ),
+            {
+              onTimeout: cancelTimedOutVoiceWork,
+              signal,
+              timeoutMessage: "Finding or starting that title took too long. Try again.",
+              timeoutMs: VOICE_MEDIA_EXECUTION_TIMEOUT_MS
+            }
+          )
+        : await executeVoiceCommandPlanCore(plan, signal, executionScope);
+      signal?.throwIfAborted();
+      if (
+        plan.kind === "resolve-media" &&
+        contextStore !== null &&
+        contextAttempt !== null
+      ) {
+        settleVoiceMediaIntentContext(
+          contextStore,
+          contextAttempt,
+          result.handled
+            ? {
+                intent: plan.intent,
+                outcome: "succeeded",
+                preserveCandidates: (result.choices?.length ?? 0) > 0
+              }
+            : { outcome: "failed" }
+        );
+      }
+      return result;
+    } catch (error) {
+      if (contextStore !== null && contextAttempt !== null) {
+        settleVoiceMediaIntentContext(contextStore, contextAttempt, {
+          outcome: signal?.aborted === true ? "cancelled" : "failed"
+        });
+      }
+      throw error;
     }
-    return result;
   } finally {
     signal?.removeEventListener("abort", cancelNavigation);
   }

@@ -28,10 +28,18 @@ describe("voice profile-preference revocation", () => {
     expect(initialization).toContain("closeWithCheckpoint(undefined, operation)");
     expect(initialization).toContain("phoneRemote.suspendVoiceAuthority()");
     expect(initialization).toContain("phoneRemote?.resumeVoiceAuthority(token)");
+    expect(initialization).toContain("phoneRemote?.cancelPendingVoiceConfirmations()");
   });
 
   it("serializes profile changes and custom-service removal through the same boundary", () => {
     expect(source).toContain("coordinator.changeProfile(async () =>");
     expect(source).toContain("voiceProfilePreferenceCoordinator.removeService(");
+  });
+
+  it("binds confirmation cards to profile generation and enabled-service authority", () => {
+    expect(source).toContain("getAuthorityKey: () => {");
+    expect(source).toContain("if (voiceAuthorityUpdateInProgress) return null");
+    expect(source).toContain("state.profileRevision");
+    expect(source).toContain("[...new Set(state.enabledServiceIds)].sort()");
   });
 });

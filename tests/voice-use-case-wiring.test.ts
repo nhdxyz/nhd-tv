@@ -116,15 +116,23 @@ describe("voice use-case execution wiring", () => {
     );
   });
 
-  it("commits universal media context only after a handled, non-cancelled result", () => {
+  it("settles universal media context transactionally after execution", () => {
+    const begin = planWrapper.indexOf("beginVoiceMediaIntentContext(");
     const execute = planWrapper.indexOf("await executeVoiceCommandPlanCore(");
     const abort = planWrapper.indexOf("signal?.throwIfAborted()", execute);
     const handled = planWrapper.indexOf("result.handled", execute);
-    const record = planWrapper.indexOf("recordVoiceMediaIntentContext(", execute);
+    const settle = planWrapper.indexOf("settleVoiceMediaIntentContext(", execute);
+    const succeeded = planWrapper.indexOf('outcome: "succeeded"', settle);
+    expect(begin).toBeGreaterThan(-1);
+    expect(begin).toBeLessThan(execute);
     expect(execute).toBeGreaterThan(-1);
     expect(abort).toBeGreaterThan(execute);
     expect(handled).toBeGreaterThan(abort);
-    expect(record).toBeGreaterThan(handled);
+    expect(settle).toBeGreaterThan(abort);
+    expect(handled).toBeGreaterThan(settle);
+    expect(succeeded).toBeGreaterThan(handled);
+    expect(planWrapper).toContain('outcome: "failed"');
+    expect(planWrapper).toContain('outcome: signal?.aborted === true ? "cancelled" : "failed"');
     expect(planWrapper).toContain("preserveCandidates:");
     expect(planWrapper).toContain("result.choices?.length");
   });

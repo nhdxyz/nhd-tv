@@ -287,6 +287,17 @@ export function googleWatchOfferFromUrl(
   } catch {
     return null;
   }
+  if (url.hostname === "www.youtube.com" && url.pathname === "/attribution_link") {
+    const target = url.searchParams.get("u");
+    if (target === null) return null;
+    try {
+      const unwrapped = new URL(target, "https://www.youtube.com");
+      if (unwrapped.origin !== "https://www.youtube.com") return null;
+      url = unwrapped;
+    } catch {
+      return null;
+    }
+  }
   const providerName = PROVIDER_NAMES.get(url.hostname);
   if (url.protocol !== "https:" || providerName === undefined) return null;
 

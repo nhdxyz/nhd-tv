@@ -180,6 +180,17 @@ describe("Google watch resolver boundary", () => {
       "https://watch.sling.com/1/program/example-id",
       "Sling TV Subscription"
     )).toMatchObject({ providerName: "Sling TV" });
+    expect(googleWatchOfferFromUrl(
+      "https://www.youtube.com/attribution_link?u=%2Fwatch%3Fv%3Dabcdefghijk%26feature%3Dshare",
+      "YouTube Free Watch"
+    )).toMatchObject({
+      providerContentId: "abcdefghijk",
+      watchUrl: "https://www.youtube.com/watch?v=abcdefghijk&feature=share"
+    });
+    expect(googleWatchOfferFromUrl(
+      "https://www.youtube.com/attribution_link?u=https%3A%2F%2Fevil.test%2Fwatch%3Fv%3Dabcdefghijk",
+      "YouTube Free Watch"
+    )).toBeNull();
   });
 
   it("resolves the user's preferred provider before slower redirect candidates", () => {

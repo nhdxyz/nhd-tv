@@ -910,10 +910,15 @@ export const REMOTE_JS = `(() => {
   let voiceDiscardRequested = false;
   let voiceProcessing = false;
   let pendingVoiceConfirmation = null;
+  let voiceConfirmationTimer = null;
+  let voiceConfirmationRequestInFlight = false;
+  let pageTerminationPending = false;
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const DIRECTION_REPEAT_DELAY_MS = 380;
   const DIRECTION_REPEAT_INTERVAL_MS = 115;
+  const VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS = 25_000;
+  const VOICE_CONFIRMATION_TTL_MS = 30_000;
   const precisionRelativeDelta = (${precisionRelativeDelta.toString()});
   const movePrecisionPoint = (${movePrecisionPoint.toString()});
   const edgeScroll = (${precisionEdgeScroll.toString()});
@@ -996,8 +1001,10 @@ export const REMOTE_JS = `(() => {
     searchToggle.disabled = !enabled;
     searchSubmit.disabled = !enabled;
     controlMode.disabled = !enabled;
+    updateVoiceConfirmationButtons();
     updateVoiceButton();
     if (!enabled) {
+      closeVoiceConfirmation();
       resetTextEntry();
     }
   }
@@ -1044,17 +1051,49 @@ export const REMOTE_JS = `(() => {
     } catch {}
   }
 
+  function clearVoiceConfirmationTimer() {
+    if (voiceConfirmationTimer !== null) {
+      clearTimeout(voiceConfirmationTimer);
+      voiceConfirmationTimer = null;
+    }
+  }
+
+  function updateVoiceConfirmationButtons() {
+    const disabled = !remoteEnabled || voiceProcessing || pendingVoiceConfirmation === null;
+    voiceConfirmCancel.disabled = disabled;
+    voiceConfirmPlay.disabled = disabled;
+  }
+
   function closeVoiceConfirmation() {
     const pending = pendingVoiceConfirmation;
+    clearVoiceConfirmationTimer();
     pendingVoiceConfirmation = null;
     voiceConfirm.hidden = true;
+    updateVoiceConfirmationButtons();
     return pending;
   }
 
   function showVoiceConfirmation(pending) {
+    clearVoiceConfirmationTimer();
+    const expiresAt = Number.isFinite(pending.expiresAt)
+      ? pending.expiresAt
+      : Date.now() + VOICE_CONFIRMATION_TTL_MS;
+    if (expiresAt <= Date.now()) {
+      closeVoiceConfirmation();
+      setState("Voice confirmation expired — hold the microphone and try again", "error");
+      return false;
+    }
+    pending.expiresAt = expiresAt;
     pendingVoiceConfirmation = pending;
     voiceConfirmCopy.textContent = pending.detail;
     voiceConfirm.hidden = false;
+    updateVoiceConfirmationButtons();
+    voiceConfirmationTimer = setTimeout(() => {
+      if (pendingVoiceConfirmation?.confirmationId !== pending.confirmationId) return;
+      closeVoiceConfirmation();
+      setState("Voice confirmation expired — hold the microphone and try again", "error");
+    }, Math.max(0, expiresAt - Date.now()));
+    return true;
   }
 
   async function cancelVoiceConfirmation(pending, showStatus) {
@@ -1070,8 +1109,13 @@ export const REMOTE_JS = `(() => {
       });
       if (showStatus) setState("Voice command cancelled", "connected");
     } catch (error) {
-      if (showStatus && (!error || error.status !== 410)) {
-        setState(error instanceof Error ? error.message : "Could not cancel voice command", "error");
+      if (showStatus) {
+        setState(
+          error && error.status === 410
+            ? "Voice confirmation already expired"
+            : error instanceof Error ? error.message : "Could not cancel voice command",
+          error && error.status === 410 ? "connected" : "error"
+        );
       }
     }
   }
@@ -1111,15 +1155,24 @@ export const REMOTE_JS = `(() => {
         result.outcome === "confirmation-required" &&
         typeof result.confirmationId === "string"
       ) {
-        showVoiceConfirmation({
+        const now = Date.now();
+        const expiresAt = Number.isFinite(result.confirmationExpiresAt) &&
+          result.confirmationExpiresAt > now &&
+          result.confirmationExpiresAt <= now + VOICE_CONFIRMATION_TTL_MS
+          ? result.confirmationExpiresAt
+          : now + VOICE_CONFIRMATION_TTL_MS;
+        const shown = showVoiceConfirmation({
           commandId,
           confirmationId: result.confirmationId,
           detail: typeof result.detail === "string"
             ? result.detail.slice(0, 200)
-            : "Play this title?"
+            : "Play this title?",
+          expiresAt
         });
-        setState("Confirm on your phone", "connected");
-        if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+        if (shown) {
+          setState("Confirm on your phone", "connected");
+          if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+        }
       } else {
         closeVoiceConfirmation();
         setState(
@@ -1138,6 +1191,7 @@ export const REMOTE_JS = `(() => {
       voiceProcessing = false;
       voiceButtonCopy.textContent = "Hold to talk";
       updateVoiceButton();
+      updateVoiceConfirmationButtons();
     }
   }
 
@@ -1165,10 +1219,6 @@ export const REMOTE_JS = `(() => {
       supportedVoiceMimeType === null
     ) return;
 
-    const supersededConfirmation = closeVoiceConfirmation();
-    if (supersededConfirmation !== null) {
-      void cancelVoiceConfirmation(supersededConfirmation, false);
-    }
     voiceCommandId = createVoiceCommandId();
     voiceStarting = true;
     voiceReleaseRequested = false;
@@ -1236,6 +1286,10 @@ export const REMOTE_JS = `(() => {
       voiceStartedAt = performance.now();
       recorder.start(250);
       voiceRecorder = recorder;
+      const supersededConfirmation = closeVoiceConfirmation();
+      if (supersededConfirmation !== null) {
+        void cancelVoiceConfirmation(supersededConfirmation, false);
+      }
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Listening";
       sendVoiceActivity("listening", false, commandId);
@@ -1273,8 +1327,14 @@ export const REMOTE_JS = `(() => {
     const confirmationId = pending.confirmationId;
     closeVoiceConfirmation();
     voiceProcessing = true;
+    voiceConfirmationRequestInFlight = true;
     updateVoiceButton();
     setState("Starting playback…");
+    const requestController = new AbortController();
+    const requestTimeout = setTimeout(
+      () => requestController.abort(),
+      VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS
+    );
     try {
       const result = await jsonRequest("/api/voice/confirm", {
         method: "POST",
@@ -1282,18 +1342,43 @@ export const REMOTE_JS = `(() => {
           "Authorization": "Bearer " + controllerToken,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ confirmationId })
+        body: JSON.stringify({ confirmationId }),
+        keepalive: true,
+        signal: requestController.signal
       });
       setState(result.detail || "Voice command confirmed", "connected");
       if (navigator.vibrate) navigator.vibrate(18);
     } catch (error) {
-      if (error && (error.status === 409 || error.status >= 500)) {
-        showVoiceConfirmation(pending);
+      const status = error && typeof error.status === "number" ? error.status : null;
+      const retryable = status === null || status === 409 || status >= 500;
+      if (
+        retryable &&
+        !pageTerminationPending &&
+        controllerToken !== null &&
+        remoteEnabled &&
+        showVoiceConfirmation(pending)
+      ) {
+        setState(
+          error && error.name === "AbortError"
+            ? "Confirmation timed out — tap Play again"
+            : "Could not confirm yet — tap Play again",
+          "error"
+        );
+      } else if (status === 401) {
+        controllerToken = null;
+        sessionStorage.removeItem("nhd-controller-token");
+        setEnabled(false);
+        setState("Remote session expired — rescan the TV code", "error");
+      } else if (status !== null || !retryable) {
+        setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
       }
-      setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
     } finally {
+      clearTimeout(requestTimeout);
+      voiceConfirmationRequestInFlight = false;
       voiceProcessing = false;
       updateVoiceButton();
+      updateVoiceConfirmationButtons();
+      if (pageTerminationPending) disconnectRemote();
     }
   }
 
@@ -1354,6 +1439,7 @@ export const REMOTE_JS = `(() => {
     const token = controllerToken;
     controllerToken = null;
     sessionStorage.removeItem("nhd-controller-token");
+    setEnabled(false);
     void fetch("/api/disconnect", {
       method: "POST",
       headers: {
@@ -1852,9 +1938,27 @@ export const REMOTE_JS = `(() => {
 
   setEnabled(false);
   usePrecisionMode(false);
-  window.addEventListener("pagehide", () => {
+  window.addEventListener("pagehide", (event) => {
     cancelVoiceRecording();
-    disconnectRemote();
+    if (event.persisted) return;
+    pageTerminationPending = true;
+    if (!voiceConfirmationRequestInFlight) disconnectRemote();
+  });
+  window.addEventListener("pageshow", (event) => {
+    pageTerminationPending = false;
+    if (!event.persisted) return;
+    controllerToken = sessionStorage.getItem("nhd-controller-token");
+    if (pendingVoiceConfirmation?.expiresAt <= Date.now()) {
+      closeVoiceConfirmation();
+      setState("Voice confirmation expired — hold the microphone and try again", "error");
+    }
+    if (controllerToken === null) {
+      setEnabled(false);
+      setState("Remote session ended — rescan the TV code", "error");
+      return;
+    }
+    setState("Reconnecting…");
+    void sendHeartbeat();
   });
   setInterval(() => void sendHeartbeat(), 10_000);
   beginPairing();

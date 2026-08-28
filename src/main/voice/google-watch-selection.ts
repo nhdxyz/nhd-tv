@@ -144,11 +144,14 @@ export function watchOfferNavigationUrl(
   intent: VoiceMediaIntent,
   providerSearchUrl: string | null
 ): string {
-  // A generic Netflix-series offer often points at one arbitrary episode.
-  // Use Google to select Netflix, then let Netflix's own title page choose the
-  // viewer's Resume/Continue target (or the first episode for a new viewer).
+  // A generic Netflix-series offer often points at one arbitrary episode. A
+  // model may conservatively classify a bare title as `title`, so only an
+  // explicitly qualified movie or exact episode may trust Google's watch URL.
+  // Everything else lets Netflix choose Resume/Continue (or the first episode
+  // for a new viewer) from its own exact-title result.
   return selected.serviceId === "netflix" &&
-    intent.mediaType === "show" &&
+    intent.mediaType !== "movie" &&
+    intent.mediaType !== "episode" &&
     providerSearchUrl !== null
     ? providerSearchUrl
     : selected.offer.watchUrl;

@@ -72,7 +72,7 @@ describe("Google watch selection", () => {
     expect(selectEnabledWatchOffer(result, ["spotify"])).toBeNull();
   });
 
-  it("lets Netflix choose Resume for a generic show instead of trusting an episode link", () => {
+  it("lets Netflix choose Resume for generic shows and untyped titles", () => {
     const selected = selectEnabledWatchOffer(result, ["netflix"]);
     expect(selected).not.toBeNull();
     expect(watchOfferNavigationUrl(
@@ -82,8 +82,23 @@ describe("Google watch selection", () => {
     )).toBe("https://www.netflix.com/search?q=Breaking%20Bad");
     expect(watchOfferNavigationUrl(
       selected!,
+      intent({ mediaType: "title", title: "Breaking Bad" }),
+      "https://www.netflix.com/search?q=Breaking%20Bad"
+    )).toBe("https://www.netflix.com/search?q=Breaking%20Bad");
+    expect(watchOfferNavigationUrl(
+      selected!,
       intent(),
       "https://www.netflix.com/search?q=Apollo%2013"
+    )).toBe("https://www.netflix.com/watch/123");
+    expect(watchOfferNavigationUrl(
+      selected!,
+      intent({
+        episode: 3,
+        mediaType: "episode",
+        season: 1,
+        title: "Breaking Bad"
+      }),
+      "https://www.netflix.com/search?q=Breaking%20Bad"
     )).toBe("https://www.netflix.com/watch/123");
   });
 

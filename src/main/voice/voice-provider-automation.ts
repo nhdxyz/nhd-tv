@@ -1,5 +1,14 @@
 import type { VoiceMediaIntent } from "./voice-intent";
 
+export type VoiceProviderAutomationResult =
+  | "complete"
+  | "fullscreen-requested"
+  | "idle"
+  | "navigated"
+  | "play-clicked"
+  | "playing"
+  | "profile-selected";
+
 function serializedIntent(intent: VoiceMediaIntent): string {
   return JSON.stringify({
     action: intent.action,
@@ -8,6 +17,10 @@ function serializedIntent(intent: VoiceMediaIntent): string {
     recency: intent.recency,
     title: intent.title
   });
+}
+
+function serializedProfileHint(profileNameHint: string | null): string {
+  return JSON.stringify(profileNameHint?.replace(/\s+/g, " ").trim().slice(0, 80) || null);
 }
 
 export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): string {
@@ -19,56 +32,101 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
       if (!(element instanceof HTMLElement)) return false;
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
-    const title = normalize(intent.title);
-    const creator = normalize(intent.creator);
-    const titleIdentity = identity(title);
-    const creatorIdentity = identity(creator);
-    const matches = (element, hrefPrefix) => {
-      const text = normalize(element.textContent);
-      const textIdentity = identity(text);
-      const titleLinks = [...element.querySelectorAll('a[href]')]
-        .filter((anchor) => anchor.getAttribute("href")?.startsWith(hrefPrefix));
-      const exactTitle = titleLinks.some((anchor) => identity(anchor.textContent) === titleIdentity);
-      const titleMatches = exactTitle || titleLinks.length === 0 && textIdentity.includes(titleIdentity);
-      return titleMatches && (!creatorIdentity || textIdentity.includes(creatorIdentity));
-    };
-    const playButton = (root) => [...root.querySelectorAll(
-      '[data-testid="play-button"],button[aria-label^="Play "],button[aria-label="Play"]'
-    )].find(visible);
-    const hrefPrefix = intent.mediaType === "artist" ? "/artist/"
+    const titleIdentity = identity(intent.title);
+    const creatorIdentity = identity(intent.creator);
+    const routePrefix = intent.mediaType === "artist" ? "/artist/"
       : intent.mediaType === "album" ? "/album/"
         : intent.mediaType === "playlist" ? "/playlist/"
           : intent.mediaType === "song" ? "/track/" : "/";
-    const rows = [...document.querySelectorAll(
-      '[data-testid="tracklist-row"],[role="row"],[data-testid="card-container"]'
-    )].filter((element) => visible(element) && matches(element, hrefPrefix));
-    for (const row of rows) {
-      const button = playButton(row);
-      if (button instanceof HTMLElement && intent.action === "play") {
-        button.click();
-        return true;
+    const links = (root, prefix) => [...root.querySelectorAll('a[href]')]
+      .filter((anchor) => anchor.getAttribute("href")?.startsWith(prefix));
+    const exactLink = (root, prefix, expected) => links(root, prefix)
+      .find((anchor) => identity(anchor.textContent || anchor.getAttribute("aria-label")) === expected);
+    const creatorMatches = (root) => !creatorIdentity || Boolean(exactLink(root, "/artist/", creatorIdentity));
+    const candidateMatches = (root) => {
+      if (intent.mediaType === "song") {
+        return Boolean(exactLink(root, "/track/", titleIdentity)) && creatorMatches(root);
+      }
+      if (intent.mediaType === "artist") {
+        return Boolean(exactLink(root, "/artist/", titleIdentity || creatorIdentity));
+      }
+      return Boolean(exactLink(root, routePrefix, titleIdentity)) && creatorMatches(root);
+    };
+    const playButton = (root) => [...root.querySelectorAll(
+      '[data-testid="play-button"],button[aria-label^="Play "],button[aria-label="Play"]'
+    )].find((button) => visible(button) && !/^pause(?:\\s|$)/i.test(
+      button.getAttribute("aria-label") ?? button.textContent ?? ""
+    ));
+    const nowPlaying = document.querySelector(
+      '[data-testid="now-playing-widget"],[data-testid="now-playing-bar"],[data-testid="now-playing-view"]'
+    );
+    const nowPlayingTitle = identity(nowPlaying?.querySelector(
+      '[data-testid="context-item-info-title"],a[href^="/track/"]'
+    )?.textContent);
+    const nowPlayingCreator = identity(nowPlaying?.querySelector(
+      '[data-testid="context-item-info-subtitles"],a[href^="/artist/"]'
+    )?.textContent);
+    const nowPlayingMatches = intent.mediaType === "song" && nowPlayingTitle === titleIdentity &&
+      (!creatorIdentity || nowPlayingCreator === creatorIdentity);
+    if (intent.action === "play" && nowPlaying && (nowPlayingMatches || candidateMatches(nowPlaying))) {
+      const pause = [...document.querySelectorAll(
+        '[data-testid="control-button-playpause"],button[aria-label^="Pause"]'
+      )].find(visible);
+      if (pause instanceof HTMLElement) return "complete";
+    }
+    const roots = [...document.querySelectorAll(
+      '[data-testid="tracklist-row"],[data-testid="search-track-list"] [role="row"],'
+      + '[role="row"][aria-rowindex],[data-testid="card-container"],[data-encore-id="card"]'
+    )].filter((root) => visible(root) && candidateMatches(root));
+    for (const root of roots) {
+      if (intent.action === "play") {
+        const button = playButton(root);
+        if (button instanceof HTMLElement) {
+          button.click();
+          return intent.mediaType === "song" ? "play-clicked" : "complete";
+        }
+      }
+      const destination = exactLink(root, routePrefix,
+        intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity);
+      if (destination instanceof HTMLElement && visible(destination)) {
+        destination.click();
+        return intent.action === "play" ? "navigated" : "complete";
       }
     }
-    const anchor = [...document.querySelectorAll('a[href]')]
-      .find((candidate) => visible(candidate) &&
-        candidate.getAttribute("href")?.startsWith(hrefPrefix) &&
-        identity(candidate.textContent) === titleIdentity &&
-        matches(candidate.closest('[data-testid="card-container"],[role="row"]') ?? candidate, hrefPrefix));
-    if (intent.action !== "play" && anchor instanceof HTMLElement) {
-      anchor.click();
-      return true;
-    }
-    if (intent.action === "play" && /^\\/(?:album|artist|playlist|track)\\//.test(location.pathname)) {
-      const detailPlay = playButton(document);
-      if (detailPlay instanceof HTMLElement) {
-        detailPlay.click();
-        return true;
+    if (/^\\/(?:album|artist|playlist|track)\\//.test(location.pathname)) {
+      const headingIdentity = identity(document.querySelector(
+        'h1,[data-testid="entityTitle"],[data-testid="context-item-info-title"]'
+      )?.textContent);
+      const requestedIdentity = intent.mediaType === "artist"
+        ? titleIdentity || creatorIdentity
+        : titleIdentity;
+      if (headingIdentity === requestedIdentity) {
+        if (intent.action !== "play") return "complete";
+        const button = playButton(document);
+        if (button instanceof HTMLElement) {
+          button.click();
+          return intent.mediaType === "song" ? "play-clicked" : "complete";
+        }
       }
     }
-    if (intent.action === "play" && anchor instanceof HTMLElement) anchor.click();
-    return false;
+    const direct = [...document.querySelectorAll('a[href]')].find((anchor) =>
+      visible(anchor) && anchor.getAttribute("href")?.startsWith(routePrefix) &&
+      identity(anchor.textContent || anchor.getAttribute("aria-label")) ===
+        (intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity)
+    );
+    if (direct instanceof HTMLElement) {
+      const root = direct.closest(
+        '[data-testid="tracklist-row"],[role="row"],[data-testid="card-container"],[data-encore-id="card"]'
+      ) ?? direct;
+      if (creatorMatches(root)) {
+        direct.click();
+        return intent.action === "play" ? "navigated" : "complete";
+      }
+    }
+    return "idle";
   })()`;
 }
 
@@ -77,15 +135,48 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
     const intent = ${serializedIntent(intent)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
+    const nearIdentity = (left, right) => {
+      if (!left || !right || left.length !== right.length) return false;
+      let differences = 0;
+      for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index] && ++differences > 1) return false;
+      }
+      return differences === 1;
+    };
     const visible = (element) => {
       if (!(element instanceof HTMLElement)) return false;
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
+    if (intent.action === "play" && location.pathname === "/watch") {
+      const video = document.querySelector("video");
+      if (video && !video.paused && !video.ended && video.readyState >= 2) {
+        const fullscreenElement = document.fullscreenElement;
+        if ((fullscreenElement !== null && (
+          fullscreenElement === video || fullscreenElement.contains(video)
+        )) ||
+          document.querySelector(".html5-video-player.ytp-fullscreen") !== null) return "complete";
+        const fullscreen = [...document.querySelectorAll(
+          'button.ytp-fullscreen-button,button[aria-label^="Full screen"],button[title^="Full screen"]'
+        )].find(visible);
+        if (fullscreen instanceof HTMLElement) {
+          fullscreen.click();
+          return "fullscreen-requested";
+        }
+        return "playing";
+      }
+      const play = [...document.querySelectorAll(
+        'button.ytp-play-button,button[aria-label^="Play"]'
+      )].find((button) => visible(button) && !/^pause/i.test(button.getAttribute("aria-label") ?? ""));
+      if (play instanceof HTMLElement) {
+        play.click();
+        return "play-clicked";
+      }
+    }
     const title = normalize(intent.title);
-    const creator = normalize(intent.creator);
-    const creatorIdentity = identity(creator);
+    const creatorIdentity = identity(intent.creator);
     const candidates = [];
     if (intent.mediaType === "channel") {
       const anchors = [...document.querySelectorAll(
@@ -102,7 +193,8 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
         const nameIdentity = identity(name);
         const exact = creatorIdentity && (nameIdentity === creatorIdentity || hrefIdentity === creatorIdentity);
         const partial = creatorIdentity && (nameIdentity.includes(creatorIdentity) || creatorIdentity.includes(nameIdentity));
-        if (exact || partial) candidates.push({ anchor, score: exact ? 200 : 100 });
+        const near = creatorIdentity && nearIdentity(nameIdentity, creatorIdentity);
+        if (exact || partial || near) candidates.push({ anchor, score: exact ? 200 : near ? 110 : 100 });
       }
     } else {
       const genericTitles = new Set(["video", "a video", "something", "latest video"]);
@@ -122,6 +214,7 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
           const bylineIdentity = identity(byline);
           if (bylineIdentity === creatorIdentity) score += 200;
           else if (bylineIdentity && (bylineIdentity.includes(creatorIdentity) || creatorIdentity.includes(bylineIdentity))) score += 120;
+          else if (nearIdentity(bylineIdentity, creatorIdentity)) score += 110;
           else if (bylineIdentity) continue;
           else if (identity(cardText).includes(creatorIdentity)) score += 40;
           else continue;
@@ -138,9 +231,133 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
     const anchor = candidates[0]?.anchor;
     if (anchor instanceof HTMLElement) {
       anchor.click();
-      return true;
+      return intent.action === "play" && intent.mediaType !== "channel"
+        ? "navigated"
+        : "complete";
     }
-    return false;
+    return "idle";
+  })()`;
+}
+
+export function buildNetflixVoiceAutomationScript(
+  intent: VoiceMediaIntent,
+  profileNameHint: string | null = null
+): string {
+  return `(() => {
+    const intent = ${serializedIntent(intent)};
+    const profileNameHint = ${serializedProfileHint(profileNameHint)};
+    const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
+    const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
+    const visible = (element) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
+    };
+    const controlLabel = (element) => normalize([
+      element.getAttribute("aria-label"),
+      element.getAttribute("data-uia"),
+      element.getAttribute("title"),
+      element.textContent
+    ].filter(Boolean).join(" "));
+    const profileCandidates = [...document.querySelectorAll(
+      '[data-uia="profile-link"],a.profile-link,a[href*="/SwitchProfile"],button[data-profile-guid]'
+    )].filter((element) => visible(element) && !/(?:add|manage|transfer|edit) profile/.test(controlLabel(element)));
+    const profileGate = profileCandidates.length > 0 && (
+      /who(?:'|’)s watching/.test(normalize(document.body?.innerText)) ||
+      /\\/profiles(?:\\/|$)/i.test(location.pathname) ||
+      document.querySelector('.choose-profile,[data-uia="profile-gate-label"]') !== null
+    );
+    if (profileGate) {
+      const hintIdentity = identity(profileNameHint);
+      const selected = (hintIdentity
+        ? profileCandidates.find((element) => {
+          const name = element.querySelector('.profile-name,[data-uia="profile-name"]')?.textContent ??
+            element.getAttribute("aria-label") ?? element.textContent;
+          return identity(name) === hintIdentity;
+        })
+        : null) ?? profileCandidates[0];
+      if (selected instanceof HTMLElement) {
+        selected.click();
+        return "profile-selected";
+      }
+      return "idle";
+    }
+    if (intent.action === "play") {
+      const video = document.querySelector("video");
+      if (video && !video.paused && !video.ended && video.readyState >= 2) {
+        const fullscreenElement = document.fullscreenElement;
+        if (fullscreenElement !== null && (
+          fullscreenElement === video || fullscreenElement.contains(video)
+        )) return "complete";
+        const fullscreen = [...document.querySelectorAll(
+          '[data-uia="control-fullscreen-enter"],button[aria-label*="Full screen" i],button[aria-label*="fullscreen" i]'
+        )].find(visible);
+        if (fullscreen instanceof HTMLElement) {
+          fullscreen.click();
+          return "fullscreen-requested";
+        }
+        return "playing";
+      }
+      const detailRoot = document.querySelector(
+        '[role="dialog"],.previewModal--wrapper,[data-uia="modal"]'
+      ) ?? (/^\\/(?:title|watch)\\//.test(location.pathname) ? document : null);
+      const detailSignals = detailRoot === null ? [] : [
+        ...detailRoot.querySelectorAll('h1,h2,h3,[aria-label],[title],img[alt]')
+      ].flatMap((element) => [
+        element.getAttribute("aria-label"),
+        element.getAttribute("title"),
+        element.getAttribute("alt"),
+        element.textContent
+      ]).filter(Boolean);
+      const detailMatches = /^\\/(?:title|watch)\\//.test(location.pathname) ||
+        detailSignals.some((signal) => identity(signal) === identity(intent.title));
+      const controls = detailRoot === null || !detailMatches ? [] :
+        [...detailRoot.querySelectorAll('button,a,[role="button"]')]
+        .filter(visible)
+        .map((element) => ({ element, label: controlLabel(element) }))
+        .filter(({ label }) => !/(?:trailer|preview|teaser)/.test(label));
+      const resume = controls.find(({ label }) =>
+        /(?:^|\\s)(?:resume|continue watching|continue)(?:\\s|$)/.test(label) ||
+        /(?:resume|continue)-button/.test(label)
+      );
+      const play = controls.find(({ label }) =>
+        /(?:^|\\s)(?:play|watch now)(?:\\s|$)/.test(label) || /play-button/.test(label)
+      );
+      const control = resume ?? play;
+      if (control?.element instanceof HTMLElement) {
+        control.element.click();
+        return "play-clicked";
+      }
+    }
+    const titleIdentity = identity(intent.title);
+    const cards = [...document.querySelectorAll(
+      '[data-uia="search-video"],[data-uia^="title-card-"],.title-card-container,.slider-item,.galleryContent'
+    )].filter(visible);
+    const exactCard = cards.find((card) => {
+      const signals = [
+        card.getAttribute("aria-label"),
+        card.getAttribute("title"),
+        ...[...card.querySelectorAll('[aria-label],[title],img[alt],[data-uia="title-card-title"]')]
+          .flatMap((element) => [
+            element.getAttribute("aria-label"),
+            element.getAttribute("title"),
+            element.getAttribute("alt"),
+            element.textContent
+          ])
+      ].filter(Boolean);
+      return signals.some((signal) => identity(signal) === titleIdentity);
+    });
+    if (exactCard instanceof HTMLElement) {
+      const destination = [...exactCard.querySelectorAll('a[href^="/title/"],a[href^="/watch/"]')]
+        .find(visible) ?? exactCard;
+      if (destination instanceof HTMLElement) {
+        destination.click();
+        return intent.action === "play" ? "navigated" : "complete";
+      }
+    }
+    return "idle";
   })()`;
 }
 

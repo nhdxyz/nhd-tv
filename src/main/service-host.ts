@@ -75,8 +75,10 @@ import {
 } from "./spotify-playback";
 import type { VoiceMediaIntent } from "./voice/voice-intent";
 import {
+  buildNetflixVoiceAutomationScript,
   buildSpotifyVoiceAutomationScript,
-  buildYouTubeVoiceAutomationScript
+  buildYouTubeVoiceAutomationScript,
+  type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
@@ -138,6 +140,7 @@ const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
 const PLAYBACK_CHECKPOINT_INTERVAL_MS = 10_000;
 const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SPOTIFY_PLAYBACK_INTERVAL_MS = 1_000;
+const VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000;
 const REMOTE_TEXT_ENTRY_SETTLE_DELAYS_MS = [0, 45, 120] as const;
 const YOUTUBE_TV_CONFIG_SETTLE_DELAYS_MS = [0, 120, 600] as const;
 const DEFAULT_YOUTUBE_TV_PREFERENCES: YouTubeTvModePreferences = {
@@ -508,6 +511,26 @@ export function serviceSpatialNavigationScript(action: ServiceSpatialAction): st
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function waitForProviderNavigation(
+  view: WebContentsView,
+  timeoutMilliseconds: number
+): Promise<void> {
+  const webContents = view.webContents;
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timeout);
+      webContents.removeListener("did-finish-load", finish);
+      webContents.removeListener("did-navigate", finish);
+      webContents.removeListener("did-navigate-in-page", finish);
+      resolve();
+    };
+    const timeout = setTimeout(finish, timeoutMilliseconds);
+    webContents.once("did-finish-load", finish);
+    webContents.once("did-navigate", finish);
+    webContents.once("did-navigate-in-page", finish);
+  });
 }
 
 const netflixSnapshotScript = `(() => {
@@ -1349,36 +1372,113 @@ export class ServiceHost {
     }
   }
 
-  async executeVoiceMediaIntent(intent: VoiceMediaIntent): Promise<boolean> {
+  async executeVoiceMediaIntent(
+    intent: VoiceMediaIntent,
+    options: {
+      intendedUrl?: string | null;
+      profileNameHint?: string | null;
+    } = {}
+  ): Promise<boolean> {
     const view = this.#view;
     const definition = this.#activeDefinition;
     if (
       view === null ||
       definition === null ||
       view.webContents.isDestroyed() ||
-      !["spotify", "youtube"].includes(definition.id)
+      !["netflix", "spotify", "youtube"].includes(definition.id)
     ) {
       return false;
     }
 
-    const script = definition.id === "spotify"
-      ? buildSpotifyVoiceAutomationScript(intent)
-      : buildYouTubeVoiceAutomationScript(intent);
-    const deadline = Date.now() + 8_000;
+    const script = definition.id === "netflix"
+      ? buildNetflixVoiceAutomationScript(intent, options.profileNameHint ?? null)
+      : definition.id === "spotify"
+        ? buildSpotifyVoiceAutomationScript(intent)
+        : buildYouTubeVoiceAutomationScript(intent);
+    const suppliedDestination = options.intendedUrl ?? null;
+    const safeSuppliedDestination = suppliedDestination !== null && isAllowedServiceUrl(
+      suppliedDestination,
+      definition.allowedOrigins,
+      definition.allowedSubdomainHosts
+    )
+      ? suppliedDestination
+      : null;
+    const netflixFallbackDestination = definition.id === "netflix"
+      ? `https://www.netflix.com/search?q=${encodeURIComponent(intent.title)}`
+      : null;
+    const intendedDestination = safeSuppliedDestination ?? netflixFallbackDestination;
+    let profileRetried = false;
+    let playbackRevealAttempts = 0;
+    const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
     while (
       Date.now() < deadline &&
       this.#view === view &&
       !view.webContents.isDestroyed()
     ) {
+      let settleDelayMs = 250;
       try {
-        if (await view.webContents.executeJavaScript(script, true) === true) {
+        const result = await view.webContents.executeJavaScript(
+          script,
+          true
+        ) as VoiceProviderAutomationResult;
+        if (result === "complete") {
           if (definition.id === "spotify") void this.#captureSpotifyPlayback();
           return true;
+        }
+        if (result === "navigated" || result === "play-clicked") {
+          settleDelayMs = 650;
+        } else if (result === "fullscreen-requested") {
+          settleDelayMs = 450;
+        }
+        if (
+          result === "playing" &&
+          ["netflix", "youtube"].includes(definition.id)
+        ) {
+          this.#window.focus();
+          view.webContents.focus();
+          this.#replayingInput = true;
+          try {
+            if (playbackRevealAttempts === 0) {
+              const bounds = view.getBounds();
+              view.webContents.sendInputEvent({
+                type: "mouseMove",
+                x: Math.max(0, Math.floor(bounds.width / 2)),
+                y: Math.max(0, bounds.height - 80)
+              });
+            } else if (playbackRevealAttempts === 1) {
+              view.webContents.sendInputEvent({ keyCode: "F", type: "keyDown" });
+              view.webContents.sendInputEvent({ keyCode: "F", type: "keyUp" });
+            }
+          } finally {
+            this.#replayingInput = false;
+          }
+          playbackRevealAttempts += 1;
+        }
+        if (
+          result === "profile-selected" &&
+          !profileRetried &&
+          intendedDestination !== null
+        ) {
+          profileRetried = true;
+          await waitForProviderNavigation(view, 1_500);
+          if (this.#view !== view || view.webContents.isDestroyed()) return false;
+          try {
+            await view.webContents.loadURL(intendedDestination);
+          } catch (error) {
+            if (!isExpectedAllowedNavigationAbort(
+              error,
+              view.webContents.getURL(),
+              definition.allowedOrigins,
+              definition.allowedSubdomainHosts
+            )) {
+              throw error;
+            }
+          }
         }
       } catch {
         // Provider navigation can replace the page between attempts.
       }
-      await delay(250);
+      await delay(settleDelayMs);
     }
     return false;
   }

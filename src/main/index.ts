@@ -143,6 +143,7 @@ const VOICE_RESULT_DISPLAY_MS = 4_500;
 const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 130_000;
 const VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000;
+const VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS = 15_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
   "#store-search"
@@ -1293,16 +1294,12 @@ async function executeGoogleWatchPlan(
   if (resolver === null || !usesGoogleWatchDiscovery(plan)) return null;
 
   const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
-  const playbackDiscoveryDeadlineAt = Date.now() + VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS;
-  const resolveOffers = async (completeOffers: boolean) => {
-    if (plan.intent.action !== "play") {
-      return resolver.resolve(lookup, {
-        completeOffers,
-        preferredProviderNames: watchProviderPriorityNames(plan.candidateServiceIds),
-        signal
-      });
-    }
-    return runVoiceStageWithDeadline(
+  const discoveryTimeoutMs = plan.intent.action === "play"
+    ? VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS
+    : VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS;
+  const discoveryDeadlineAt = Date.now() + discoveryTimeoutMs;
+  const resolveOffers = async (completeOffers: boolean) =>
+    runVoiceStageWithDeadline(
       (stageSignal) => resolver.resolve(lookup, {
         completeOffers,
         preferredProviderNames: watchProviderPriorityNames(plan.candidateServiceIds),
@@ -1310,11 +1307,12 @@ async function executeGoogleWatchPlan(
       }),
       {
         signal,
-        timeoutMessage: "Watch-provider discovery took too long.",
-        timeoutMs: Math.max(1, playbackDiscoveryDeadlineAt - Date.now())
+        timeoutMessage: plan.intent.action === "play"
+          ? "Watch-provider discovery took too long."
+          : "Availability lookup took too long.",
+        timeoutMs: Math.max(1, discoveryDeadlineAt - Date.now())
       }
     );
-  };
   signal?.throwIfAborted();
   presentPhoneVoiceProgress("Checking your services…");
   let result = await resolveOffers(

@@ -39,7 +39,7 @@ describe("Google watch resolver boundary", () => {
     expect(cancelActive).not.toContain("webContents.stop()");
   });
 
-  it("bounds automatic playback discovery and cancels hidden state on timeout", async () => {
+  it("bounds playback and availability discovery and cancels hidden state", async () => {
     const source = await import("node:fs/promises").then(({ readFile }) =>
       readFile(new URL("../src/main/index.ts", import.meta.url), "utf8")
     );
@@ -49,9 +49,10 @@ describe("Google watch resolver boundary", () => {
     );
 
     expect(source).toContain("VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000");
+    expect(source).toContain("VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS = 15_000");
     expect(execution).toContain('plan.intent.action === "play"');
     expect(execution).toContain("runVoiceStageWithDeadline(");
-    expect(execution).toContain("timeoutMs: Math.max(1, playbackDiscoveryDeadlineAt - Date.now())");
+    expect(execution).toContain("timeoutMs: Math.max(1, discoveryDeadlineAt - Date.now())");
     expect(execution).toContain("signal,");
   });
 

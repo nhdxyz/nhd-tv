@@ -934,6 +934,7 @@ export const REMOTE_JS = `(() => {
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const DIRECTION_REPEAT_DELAY_MS = 380;
   const DIRECTION_REPEAT_INTERVAL_MS = 115;
+  const VOICE_COMMAND_REQUEST_TIMEOUT_MS = 65_000;
   const VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS = 65_000;
   const VOICE_CANCELLATION_REQUEST_TIMEOUT_MS = 10_000;
   const VOICE_CONFIRMATION_TTL_MS = 30_000;
@@ -1181,6 +1182,11 @@ export const REMOTE_JS = `(() => {
     voiceButtonCopy.textContent = "Understanding";
     updateVoiceButton();
     setState("Understanding voice command…");
+    const requestController = new AbortController();
+    const requestTimeout = setTimeout(
+      () => requestController.abort(),
+      VOICE_COMMAND_REQUEST_TIMEOUT_MS
+    );
     try {
       const result = await jsonRequest("/api/voice", {
         method: "POST",
@@ -1190,7 +1196,8 @@ export const REMOTE_JS = `(() => {
           "X-NHD-TV-Audio-Duration-Ms": String(durationMs),
           "X-NHD-TV-Voice-Command-Id": commandId
         },
-        body: blob
+        body: blob,
+        signal: requestController.signal
       });
       if (
         result.outcome === "confirmation-required" &&
@@ -1223,12 +1230,19 @@ export const REMOTE_JS = `(() => {
         if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
       }
     } catch (error) {
-      // A 422 is the main process's sanitized voice-command failure response;
-      // it has already published the TV error and must not be hidden by a
-      // subsequent cancellation activity event.
-      if (!error || error.status !== 422) sendVoiceActivity("cancelled", false, commandId);
-      setState(error instanceof Error ? error.message : "Voice command failed", "error");
+      // Sanitized command failures and server deadlines have already published
+      // the TV error and must not be hidden by a later cancellation activity.
+      if (!error || (error.status !== 422 && error.status !== 504)) {
+        sendVoiceActivity("cancelled", false, commandId);
+      }
+      setState(
+        error && error.name === "AbortError"
+          ? "The TV did not finish the voice command — hold the microphone and try again"
+          : error instanceof Error ? error.message : "Voice command failed",
+        "error"
+      );
     } finally {
+      clearTimeout(requestTimeout);
       voiceProcessing = false;
       voiceButtonCopy.textContent = "Hold to talk";
       updateVoiceButton();

@@ -138,7 +138,7 @@ describe("phone remote boundary", () => {
     expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
     expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
     expect(serverSource).toContain("VOICE_UPLOAD_BODY_TIMEOUT_MS");
-    expect(serverSource).toContain("VOICE_COMMAND_OPERATION_TIMEOUT_MS");
+    expect(serverSource).toContain("VOICE_COMMAND_OPERATION_TIMEOUT_MS = 60_000");
     expect(serverSource).toContain("VOICE_CONFIRM_OPERATION_TIMEOUT_MS");
     expect(serverSource).toContain("#voiceConfirmationReplays.get(confirmationId, controllerId)");
     expect(serverSource).toContain(
@@ -173,6 +173,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm/cancel"');
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS");
+    expect(REMOTE_JS).toContain("VOICE_COMMAND_REQUEST_TIMEOUT_MS = 65_000");
+    expect(REMOTE_JS).toContain("error.status !== 422 && error.status !== 504");
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REPLAY_TTL_MS");
     expect(REMOTE_JS).toContain("VOICE_CANCELLATION_REQUEST_TIMEOUT_MS");
     expect(REMOTE_JS).toContain("status >= 500 && status !== 504");

@@ -221,6 +221,13 @@ export function planVoiceCommand(
   if (intent.kind === "current-media") {
     return { action: intent.action, kind: "query-current-media" };
   }
+  if (intent.kind === "confirmation") {
+    return {
+      detail: "There isn't a voice confirmation waiting right now.",
+      handled: false,
+      kind: "no-op"
+    };
+  }
   if (intent.kind === "media-reference") {
     return {
       detail: "I lost track of what that referred to. Please name it again.",

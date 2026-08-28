@@ -59,6 +59,14 @@ describe("voice command planning", () => {
     });
   });
 
+  it("fails closed when a spoken decision has no bound confirmation", () => {
+    expect(planVoiceCommand({ action: "confirm", kind: "confirmation" }, context)).toEqual({
+      detail: "There isn't a voice confirmation waiting right now.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
   it("routes ordinary controls directly", () => {
     expect(planVoiceCommand({ action: "volume-up", kind: "control" }, context)).toEqual({
       action: "volume-up",

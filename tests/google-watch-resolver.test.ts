@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  googleWatchCachedIdentityNeedsRefresh,
   googleWatchLookupFromIntent,
   googleWatchMetadataForLookup,
   googleWatchOfferFromUrl,
@@ -117,6 +118,27 @@ describe("Google watch resolver boundary", () => {
       resolvedSubtitle: null,
       resolvedTitle: "Breaking Bad"
     })).toEqual({ resolvedSubtitle: null, resolvedTitle: "Breaking Bad" });
+  });
+
+  it("refreshes legacy generated-query identity rows but keeps ordinary title rows", () => {
+    const episodeLookup = googleWatchLookupFromIntent(intent({
+      episode: 4,
+      mediaType: "episode",
+      season: 1,
+      title: "Breaking Bad"
+    }), "US");
+    expect(googleWatchCachedIdentityNeedsRefresh(episodeLookup, {
+      resolvedSubtitle: "Breaking Bad season 1 episode 4",
+      resolvedTitle: "Breaking Bad season 1 episode 4"
+    })).toBe(true);
+    expect(googleWatchCachedIdentityNeedsRefresh(episodeLookup, {
+      resolvedSubtitle: "Season 1, Episode 4",
+      resolvedTitle: "Breaking Bad"
+    })).toBe(false);
+    expect(googleWatchCachedIdentityNeedsRefresh(
+      googleWatchLookupFromIntent(intent({ mediaType: "show", title: "Breaking Bad" }), "US"),
+      { resolvedSubtitle: null, resolvedTitle: "Breaking Bad" }
+    )).toBe(false);
   });
 
   it("allows only known HTTPS provider destinations", () => {

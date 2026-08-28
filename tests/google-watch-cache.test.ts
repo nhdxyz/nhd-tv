@@ -91,4 +91,18 @@ describe("Google watch cache", () => {
     )).toBeNull();
     database.close();
   });
+
+  it("invalidates an incorrect regional result and its offers", () => {
+    const database = cache();
+    database.save(result());
+    expect(database.invalidate(result().queryText, "us")).toBe(true);
+    expect(database.getFresh(
+      result().queryText,
+      "US",
+      new Date("2026-08-28T12:00:00.000Z")
+    )).toBeNull();
+    expect(database.exportRows()).toHaveLength(0);
+    expect(database.invalidate(result().queryText, "US")).toBe(false);
+    database.close();
+  });
 });

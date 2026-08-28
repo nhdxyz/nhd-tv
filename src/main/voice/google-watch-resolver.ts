@@ -200,6 +200,17 @@ export function googleWatchMetadataForLookup(
   };
 }
 
+export function googleWatchCachedIdentityNeedsRefresh(
+  lookup: Pick<GoogleWatchLookup, "queryText" | "requestedTitle">,
+  result: Pick<GoogleWatchResult, "resolvedSubtitle" | "resolvedTitle">
+): boolean {
+  const queryText = normalizedMetadataText(lookup.queryText);
+  if (queryText === normalizedMetadataText(lookup.requestedTitle)) return false;
+  return [result.resolvedTitle, result.resolvedSubtitle].some((candidate) =>
+    candidate !== null && normalizedMetadataText(candidate) === queryText
+  );
+}
+
 function verifiedCachedResult(
   result: GoogleWatchResult,
   lookup: GoogleWatchLookup
@@ -401,7 +412,10 @@ export class GoogleWatchResolver {
     const completeOffers = options.completeOffers === true;
     const fresh = this.#cache.getFresh(lookup.queryText, countryCode);
     if (fresh !== null && (!completeOffers || fresh.offersComplete)) {
-      return verifiedCachedResult(fresh, lookup);
+      if (!googleWatchCachedIdentityNeedsRefresh(lookup, fresh)) {
+        return verifiedCachedResult(fresh, lookup);
+      }
+      this.#cache.invalidate(lookup.queryText, countryCode);
     }
 
     const resolution = Symbol("google-watch-resolution");
@@ -411,7 +425,10 @@ export class GoogleWatchResolver {
       try {
         const secondFresh = this.#cache.getFresh(lookup.queryText, countryCode);
         if (secondFresh !== null && (!completeOffers || secondFresh.offersComplete)) {
-          return verifiedCachedResult(secondFresh, lookup);
+          if (!googleWatchCachedIdentityNeedsRefresh(lookup, secondFresh)) {
+            return verifiedCachedResult(secondFresh, lookup);
+          }
+          this.#cache.invalidate(lookup.queryText, countryCode);
         }
         await this.warm(signal);
         return await this.#resolveUncached(

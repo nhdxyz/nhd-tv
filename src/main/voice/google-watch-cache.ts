@@ -116,6 +116,7 @@ function rowResult(row: ResultRow, offerRows: OfferRow[]): GoogleWatchResult {
 export class GoogleWatchCache {
   readonly #database: DatabaseSync;
   readonly #deleteOffers: StatementSync;
+  readonly #deleteResult: StatementSync;
   readonly #findFresh: StatementSync;
   readonly #insertOffer: StatementSync;
   readonly #offers: StatementSync;
@@ -232,6 +233,10 @@ export class GoogleWatchCache {
     this.#deleteOffers = this.#database.prepare(
       "DELETE FROM discovery_offers WHERE result_id = ?"
     );
+    this.#deleteResult = this.#database.prepare(`
+      DELETE FROM discovery_results
+      WHERE query_key = ? AND country_code = ? AND source = 'google-search'
+    `);
     this.#insertOffer = this.#database.prepare(`
       INSERT INTO discovery_offers (
         result_id, provider_name, provider_host, provider_content_id,
@@ -278,6 +283,14 @@ export class GoogleWatchCache {
     if (row === undefined) return null;
     const offers = this.#offers.all(row.id) as unknown as OfferRow[];
     return rowResult(row, offers);
+  }
+
+  invalidate(queryText: string, countryCodeValue: string): boolean {
+    const result = this.#deleteResult.run(
+      normalizeGoogleWatchQuery(queryText),
+      normalizedCountryCode(countryCodeValue)
+    );
+    return result.changes > 0;
   }
 
   save(result: GoogleWatchResult): void {

@@ -130,6 +130,15 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain(".catch(() => {})");
     expect(REMOTE_JS).toContain("finishVoiceRecording");
     expect(REMOTE_JS).toContain("stopVoiceStream");
+    const recorderStart = REMOTE_JS.indexOf("recorder.start(250)");
+    const recorderAssignment = REMOTE_JS.indexOf("voiceRecorder = recorder", recorderStart);
+    expect(recorderStart).toBeGreaterThan(-1);
+    expect(recorderAssignment).toBeGreaterThan(recorderStart);
+    const microphoneCatch = REMOTE_JS.indexOf("} catch (error) {", recorderAssignment);
+    expect(REMOTE_JS.slice(microphoneCatch, microphoneCatch + 500))
+      .toContain("voiceRecorder = null");
+    expect(REMOTE_JS.slice(microphoneCatch, microphoneCatch + 500))
+      .toContain("voiceChunks = []");
     expect(REMOTE_JS).toContain("}, 19_500);");
     expect(REMOTE_JS).not.toContain("localStorage");
     expect(REMOTE_JS).not.toMatch(/sessionStorage\.(?:setItem|getItem)\([^)]*(?:audio|voice|transcript)/i);

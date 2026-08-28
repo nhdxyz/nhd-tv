@@ -74,6 +74,14 @@ describe("TV voice presentation", () => {
       phase: "listening",
       transcript: null
     })).toEqual({ copy: "Listening…", label: "AI Voice" });
+    expect(voicePresentationCopy({
+      detail: "Confirm on your phone — Play Breaking Bad?",
+      phase: "confirmation",
+      transcript: null
+    })).toEqual({
+      copy: "Confirm on your phone — Play Breaking Bad?",
+      label: "Confirm on phone"
+    });
   });
 
   it("exposes one validated event channel and renders only through textContent", () => {
@@ -97,6 +105,7 @@ describe("TV voice presentation", () => {
     expect(css).toContain(".voice-presentation");
     expect(css).toContain("pointer-events: none");
     expect(css).toContain('.voice-presentation[data-phase="listening"]');
+    expect(css).toContain('.voice-presentation[data-phase="confirmation"]');
     expect(css).toContain('.voice-presentation[data-phase="error"]');
   });
 

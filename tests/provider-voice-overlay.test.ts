@@ -37,6 +37,8 @@ describe("provider voice overlay", () => {
     expect(indexSource).toContain("profileNameHint: activeVoiceProfileName()");
     expect(indexSource).toContain('plan.intent.action !== "open"');
     expect(indexSource).toContain("VOICE_TRANSCRIPT_MIN_DISPLAY_MS");
+    expect(indexSource).toContain('result.outcome === "confirmation-required" ? "confirmation"');
+    expect(indexSource).toContain("voiceProviderCommandHandled(plan.intent, automated)");
     expect(overlaySource).toContain("new WebContentsView");
     expect(overlaySource).toContain("detail.textContent = state.copy");
     expect(overlaySource).not.toContain("innerHTML");

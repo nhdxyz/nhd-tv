@@ -78,6 +78,7 @@ import {
   buildNetflixVoiceAutomationScript,
   buildSpotifyVoiceAutomationScript,
   buildYouTubeVoiceAutomationScript,
+  netflixContentIdFromUrl,
   type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
 
@@ -1405,6 +1406,11 @@ export class ServiceHost {
     let profileRetried = false;
     let playbackRevealAttempts = 0;
     let playbackRequested = false;
+    let fullscreenRequested = false;
+    let trustedNetflixContentId = definition.id === "netflix"
+      ? netflixContentIdFromUrl(safeSuppliedDestination)
+      : null;
+    let trustNextNetflixNavigation = false;
     const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
     while (
       Date.now() < deadline &&
@@ -1413,11 +1419,23 @@ export class ServiceHost {
     ) {
       let settleDelayMs = 250;
       try {
+        if (definition.id === "netflix" && trustNextNetflixNavigation) {
+          const navigatedContentId = netflixContentIdFromUrl(view.webContents.getURL());
+          if (navigatedContentId !== null) {
+            trustedNetflixContentId = navigatedContentId;
+            trustNextNetflixNavigation = false;
+          }
+        }
         const script = definition.id === "netflix"
-          ? buildNetflixVoiceAutomationScript(intent, options.profileNameHint ?? null)
+          ? buildNetflixVoiceAutomationScript(
+            intent,
+            options.profileNameHint ?? null,
+            trustedNetflixContentId,
+            fullscreenRequested
+          )
           : definition.id === "spotify"
             ? buildSpotifyVoiceAutomationScript(intent, playbackRequested)
-            : buildYouTubeVoiceAutomationScript(intent);
+            : buildYouTubeVoiceAutomationScript(intent, fullscreenRequested);
         const result = await view.webContents.executeJavaScript(
           script,
           true
@@ -1429,8 +1447,11 @@ export class ServiceHost {
         if (result === "navigated" || result === "play-clicked") {
           settleDelayMs = 650;
           if (result === "play-clicked") playbackRequested = true;
+          if (definition.id === "netflix") trustNextNetflixNavigation = true;
         } else if (result === "fullscreen-requested") {
           settleDelayMs = 450;
+          fullscreenRequested = true;
+          playbackRevealAttempts = Math.max(1, playbackRevealAttempts);
         }
         if (result === "playing" && definition.id === "spotify" && playbackRequested) {
           void this.#captureSpotifyPlayback();

@@ -67,6 +67,7 @@ const IPC_CHANNELS = {
 } as const;
 
 const VOICE_PRESENTATION_PHASES = new Set([
+  "confirmation",
   "error",
   "hidden",
   "listening",

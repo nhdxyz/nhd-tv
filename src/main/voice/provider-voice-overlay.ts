@@ -47,8 +47,10 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       small { color: #d7ff55; font-size: 12px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
       strong { overflow: hidden; font-size: clamp(21px, 3.2vw, 30px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
       aside[data-phase="success"] .signal { background: #72e6a1; }
+      aside[data-phase="confirmation"] .signal { background: #fbbf24; }
       aside[data-phase="error"] .signal { background: #ff6577; color: #fff; }
       aside[data-phase="success"] small { color: #72e6a1; }
+      aside[data-phase="confirmation"] small { color: #fbbf24; }
       aside[data-phase="error"] small { color: #ff8795; }
       aside[data-phase="success"] .signal i,
       aside[data-phase="error"] .signal i { height: 18px; animation: none; transform: rotate(45deg); }
@@ -104,6 +106,9 @@ function overlayCopy(state: VoicePresentationState): { copy: string; label: stri
   }
   if (state.phase === "success") {
     return { copy: state.detail ?? "Done", label: "Done" };
+  }
+  if (state.phase === "confirmation") {
+    return { copy: state.detail ?? "Confirm on your phone.", label: "Confirm on phone" };
   }
   if (state.phase === "error") {
     return { copy: state.detail ?? "Voice control could not finish that", label: "Try again" };

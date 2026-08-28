@@ -919,6 +919,10 @@ summary:focus-visible {
   --voice-accent: #86efac;
 }
 
+.voice-presentation[data-phase="confirmation"] {
+  --voice-accent: #fbbf24;
+}
+
 .voice-presentation[data-phase="error"] {
   --voice-accent: #fda4af;
 }

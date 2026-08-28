@@ -9,6 +9,13 @@ export type VoiceProviderAutomationResult =
   | "playing"
   | "profile-selected";
 
+export function voiceProviderCommandHandled(
+  intent: VoiceMediaIntent,
+  automated: boolean
+): boolean {
+  return intent.action !== "play" || automated;
+}
+
 function serializedIntent(intent: VoiceMediaIntent): string {
   return JSON.stringify({
     action: intent.action,
@@ -23,6 +30,25 @@ function serializedIntent(intent: VoiceMediaIntent): string {
 
 function serializedProfileHint(profileNameHint: string | null): string {
   return JSON.stringify(profileNameHint?.replace(/\s+/g, " ").trim().slice(0, 80) || null);
+}
+
+function serializedNetflixContentId(contentId: string | null): string {
+  return JSON.stringify(
+    typeof contentId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(contentId)
+      ? contentId
+      : null
+  );
+}
+
+export function netflixContentIdFromUrl(urlValue: string | null): string | null {
+  if (urlValue === null) return null;
+  try {
+    const url = new URL(urlValue);
+    if (url.protocol !== "https:" || !/(?:^|\.)netflix\.com$/i.test(url.hostname)) return null;
+    return /^\/(?:title|watch)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/.exec(url.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildSpotifyVoiceAutomationScript(
@@ -67,7 +93,13 @@ export function buildSpotifyVoiceAutomationScript(
       button.getAttribute("aria-label") ?? button.textContent ?? ""
     ));
     const pauseButton = (root) => [...root.querySelectorAll(
-      '[data-testid="control-button-playpause"],button[aria-label^="Pause"]'
+      '[data-testid="play-button"],button[aria-label^="Pause"]'
+    )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(
+      button.getAttribute("aria-label") ?? button.textContent ?? ""
+    ));
+    const globalPauseButton = () => [...document.querySelectorAll(
+      '[data-testid="control-button-playpause"],'
+      + '[data-testid="now-playing-bar"] button[aria-label^="Pause"]'
     )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(
       button.getAttribute("aria-label") ?? button.textContent ?? ""
     ));
@@ -83,9 +115,7 @@ export function buildSpotifyVoiceAutomationScript(
     const nowPlayingMatches = intent.mediaType === "song" && nowPlayingTitle === titleIdentity &&
       (!creatorIdentity || nowPlayingCreator === creatorIdentity);
     if (intent.action === "play" && nowPlaying && (nowPlayingMatches || candidateMatches(nowPlaying))) {
-      const pause = [...document.querySelectorAll(
-        '[data-testid="control-button-playpause"],button[aria-label^="Pause"]'
-      )].find(visible);
+      const pause = globalPauseButton();
       if (pause instanceof HTMLElement) return "complete";
     }
     const roots = [...document.querySelectorAll(
@@ -94,7 +124,11 @@ export function buildSpotifyVoiceAutomationScript(
     )].filter((root) => visible(root) && candidateMatches(root));
     for (const root of roots) {
       if (intent.action === "play") {
-        if (playbackRequested && pauseButton(root) instanceof HTMLElement) return "playing";
+        if (
+          playbackRequested &&
+          pauseButton(root) instanceof HTMLElement &&
+          globalPauseButton() instanceof HTMLElement
+        ) return "playing";
         const button = playButton(root);
         if (button instanceof HTMLElement) {
           button.click();
@@ -117,7 +151,7 @@ export function buildSpotifyVoiceAutomationScript(
         : titleIdentity;
       if (headingIdentity === requestedIdentity) {
         if (intent.action !== "play") return "complete";
-        if (playbackRequested && pauseButton(document) instanceof HTMLElement) return "playing";
+        if (playbackRequested && globalPauseButton() instanceof HTMLElement) return "playing";
         const button = playButton(document);
         if (button instanceof HTMLElement) {
           button.click();
@@ -143,9 +177,13 @@ export function buildSpotifyVoiceAutomationScript(
   })()`;
 }
 
-export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): string {
+export function buildYouTubeVoiceAutomationScript(
+  intent: VoiceMediaIntent,
+  fullscreenRequested = false
+): string {
   return `(() => {
     const intent = ${serializedIntent(intent)};
+    const fullscreenRequested = ${JSON.stringify(fullscreenRequested)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
     const nearIdentity = (left, right) => {
@@ -171,6 +209,7 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
           fullscreenElement === video || fullscreenElement.contains(video)
         )) ||
           document.querySelector(".html5-video-player.ytp-fullscreen") !== null) return "complete";
+        if (fullscreenRequested) return "playing";
         const fullscreen = [...document.querySelectorAll(
           'button.ytp-fullscreen-button,button[aria-label^="Full screen"],button[title^="Full screen"]'
         )].find(visible);
@@ -206,9 +245,8 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
         const hrefIdentity = identity(anchor.getAttribute("href")?.replace(/^\\/@?/, "") ?? "");
         const nameIdentity = identity(name);
         const exact = channelIdentity && (nameIdentity === channelIdentity || hrefIdentity === channelIdentity);
-        const partial = channelIdentity && (nameIdentity.includes(channelIdentity) || channelIdentity.includes(nameIdentity));
         const near = channelIdentity && nearIdentity(nameIdentity, channelIdentity);
-        if (exact || partial || near) candidates.push({ anchor, score: exact ? 200 : near ? 110 : 100 });
+        if (exact || near) candidates.push({ anchor, score: exact ? 200 : 110 });
       }
     } else {
       const genericTitles = new Set(["video", "a video", "something", "latest video"]);
@@ -226,7 +264,6 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
         if (creatorIdentity) {
           const bylineIdentity = identity(byline);
           if (bylineIdentity === creatorIdentity) score += 200;
-          else if (bylineIdentity && (bylineIdentity.includes(creatorIdentity) || creatorIdentity.includes(bylineIdentity))) score += 120;
           else if (nearIdentity(bylineIdentity, creatorIdentity)) score += 110;
           else continue;
         }
@@ -252,11 +289,15 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
 
 export function buildNetflixVoiceAutomationScript(
   intent: VoiceMediaIntent,
-  profileNameHint: string | null = null
+  profileNameHint: string | null = null,
+  expectedContentId: string | null = null,
+  fullscreenRequested = false
 ): string {
   return `(() => {
     const intent = ${serializedIntent(intent)};
     const profileNameHint = ${serializedProfileHint(profileNameHint)};
+    const expectedContentId = ${serializedNetflixContentId(expectedContentId)};
+    const fullscreenRequested = ${JSON.stringify(fullscreenRequested)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
     const visible = (element) => {
@@ -272,6 +313,10 @@ export function buildNetflixVoiceAutomationScript(
       element.getAttribute("title"),
       element.textContent
     ].filter(Boolean).join(" "));
+    const currentContentId = /^\\/(?:title|watch)\\/([A-Za-z0-9_-]{1,64})(?:\\/|$)/
+      .exec(location.pathname)?.[1] ?? null;
+    const expectedContentMatches = expectedContentId !== null &&
+      currentContentId === expectedContentId;
     const profileCandidates = [...document.querySelectorAll(
       '[data-uia="profile-link"],a.profile-link,a[href*="/SwitchProfile"],button[data-profile-guid]'
     )].filter((element) => visible(element) && !/(?:add|manage|transfer|edit) profile/.test(controlLabel(element)));
@@ -298,10 +343,12 @@ export function buildNetflixVoiceAutomationScript(
     if (intent.action === "play") {
       const video = document.querySelector("video");
       if (video && !video.paused && !video.ended && video.readyState >= 2) {
+        if (!expectedContentMatches) return "idle";
         const fullscreenElement = document.fullscreenElement;
         if (fullscreenElement !== null && (
           fullscreenElement === video || fullscreenElement.contains(video)
         )) return "complete";
+        if (fullscreenRequested) return "playing";
         const fullscreen = [...document.querySelectorAll(
           '[data-uia="control-fullscreen-enter"],button[aria-label*="Full screen" i],button[aria-label*="fullscreen" i]'
         )].find(visible);
@@ -311,9 +358,13 @@ export function buildNetflixVoiceAutomationScript(
         }
         return "playing";
       }
-      const detailRoot = document.querySelector(
-        '[role="dialog"],.previewModal--wrapper,[data-uia="modal"]'
-      ) ?? (/^\\/(?:title|watch)\\//.test(location.pathname) ? document : null);
+      const providerDetailRoot = document.querySelector(
+        'dialog[open],[role="dialog"],[aria-modal="true"],[data-uia*="modal"],'
+        + '[class*="previewModal"],[class*="detail-modal"],'
+        + '[data-uia="title-info-container"],.jawBoneContainer'
+      );
+      const detailRoot = providerDetailRoot ??
+        (expectedContentMatches ? document : null);
       const detailSignals = detailRoot === null ? [] : [
         ...detailRoot.querySelectorAll('h1,h2,h3,[aria-label],[title],img[alt]')
       ].flatMap((element) => [
@@ -322,8 +373,11 @@ export function buildNetflixVoiceAutomationScript(
         element.getAttribute("alt"),
         element.textContent
       ]).filter(Boolean);
-      const detailMatches = /^\\/(?:title|watch)\\//.test(location.pathname) ||
-        detailSignals.some((signal) => identity(signal) === identity(intent.title));
+      const exactTitleSignal = detailSignals.some((signal) =>
+        identity(signal) === identity(intent.title)
+      );
+      const detailMatches = exactTitleSignal ||
+        (providerDetailRoot === null && expectedContentMatches);
       if (intent.mediaType === "episode" && detailRoot !== null) {
         if (!detailMatches) return "idle";
         const seasonNumber = Number(intent.season);
@@ -334,7 +388,7 @@ export function buildNetflixVoiceAutomationScript(
           if (named) return Number(named[1]) === seasonNumber;
           return /^0*\\d+$/.test(label) && Number(label) === seasonNumber;
         };
-        const seasonControls = [...document.querySelectorAll(
+        const seasonControls = [...detailRoot.querySelectorAll(
           'select[data-uia*="season"],select[aria-label*="season" i],'
           + '[data-uia*="season-selector"],button[aria-label*="season" i],'
           + '[role="button"][aria-label*="season" i]'
@@ -372,7 +426,7 @@ export function buildNetflixVoiceAutomationScript(
             return "navigated";
           }
         }
-        const episodeRows = [...document.querySelectorAll(
+        const episodeRows = [...detailRoot.querySelectorAll(
           '[data-uia^="episode-item-"],[data-uia="episode-item"],.episode-item'
         )].filter(visible);
         const exactEpisode = episodeRows.find((row) => {

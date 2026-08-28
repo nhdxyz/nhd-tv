@@ -112,7 +112,10 @@ import {
   selectEnabledWatchOffer,
   watchAvailabilityDetail
 } from "./voice/google-watch-selection";
-import { applyYouTubeLatestSort } from "./voice/voice-provider-automation";
+import {
+  applyYouTubeLatestSort,
+  voiceProviderCommandHandled
+} from "./voice/voice-provider-automation";
 import {
   createVoicePresentationState,
   remainingVoiceTranscriptDisplayMilliseconds
@@ -576,7 +579,9 @@ function presentPhoneVoiceTranscript(transcript: string): void {
 }
 
 function presentPhoneVoiceResult(result: PhoneRemoteVoiceResult): void {
-  const phase: VoicePresentationPhase = result.outcome === "failed" ? "error" : "success";
+  const phase: VoicePresentationPhase = result.outcome === "failed"
+    ? "error"
+    : result.outcome === "confirmation-required" ? "confirmation" : "success";
   const showResult = () => showVoicePresentation(
     phase,
     { detail: voiceResultDetail(result) },
@@ -1215,11 +1220,14 @@ async function executeGoogleWatchPlan(
     intendedUrl: playbackUrl,
     profileNameHint: activeVoiceProfileName()
   }) ?? false;
+  const handled = voiceProviderCommandHandled(plan.intent, automated);
   return {
-    detail: automated && plan.intent.action === "play"
-      ? `Playing ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`
+    detail: plan.intent.action === "play"
+      ? automated
+        ? `Playing ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`
+        : `Opened ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}, but could not start playback automatically.`
       : `Opened ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`,
-    handled: true
+    handled
   };
 }
 
@@ -1293,11 +1301,15 @@ async function executeVoiceCommandPlan(
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
   const discoveryDetail = voiceDiscoveryOpenedDetail(plan.intent, definition.name);
+  const handled = isVoiceDiscoveryIntent(plan.intent) ||
+    voiceProviderCommandHandled(plan.intent, automated);
   return {
     detail: discoveryDetail ?? (automated
       ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
-      : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`),
-    handled: true
+      : plan.intent.action === "play"
+        ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}, but could not start playback automatically.`
+        : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`),
+    handled
   };
 }
 

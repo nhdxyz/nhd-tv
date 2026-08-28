@@ -1153,7 +1153,6 @@ export const REMOTE_JS = `(() => {
         audioBitsPerSecond: 64_000,
         mimeType: supportedVoiceMimeType
       });
-      voiceRecorder = recorder;
       voiceChunks = [];
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size > 0) voiceChunks.push(event.data);
@@ -1187,8 +1186,9 @@ export const REMOTE_JS = `(() => {
         recordedChunks.length = 0;
         void uploadVoiceRecording(blob, durationMs);
       }, { once: true });
-      recorder.start(250);
       voiceStartedAt = performance.now();
+      recorder.start(250);
+      voiceRecorder = recorder;
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Listening";
       sendVoiceActivity("listening");
@@ -1199,7 +1199,13 @@ export const REMOTE_JS = `(() => {
         if (navigator.vibrate) navigator.vibrate(24);
       }, 19_500);
     } catch (error) {
+      voiceRecorder = null;
+      voiceChunks = [];
+      voiceStartedAt = 0;
+      clearVoiceStopTimer();
       stopVoiceStream();
+      voiceButton.classList.remove("is-recording");
+      voiceButtonCopy.textContent = "Hold to talk";
       sendVoiceActivity("cancelled");
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";
       setState(

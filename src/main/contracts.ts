@@ -233,6 +233,7 @@ export interface OpenAiCredentialStatus {
 }
 
 export type VoicePresentationPhase =
+  | "confirmation"
   | "error"
   | "hidden"
   | "listening"

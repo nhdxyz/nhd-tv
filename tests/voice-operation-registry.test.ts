@@ -68,6 +68,33 @@ describe("voice operation registry", () => {
     expect(registry.busy).toBe(true);
   });
 
+  it("lets TV-owned state revoke active work without opening an overlap window", async () => {
+    const registry = new VoiceOperationRegistry();
+    const operation = beginCommand(registry);
+
+    expect(registry.cancelActive()).toBe(operation);
+    expect(operation.controller.signal.aborted).toBe(true);
+    expect(operation.controller.signal.reason).toBeInstanceOf(VoiceOperationCancelledError);
+    expect(registry.busy).toBe(true);
+    expect(beginCommand.bind(null, registry, "voice-command-next-5678")).toThrow(
+      "operation was not reserved"
+    );
+
+    expect(registry.finish(operation)).toBe(true);
+    await expect(operation.finished).resolves.toBeUndefined();
+    expect(registry.busy).toBe(false);
+  });
+
+  it("treats TV-owned active cancellation as idempotent", () => {
+    const registry = new VoiceOperationRegistry();
+    const operation = beginCommand(registry);
+
+    expect(registry.cancelActive()).toBe(operation);
+    expect(registry.cancelActive()).toBe(operation);
+    expect(registry.finish(operation)).toBe(true);
+    expect(registry.cancelActive()).toBeNull();
+  });
+
   it("tombstones an owner-authorized cancellation before operation registration", () => {
     const registry = new VoiceOperationRegistry();
 

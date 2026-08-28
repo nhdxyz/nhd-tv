@@ -2437,12 +2437,28 @@ function registerIpc(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.updateProfilePreferences,
-    (event, preferences: ProfilePreferences) => {
+    async (event, preferences: ProfilePreferences) => {
       validateShellSender(event.senderFrame?.url ?? "");
       if (localStateStore === null) {
         throw new Error("Local profile state is not ready.");
       }
-      return localStateStore.updatePreferences(preferences);
+
+      // A lineup or routing preference is TV-owned authorization state. Revoke
+      // every slow voice stage before mutating it so an earlier check can never
+      // launch or control a service after this update takes effect.
+      serviceHost?.beginOperation();
+      googleWatchResolver?.cancelActive();
+      phoneRemote?.cancelActiveVoiceOperation();
+
+      const state = await localStateStore.updatePreferences(preferences);
+      const activeServiceId = serviceHost?.activeServiceId ?? null;
+      if (
+        activeServiceId !== null &&
+        !state.preferences.enabledServiceIds.includes(activeServiceId)
+      ) {
+        await serviceHost?.closeWithCheckpoint();
+      }
+      return state;
     }
   );
 

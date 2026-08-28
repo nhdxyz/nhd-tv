@@ -704,6 +704,11 @@ export class PhoneRemoteServer {
     return this.status;
   }
 
+  /** Cancels in-flight voice work after TV-owned authorization state changes. */
+  cancelActiveVoiceOperation(): boolean {
+    return this.#voiceOperations.cancelActive() !== null;
+  }
+
   async stop(): Promise<void> {
     this.#manager.revokeAll();
     this.#voiceActivityLease.reset();

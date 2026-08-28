@@ -135,6 +135,24 @@ export class VoiceOperationRegistry {
     return { operation: active, state: "accepted" };
   }
 
+  /**
+   * Revokes the current operation when TV-owned state changes invalidate its
+   * authority (for example, when the enabled-service lineup is edited).
+   * The operation stays registered until its normal cleanup finishes, so a
+   * second phone cannot overlap the cancelling work.
+   */
+  cancelActive(): VoiceOperationHandle | null {
+    this.#cleanup();
+    const active = this.#active;
+    if (active === null) return null;
+
+    this.#rememberCancellation(operationKey(active.controllerId, active.operationId));
+    if (!active.controller.signal.aborted) {
+      active.controller.abort(new VoiceOperationCancelledError());
+    }
+    return active;
+  }
+
   isCancelled(controllerId: string, operationId: string): boolean {
     this.#cleanup();
     return this.#cancelled.has(operationKey(controllerId, operationId));

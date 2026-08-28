@@ -73,6 +73,11 @@ import {
   qualifySpotifyPlaybackSnapshot,
   type SpotifyPlaybackSnapshot
 } from "./spotify-playback";
+import type { VoiceMediaIntent } from "./voice/voice-intent";
+import {
+  buildSpotifyVoiceAutomationScript,
+  buildYouTubeVoiceAutomationScript
+} from "./voice/voice-provider-automation";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -1342,6 +1347,40 @@ export class ServiceHost {
         throw error;
       }
     }
+  }
+
+  async executeVoiceMediaIntent(intent: VoiceMediaIntent): Promise<boolean> {
+    const view = this.#view;
+    const definition = this.#activeDefinition;
+    if (
+      view === null ||
+      definition === null ||
+      view.webContents.isDestroyed() ||
+      !["spotify", "youtube"].includes(definition.id)
+    ) {
+      return false;
+    }
+
+    const script = definition.id === "spotify"
+      ? buildSpotifyVoiceAutomationScript(intent)
+      : buildYouTubeVoiceAutomationScript(intent);
+    const deadline = Date.now() + 8_000;
+    while (
+      Date.now() < deadline &&
+      this.#view === view &&
+      !view.webContents.isDestroyed()
+    ) {
+      try {
+        if (await view.webContents.executeJavaScript(script, true) === true) {
+          if (definition.id === "spotify") void this.#captureSpotifyPlayback();
+          return true;
+        }
+      } catch {
+        // Provider navigation can replace the page between attempts.
+      }
+      await delay(250);
+    }
+    return false;
   }
 
   cancelQuit(): void {

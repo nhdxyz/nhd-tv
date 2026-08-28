@@ -104,6 +104,7 @@ import {
   selectEnabledWatchOffer,
   watchAvailabilityDetail
 } from "./voice/google-watch-selection";
+import { applyYouTubeLatestSort } from "./voice/voice-provider-automation";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
@@ -1112,18 +1113,24 @@ async function executeVoiceCommandPlan(
   }
 
   const definition = getServiceDefinition(destination.serviceId);
-  const searchUrl = definition === null
+  const baseSearchUrl = definition === null
     ? null
     : buildServiceSearchUrl(definition, destination.query);
-  if (definition === null || searchUrl === null) {
+  if (definition === null || baseSearchUrl === null) {
     return { detail: "That service cannot search for this request.", handled: false };
   }
+  const searchUrl = destination.serviceId === "youtube"
+    ? applyYouTubeLatestSort(baseSearchUrl, plan.intent)
+    : baseSearchUrl;
   await openTrackedService(definition, searchUrl);
+  const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent) ?? false;
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
   return {
-    detail: `Opened ${definition.name} for ${plan.intent.title}${exactEpisode}.`,
+    detail: automated
+      ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
+      : `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`,
     handled: true
   };
 }

@@ -911,8 +911,11 @@ describe("voice provider automation", () => {
 
   it("adds the YouTube upload-date token only for latest-video searches", () => {
     const base = "https://www.youtube.com/results?search_query=Outdoor+Guys";
-    const sorted = new URL(applyYouTubeLatestSort(base, intent({ recency: "latest" })));
-    expect(sorted.searchParams.get("sp")).toBe("CAI%3D");
+    const sortedValue = applyYouTubeLatestSort(base, intent({ recency: "latest" }));
+    const sorted = new URL(sortedValue);
+    expect(sorted.searchParams.get("sp")).toBe("CAI=");
+    expect(sortedValue).toContain("sp=CAI%3D");
+    expect(sortedValue).not.toContain("%253D");
     expect(applyYouTubeLatestSort(base, intent())).toBe(base);
     expect(applyYouTubeLatestSort("https://example.test/results", intent({ recency: "latest" })))
       .toBe("https://example.test/results");

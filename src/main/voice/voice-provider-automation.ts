@@ -661,6 +661,8 @@ export function applyYouTubeLatestSort(urlValue: string, intent: VoiceMediaInten
   if (url.hostname !== "www.youtube.com" || url.pathname !== "/results") return urlValue;
   // YouTube's provider-owned upload-date filter uses this opaque search token.
   // Keeping it here prevents the model from supplying query parameters.
-  url.searchParams.set("sp", "CAI%3D");
+  // URLSearchParams owns percent-encoding. Supplying the already encoded
+  // spelling would serialize as CAI%253D and YouTube would not receive CAI=.
+  url.searchParams.set("sp", "CAI=");
   return url.toString();
 }

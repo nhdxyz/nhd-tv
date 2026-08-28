@@ -108,7 +108,7 @@ Context is memory-only: no transcript, audio, provider URL, or cookie is retaine
 | “Play this at one-and-a-half speed” / “Normal speed” | Sets an active Netflix or YouTube finite video to an exact supported rate: 0.5×, 0.75×, 1×, 1.25×, or 1.5×. The command verifies settled provider state and never rounds unsupported rates. |
 | “Next song” / “Skip this song” / “Previous track” | Uses Spotify's next or previous track control only while Spotify is open. It never converts a track request into a video or movie seek. |
 | “Turn shuffle on/off” | Sets Spotify's current shuffle state explicitly and verifies the settled switch state. A repeated request is a no-op rather than a toggle. |
-| “Repeat everything” / “Repeat this song” / “Turn repeat off” | Selects Spotify repeat-all, repeat-one, or repeat-off explicitly. Bare “repeat,” toggle requests, named-playlist shuffle requests, and unsupported state cycles fail closed. |
+| “Repeat everything” / “Repeat this song” / “Turn repeat off” | Selects Spotify repeat-all, repeat-one, or repeat-off explicitly. Each transition is re-read and verified; a failed multi-step change is restored when possible or reported as a partial setting change. Bare “repeat,” toggle requests, named-playlist shuffle requests, and unsupported state cycles fail closed. |
 | “Volume up” / “Turn it down” | Changes system volume by one 5-point step. Raising or lowering volume also unmutes system audio. |
 | “Set volume to 20 percent” | Sets the system volume to an explicit whole-number level from 0–100. Spoken numbers such as “twenty” are accepted; vague, decimal, negative, and out-of-range values fail closed. |
 | “Mute” / “Unmute” | Sets the requested mute state explicitly; repeating the same request does not invert it. |

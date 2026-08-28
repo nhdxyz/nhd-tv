@@ -1,4 +1,8 @@
 import type { VoiceCurrentMediaIntent } from "./voice-intent";
+import { qualifyObservedPlaybackRate } from "../observed-playback-rate";
+
+const AUDIO_TIMING_FRESHNESS_MS = 5_000;
+const VIDEO_TIMING_FRESHNESS_MS = 30_000;
 
 export interface VoiceCurrentMediaSnapshot {
   album: string | null;
@@ -9,6 +13,7 @@ export interface VoiceCurrentMediaSnapshot {
   fullscreen: boolean;
   mediaKind: "audio" | "video";
   observedAt: number;
+  playbackRate: number | null;
   playbackState: "ended" | "paused" | "playing" | "unknown";
   positionSeconds: number | null;
   serviceId: string;
@@ -90,8 +95,67 @@ function naturalTimeDetail(totalSeconds: number): string {
   return `${parts[0]}, ${parts[1]}, and ${parts[2]}`;
 }
 
-function observedPositionSeconds(snapshot: VoiceCurrentMediaSnapshot): number | null {
-  const position = wholeObservedSeconds(snapshot.positionSeconds, true);
+function timingFreshnessMs(snapshot: VoiceCurrentMediaSnapshot): number {
+  return snapshot.mediaKind === "audio"
+    ? AUDIO_TIMING_FRESHNESS_MS
+    : VIDEO_TIMING_FRESHNESS_MS;
+}
+
+function observationAgeMilliseconds(
+  snapshot: VoiceCurrentMediaSnapshot,
+  nowMilliseconds: number
+): number | null {
+  if (
+    !Number.isFinite(snapshot.observedAt) ||
+    snapshot.observedAt < 0 ||
+    !Number.isFinite(nowMilliseconds)
+  ) {
+    return null;
+  }
+  const age = nowMilliseconds - snapshot.observedAt;
+  return age >= 0 && age <= timingFreshnessMs(snapshot) ? age : null;
+}
+
+interface EffectivePosition {
+  playingTimingFresh: boolean;
+  positionSeconds: number | null;
+}
+
+function effectivePosition(
+  snapshot: VoiceCurrentMediaSnapshot,
+  nowMilliseconds: number
+): EffectivePosition {
+  const rawPosition = snapshot.positionSeconds;
+  if (rawPosition === null || !Number.isFinite(rawPosition) || rawPosition < 0) {
+    return { playingTimingFresh: false, positionSeconds: null };
+  }
+
+  let positionSeconds = rawPosition;
+  let playingTimingFresh = false;
+  if (snapshot.playbackState === "playing") {
+    const rate = qualifyObservedPlaybackRate(snapshot.playbackRate);
+    const ageMilliseconds = observationAgeMilliseconds(snapshot, nowMilliseconds);
+    if (rate !== null && ageMilliseconds !== null) {
+      positionSeconds += ageMilliseconds / 1_000 * rate;
+      playingTimingFresh = true;
+    }
+  }
+
+  const duration = snapshot.durationSeconds;
+  if (duration !== null && Number.isFinite(duration) && duration > 0) {
+    positionSeconds = Math.min(positionSeconds, duration);
+  }
+  return { playingTimingFresh, positionSeconds };
+}
+
+function observedPositionSeconds(
+  snapshot: VoiceCurrentMediaSnapshot,
+  nowMilliseconds: number
+): number | null {
+  const position = wholeObservedSeconds(
+    effectivePosition(snapshot, nowMilliseconds).positionSeconds,
+    true
+  );
   if (position === null) return null;
   const duration = wholeObservedSeconds(snapshot.durationSeconds, false);
   return duration === null ? position : Math.min(position, duration);
@@ -101,20 +165,22 @@ function observedDurationSeconds(snapshot: VoiceCurrentMediaSnapshot): number | 
   return wholeObservedSeconds(snapshot.durationSeconds, false);
 }
 
-function remainingSeconds(snapshot: VoiceCurrentMediaSnapshot): number | null {
+function remainingContentSeconds(
+  snapshot: VoiceCurrentMediaSnapshot,
+  positionSeconds: number | null
+): number | null {
   const duration = snapshot.durationSeconds;
-  const position = snapshot.positionSeconds;
   if (
     duration === null ||
-    position === null ||
+    positionSeconds === null ||
     !Number.isFinite(duration) ||
-    !Number.isFinite(position) ||
+    !Number.isFinite(positionSeconds) ||
     duration <= 0 ||
-    position < 0
+    positionSeconds < 0
   ) {
     return null;
   }
-  return Math.max(0, Math.round(duration - Math.min(position, duration)));
+  return Math.max(0, duration - Math.min(positionSeconds, duration));
 }
 
 function durationDetail(totalSeconds: number): string {
@@ -202,7 +268,8 @@ export function answerCurrentMediaQuestion(
   }
 
   if (action === "position") {
-    const position = observedPositionSeconds(snapshot);
+    const now = options.now ?? Date.now;
+    const position = observedPositionSeconds(snapshot, now());
     if (position === null) {
       return {
         detail: "The current media is not reporting its playback position.",
@@ -230,14 +297,63 @@ export function answerCurrentMediaQuestion(
       };
   }
 
-  const remaining = remainingSeconds(snapshot);
-  if (remaining === null) {
+  if (snapshot.playbackState === "ended") {
+    return { detail: "This is at the end.", handled: true };
+  }
+
+  const now = options.now ?? Date.now;
+  const nowMilliseconds = now();
+  const position = effectivePosition(snapshot, nowMilliseconds);
+  const contentRemaining = remainingContentSeconds(snapshot, position.positionSeconds);
+  if (action === "end-time" && snapshot.playbackState === "paused") {
+    return {
+      detail: "Playback is paused, so there isn't an end time yet.",
+      handled: true
+    };
+  }
+  if (action === "end-time" && snapshot.playbackState === "unknown") {
+    return {
+      detail: "I can't estimate an end time because the current playback state is unavailable.",
+      handled: true
+    };
+  }
+  if (contentRemaining === null) {
     return {
       detail: "The current media does not report a fixed ending time.",
       handled: true
     };
   }
   if (action === "time-remaining") {
+    const contentSeconds = Math.max(0, Math.round(contentRemaining));
+    if (contentSeconds === 0) {
+      return { detail: "This is at the end.", handled: true };
+    }
+    if (snapshot.playbackState === "paused") {
+      return {
+        detail: `Playback is paused with about ${durationDetail(contentSeconds)} of content remaining.`,
+        handled: true
+      };
+    }
+    if (snapshot.playbackState === "unknown") {
+      return {
+        detail: `The app last reported about ${durationDetail(contentSeconds)} remaining, but its playback state is unavailable.`,
+        handled: true
+      };
+    }
+    const rate = qualifyObservedPlaybackRate(snapshot.playbackRate);
+    if (rate === null) {
+      return {
+        detail: `About ${durationDetail(contentSeconds)} of content remains, but the current playback speed is unavailable.`,
+        handled: true
+      };
+    }
+    if (!position.playingTimingFresh) {
+      return {
+        detail: `The app last reported about ${durationDetail(contentSeconds)} of content remaining, but that timing is too old to estimate current playback time.`,
+        handled: true
+      };
+    }
+    const remaining = Math.max(0, Math.round(contentRemaining / rate));
     return {
       detail: remaining === 0
         ? "This is at the end."
@@ -246,12 +362,25 @@ export function answerCurrentMediaQuestion(
     };
   }
 
-  const now = options.now ?? Date.now;
+  const rate = qualifyObservedPlaybackRate(snapshot.playbackRate);
+  if (rate === null) {
+    return {
+      detail: "I can't estimate an end time because the current playback speed is unavailable.",
+      handled: true
+    };
+  }
+  if (!position.playingTimingFresh) {
+    return {
+      detail: "I can't estimate an end time because the latest playback timing is too old.",
+      handled: true
+    };
+  }
+  const remaining = Math.max(0, Math.round(contentRemaining / rate));
   const formatTime = options.formatTime ?? defaultFormatTime;
   return {
     detail: remaining === 0
       ? "This is at the end."
-      : `It should finish around ${formatTime(now() + remaining * 1_000)}.`,
+      : `It should finish around ${formatTime(nowMilliseconds + remaining * 1_000)}.`,
     handled: true
   };
 }

@@ -49,6 +49,7 @@ describe("passive playback observer", () => {
       currentTime: 12,
       duration: 45,
       paused: false,
+      playbackRate: 1,
       playedSeconds: 0,
       readyState: 3
     });
@@ -56,6 +57,7 @@ describe("passive playback observer", () => {
     expect(qualifyLivePlaybackSnapshot(shortVideo)).toEqual({
       currentTime: 12,
       duration: 45,
+      playbackRate: 1,
       playbackState: "playing",
       subtitle: "S1:E2 An Example",
       title: "Example Show"
@@ -67,6 +69,7 @@ describe("passive playback observer", () => {
       ended: false,
       hasError: false,
       paused: false,
+      playbackRate: 1.5,
       readyState: 4,
       subtitle: "Live",
       title: "News Live",
@@ -74,6 +77,7 @@ describe("passive playback observer", () => {
     })).toEqual({
       currentTime: 9_000,
       duration: null,
+      playbackRate: 1.5,
       playbackState: "playing",
       subtitle: "Live",
       title: "News"
@@ -90,6 +94,14 @@ describe("passive playback observer", () => {
       paused: false,
       readyState: 1
     }))?.playbackState).toBe("unknown");
+  });
+
+  it("strictly qualifies a bounded finite playback rate", () => {
+    expect(qualifyLivePlaybackSnapshot(snapshot({ playbackRate: 1.25 }))?.playbackRate)
+      .toBe(1.25);
+    for (const playbackRate of [0, -1, 4.01, Number.NaN, Number.POSITIVE_INFINITY, "1.5"]) {
+      expect(qualifyLivePlaybackSnapshot(snapshot({ playbackRate }))?.playbackRate).toBeNull();
+    }
   });
 
   it("bounds provider metadata and never embeds it into the generated script", () => {
@@ -123,6 +135,7 @@ describe("passive playback observer", () => {
     expect(liveScript).toContain('document.querySelectorAll("video")');
     expect(liveScript).toContain("Number.isFinite(video.duration) ? video.duration : null");
     expect(liveScript).toContain("paused: video.paused");
+    expect(liveScript).toContain("Number.isFinite(video.playbackRate) ? video.playbackRate : null");
     expect(liveScript).not.toContain("location.href");
     expect(liveScript).not.toContain("playedSeconds");
   });

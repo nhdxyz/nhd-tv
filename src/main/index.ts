@@ -449,6 +449,7 @@ function syncVoiceContextFromServiceHost(): void {
     },
     mediaType: voiceContextMediaType(current),
     observedAt: current.observedAt,
+    playbackRate: current.playbackRate,
     playbackStatus: current.playbackState,
     positionSeconds: current.positionSeconds
   }, revisions);
@@ -478,6 +479,7 @@ function currentMediaSnapshotFromVoiceContext(
     fullscreen: snapshot.fullscreen === true,
     mediaKind: audioTypes.includes(snapshot.mediaType) ? "audio" : "video",
     observedAt: snapshot.observedAt,
+    playbackRate: snapshot.playbackRate,
     playbackState,
     positionSeconds: snapshot.positionSeconds,
     serviceId: snapshot.service.id,

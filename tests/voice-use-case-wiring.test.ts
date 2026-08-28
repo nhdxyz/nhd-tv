@@ -99,6 +99,11 @@ describe("voice use-case execution wiring", () => {
     expect(query).toBeLessThan(operation);
   });
 
+  it("preserves the qualified playback rate through shared current-media context", () => {
+    expect(source).toContain("playbackRate: current.playbackRate");
+    expect(source).toContain("playbackRate: snapshot.playbackRate");
+  });
+
   it("resolves follow-up references from fresh TV-wide context before recording the target", () => {
     const sync = contextualUnderstanding.indexOf("syncVoiceContextFromServiceHost()");
     const resolve = contextualUnderstanding.indexOf("resolveVoiceContextIntent(");

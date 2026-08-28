@@ -1,3 +1,5 @@
+import { qualifyObservedPlaybackRate } from "../observed-playback-rate";
+
 const MAX_DISPLAY_TEXT_LENGTH = 180;
 const MAX_IDENTIFIER_LENGTH = 200;
 const MAX_CANDIDATES = 10;
@@ -136,6 +138,7 @@ export interface VoiceLiveMediaInput extends VoiceMediaReferenceInput {
   durationSeconds?: number | null;
   fullscreen?: boolean | null;
   observedAt?: number;
+  playbackRate?: number | null;
   playbackStatus: VoicePlaybackStatus;
   positionSeconds?: number | null;
 }
@@ -148,6 +151,7 @@ export interface VoicePlaybackUpdate {
   durationSeconds?: number | null;
   fullscreen?: boolean | null;
   observedAt?: number;
+  playbackRate?: number | null;
   playbackStatus?: VoicePlaybackStatus;
   positionSeconds?: number | null;
 }
@@ -160,6 +164,7 @@ export interface VoiceLiveMediaSnapshot extends VoiceMediaReference {
   durationSeconds: number | null;
   fullscreen: boolean | null;
   observedAt: number;
+  playbackRate: number | null;
   playbackStatus: VoicePlaybackStatus;
   positionSeconds: number | null;
   revisions: VoiceContextRevisions;
@@ -605,6 +610,7 @@ export class VoiceContextStore {
       durationSeconds,
       fullscreen: nullableBoolean(input.fullscreen),
       observedAt,
+      playbackRate: qualifyObservedPlaybackRate(input.playbackRate),
       playbackStatus: playbackStatus(input.playbackStatus),
       positionSeconds,
       revisions: revisionCopy(this.#revisions),
@@ -652,6 +658,9 @@ export class VoiceContextStore {
         ? nullableBoolean(update.fullscreen)
         : this.#liveMedia.fullscreen,
       observedAt,
+      playbackRate: hasOwn(update, "playbackRate")
+        ? qualifyObservedPlaybackRate(update.playbackRate)
+        : this.#liveMedia.playbackRate,
       playbackStatus: hasOwn(update, "playbackStatus")
         ? playbackStatus(update.playbackStatus)
         : this.#liveMedia.playbackStatus,

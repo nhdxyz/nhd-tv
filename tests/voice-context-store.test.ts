@@ -21,6 +21,7 @@ function video(overrides: Partial<VoiceLiveMediaInput> = {}): VoiceLiveMediaInpu
     },
     mediaType: "episode",
     observedAt: 1_000,
+    playbackRate: 1.5,
     playbackStatus: "playing",
     positionSeconds: 3_000,
     ...overrides
@@ -46,6 +47,7 @@ describe("shared voice context store", () => {
       durationSeconds: 2_400,
       mediaType: "episode",
       observedAt: 1_000,
+      playbackRate: 1.5,
       playbackStatus: "playing",
       positionSeconds: 2_400,
       service: { id: "netflix", name: "Netflix" },
@@ -84,6 +86,7 @@ describe("shared voice context store", () => {
         title: "Stronger"
       },
       mediaType: "song",
+      playbackRate: null,
       playbackStatus: "paused",
       positionSeconds: 42
     }, serviceScope);
@@ -146,6 +149,18 @@ describe("shared voice context store", () => {
       kind: "playback-rate",
       serviceId: "netflix"
     });
+  });
+
+  it("retains only strictly qualified observed playback rates", () => {
+    const store = new VoiceContextStore({ now: () => 12_500 });
+    let scope = activateNetflix(store);
+    scope = store.observeMedia(video({ playbackRate: 8 }), scope) ?? scope;
+    expect(store.snapshot().liveMedia?.playbackRate).toBeNull();
+
+    expect(store.updatePlayback({ playbackRate: 1.25 }, scope)).toBe(true);
+    expect(store.snapshot().liveMedia?.playbackRate).toBe(1.25);
+    expect(store.updatePlayback({ playbackRate: 0 }, scope)).toBe(true);
+    expect(store.snapshot().liveMedia?.playbackRate).toBeNull();
   });
 
   it("records verified Spotify mode actions in the shared TV context", () => {

@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   currentMediaSnapshotForPresentation,
   type CurrentMediaSnapshot
 } from "../src/main/service-host";
+
+const serviceHostSource = readFileSync(
+  new URL("../src/main/service-host.ts", import.meta.url),
+  "utf8"
+);
 
 function snapshot(overrides: Partial<CurrentMediaSnapshot> = {}): CurrentMediaSnapshot {
   return {
@@ -13,6 +19,7 @@ function snapshot(overrides: Partial<CurrentMediaSnapshot> = {}): CurrentMediaSn
     fullscreen: false,
     mediaKind: "video",
     observedAt: 10_000,
+    playbackRate: 1.5,
     playbackState: "playing",
     positionSeconds: 620,
     serviceId: "netflix",
@@ -51,14 +58,17 @@ describe("ServiceHost current-media presentation", () => {
       now: 10_100
     })).toBeNull();
 
-    expect(currentMediaSnapshotForPresentation(snapshot(), {
+    const staleVideo = currentMediaSnapshotForPresentation(snapshot(), {
       activeServiceId: "netflix",
       backgrounded: false,
       fullscreen: false,
       now: 40_001
-    })?.playbackState).toBe("unknown");
+    });
+    expect(staleVideo?.playbackState).toBe("unknown");
+    expect(staleVideo?.playbackRate).toBeNull();
     expect(currentMediaSnapshotForPresentation(snapshot({
       mediaKind: "audio",
+      playbackRate: null,
       serviceId: "spotify",
       serviceName: "Spotify"
     }), {
@@ -67,5 +77,23 @@ describe("ServiceHost current-media presentation", () => {
       fullscreen: false,
       now: 15_001
     })?.playbackState).toBe("unknown");
+  });
+
+  it("does not present an out-of-range playback rate", () => {
+    expect(currentMediaSnapshotForPresentation(snapshot({ playbackRate: 8 }), {
+      activeServiceId: "netflix",
+      backgrounded: false,
+      fullscreen: false,
+      now: 10_100
+    })?.playbackRate).toBeNull();
+  });
+
+  it("does not assume a Spotify playback rate", () => {
+    const spotifyCapture = serviceHostSource.slice(
+      serviceHostSource.indexOf("#captureSpotifyPlayback("),
+      serviceHostSource.indexOf("async #sendSpotifyMediaAction(")
+    );
+    expect(spotifyCapture).toContain('mediaKind: "audio"');
+    expect(spotifyCapture).toContain("playbackRate: null");
   });
 });

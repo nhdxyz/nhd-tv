@@ -28,6 +28,8 @@ describe("semantic voice control host wiring", () => {
     expect(method).toContain('result !== "needs-follow-up"');
     expect(method).toContain("attempt < 3");
     expect(method).toContain("this.#operationOwner.throwIfSuperseded(operation)");
+    expect(method).toContain("await this.#captureLiveVideoPlayback(operation, true)");
+    expect(method).toContain('definition.id !== "spotify"');
     expect(method).not.toContain("loadURL(");
     expect(method).not.toContain("#closeVoiceOperationView");
   });

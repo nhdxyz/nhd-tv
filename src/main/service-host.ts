@@ -30,6 +30,7 @@ import {
   qualifyLivePlaybackSnapshot,
   qualifyPlaybackSnapshot
 } from "./playback-observer";
+import { qualifyObservedPlaybackRate } from "./observed-playback-rate";
 import type {
   NavigationDiagnostic,
   MediaAction,
@@ -130,6 +131,7 @@ export interface CurrentMediaSnapshot {
   fullscreen: boolean;
   mediaKind: CurrentMediaKind;
   observedAt: number;
+  playbackRate: number | null;
   playbackState: CurrentMediaPlaybackState;
   positionSeconds: number | null;
   serviceId: string;
@@ -218,6 +220,9 @@ export function currentMediaSnapshotForPresentation(
     ...snapshot,
     backgrounded: options.backgrounded,
     fullscreen: options.fullscreen,
+    playbackRate: playbackState === "unknown"
+      ? null
+      : qualifyObservedPlaybackRate(snapshot.playbackRate),
     playbackState
   };
 }
@@ -1244,6 +1249,7 @@ export class ServiceHost {
       if (this.#view === view) {
         this.#playbackActive = false;
         this.#updateCurrentMediaPlaybackState("paused", "video");
+        void this.#captureLiveVideoPlayback(undefined, true);
         void this.#checkpointPlayback();
         this.#onStateChanged(this.activeServiceId);
       }
@@ -1256,7 +1262,7 @@ export class ServiceHost {
 
       this.#playbackActive = true;
       this.#updateCurrentMediaPlaybackState("playing", "video");
-      void this.#captureLiveVideoPlayback();
+      void this.#captureLiveVideoPlayback(undefined, true);
       this.#onStateChanged(this.activeServiceId);
 
       if (this.#playbackQualificationTimer !== null) {
@@ -2099,7 +2105,15 @@ export class ServiceHost {
         signal?.throwIfAborted();
         if (this.#view !== view || view.webContents.isDestroyed()) return "unavailable";
         const result = parseVoiceSemanticControlResult(rawResult);
-        if (result !== "needs-follow-up") return result;
+        if (result !== "needs-follow-up") {
+          if (
+            definition.id !== "spotify" &&
+            (result === "complete" || result === "verified")
+          ) {
+            await this.#captureLiveVideoPlayback(operation, true);
+          }
+          return result;
+        }
         await delay(250, signal);
       }
       return "unavailable";
@@ -2575,20 +2589,24 @@ export class ServiceHost {
       ...snapshot,
       backgrounded: this.#backgrounded,
       fullscreen: this.#htmlFullscreen,
-      observedAt: Date.now(),
+      playbackRate: null,
       playbackState
     };
   }
 
   #captureLiveVideoPlayback(
-    operationToken?: ServiceOperationToken
+    operationToken?: ServiceOperationToken,
+    forceFresh = false
   ): Promise<void> {
     const epoch = this.#currentMediaEpoch;
     if (
       this.#livePlaybackCheckpoint !== null &&
       this.#livePlaybackCheckpointEpoch === epoch
     ) {
-      return this.#livePlaybackCheckpoint;
+      const checkpoint = this.#livePlaybackCheckpoint;
+      return forceFresh
+        ? checkpoint.then(() => this.#captureLiveVideoPlayback(operationToken))
+        : checkpoint;
     }
 
     const view = this.#view;
@@ -2634,6 +2652,7 @@ export class ServiceHost {
           fullscreen: this.#htmlFullscreen,
           mediaKind: "video",
           observedAt: Date.now(),
+          playbackRate: snapshot.playbackRate,
           playbackState: snapshot.playbackState,
           positionSeconds: snapshot.currentTime,
           serviceId: definition.id,
@@ -2777,6 +2796,7 @@ export class ServiceHost {
             fullscreen: this.#htmlFullscreen,
             mediaKind: "audio",
             observedAt: Date.now(),
+            playbackRate: null,
             playbackState: snapshot.playbackState,
             positionSeconds: snapshot.positionSeconds,
             serviceId: definition.id,

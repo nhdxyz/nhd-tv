@@ -1,4 +1,5 @@
 import type { ServiceDefinition } from "./security/navigation-policy";
+import { qualifyObservedPlaybackRate } from "./observed-playback-rate";
 
 const MINIMUM_DURATION_SECONDS = 60;
 const MINIMUM_ENGAGEMENT_SECONDS = 5;
@@ -27,6 +28,7 @@ export type LivePlaybackState = "ended" | "paused" | "playing" | "unknown";
 export interface LivePlaybackSnapshot {
   currentTime: number | null;
   duration: number | null;
+  playbackRate: number | null;
   playbackState: LivePlaybackState;
   subtitle: string | null;
   title: string | null;
@@ -52,6 +54,7 @@ interface RawLivePlaybackSnapshot {
   ended?: unknown;
   hasError?: unknown;
   paused?: unknown;
+  playbackRate?: unknown;
   readyState?: unknown;
   subtitle?: unknown;
   title?: unknown;
@@ -126,6 +129,7 @@ export function qualifyLivePlaybackSnapshot(value: unknown): LivePlaybackSnapsho
       ? currentTime
       : Math.min(currentTime, duration),
     duration,
+    playbackRate: qualifyObservedPlaybackRate(snapshot.playbackRate),
     playbackState,
     subtitle,
     title
@@ -226,6 +230,7 @@ export function buildLivePlaybackSnapshotScript(
       ended: video.ended,
       hasError: video.error !== null,
       paused: video.paused,
+      playbackRate: Number.isFinite(video.playbackRate) ? video.playbackRate : null,
       readyState: video.readyState,
       subtitle: readText(${subtitleSelectors}),
       title,

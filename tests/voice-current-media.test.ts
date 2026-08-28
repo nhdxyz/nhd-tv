@@ -16,6 +16,7 @@ function videoSnapshot(
     fullscreen: true,
     mediaKind: "video",
     observedAt: 1_000,
+    playbackRate: 1,
     playbackState: "playing",
     positionSeconds: 900,
     serviceId: "netflix",
@@ -104,7 +105,9 @@ describe("current media voice answers", () => {
       durationSeconds: 7_500,
       positionSeconds: 3_600
     });
-    expect(answerCurrentMediaQuestion("time-remaining", snapshot).detail).toBe(
+    expect(answerCurrentMediaQuestion("time-remaining", snapshot, {
+      now: () => 1_000
+    }).detail).toBe(
       "There are about 1 hour and 5 minutes left."
     );
     expect(answerCurrentMediaQuestion("end-time", snapshot, {
@@ -114,7 +117,107 @@ describe("current media voice answers", () => {
     expect(answerCurrentMediaQuestion("time-remaining", videoSnapshot({
       durationSeconds: 3_600,
       positionSeconds: 0
-    })).detail).toBe("There is about 1 hour left.");
+    }), {
+      now: () => 1_000
+    }).detail).toBe("There is about 1 hour left.");
+  });
+
+  it("uses fresh elapsed time and playback speed for wall-clock timing", () => {
+    const snapshot = videoSnapshot({
+      durationSeconds: 3_600,
+      observedAt: 1_000,
+      playbackRate: 1.5,
+      positionSeconds: 600
+    });
+    expect(answerCurrentMediaQuestion("position", snapshot, {
+      now: () => 11_000
+    }).detail).toBe("You're 10 minutes and 15 seconds into this.");
+    expect(answerCurrentMediaQuestion("time-remaining", snapshot, {
+      now: () => 11_000
+    }).detail).toBe("There are about 34 minutes left.");
+
+    let estimatedEnd = 0;
+    expect(answerCurrentMediaQuestion("end-time", snapshot, {
+      formatTime: (timestamp) => {
+        estimatedEnd = timestamp;
+        return "12:25 PM";
+      },
+      now: () => 11_000
+    }).detail).toBe("It should finish around 12:25 PM.");
+    expect(estimatedEnd).toBe(2_001_000);
+  });
+
+  it("does not extrapolate paused, unknown, or stale timing observations", () => {
+    const paused = videoSnapshot({
+      durationSeconds: 3_600,
+      observedAt: 1_000,
+      playbackRate: 2,
+      playbackState: "paused",
+      positionSeconds: 600
+    });
+    expect(answerCurrentMediaQuestion("position", paused, {
+      now: () => 11_000
+    }).detail).toBe("You're 10 minutes into this.");
+    expect(answerCurrentMediaQuestion("time-remaining", paused, {
+      now: () => 11_000
+    }).detail).toBe("Playback is paused with about 50 minutes of content remaining.");
+    expect(answerCurrentMediaQuestion("end-time", paused, {
+      now: () => 11_000
+    }).detail).toBe("Playback is paused, so there isn't an end time yet.");
+
+    const unknown = { ...paused, playbackState: "unknown" as const };
+    expect(answerCurrentMediaQuestion("position", unknown, {
+      now: () => 11_000
+    }).detail).toBe("You're 10 minutes into this.");
+    expect(answerCurrentMediaQuestion("end-time", unknown, {
+      now: () => 11_000
+    }).detail).toBe(
+      "I can't estimate an end time because the current playback state is unavailable."
+    );
+
+    const stale = { ...paused, playbackState: "playing" as const };
+    expect(answerCurrentMediaQuestion("position", stale, {
+      now: () => 40_001
+    }).detail).toBe("You're 10 minutes into this.");
+    expect(answerCurrentMediaQuestion("end-time", stale, {
+      now: () => 40_001
+    }).detail).toBe(
+      "I can't estimate an end time because the latest playback timing is too old."
+    );
+  });
+
+  it("never invents an end clock without a trustworthy playback speed", () => {
+    const missingRate = videoSnapshot({ playbackRate: null });
+    expect(answerCurrentMediaQuestion("time-remaining", missingRate, {
+      now: () => 1_000
+    }).detail).toBe(
+      "About 45 minutes of content remains, but the current playback speed is unavailable."
+    );
+    expect(answerCurrentMediaQuestion("time-remaining", videoSnapshot({
+      playbackRate: null,
+      positionSeconds: 0
+    }), {
+      now: () => 1_000
+    }).detail).toBe(
+      "About 1 hour of content remains, but the current playback speed is unavailable."
+    );
+    expect(answerCurrentMediaQuestion("end-time", missingRate, {
+      now: () => 1_000
+    }).detail).toBe(
+      "I can't estimate an end time because the current playback speed is unavailable."
+    );
+    expect(answerCurrentMediaQuestion("end-time", videoSnapshot({
+      playbackRate: 8
+    }), {
+      now: () => 1_000
+    }).detail).toBe(
+      "I can't estimate an end time because the current playback speed is unavailable."
+    );
+    expect(answerCurrentMediaQuestion("end-time", videoSnapshot({
+      playbackState: "ended"
+    }), {
+      now: () => 1_000
+    }).detail).toBe("This is at the end.");
   });
 
   it("does not invent a duration or episode", () => {

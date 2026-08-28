@@ -21,7 +21,9 @@ const VOICE_MEDIA_TYPES = [
   "episode",
   "movie",
   "playlist",
+  "recommendation",
   "show",
+  "similar-title",
   "song",
   "title",
   "video"
@@ -232,6 +234,17 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     providerHint !== "youtube"
   ) {
     throw new TypeError("Video intents may only target YouTube.");
+  }
+  if (
+    (mediaType === "recommendation" || mediaType === "similar-title") &&
+    (action !== "open" ||
+      creator !== null ||
+      season !== null ||
+      episode !== null ||
+      recency !== null ||
+      (providerHint !== null && providerHint !== "netflix"))
+  ) {
+    throw new TypeError("Recommendation intents may only open Netflix discovery results.");
   }
   if (recency !== null && (mediaType !== "video" || creator === null)) {
     throw new TypeError("Latest-media intents require a video creator or channel.");

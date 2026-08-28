@@ -53,4 +53,20 @@ describe("voice media destination", () => {
     expect(resolveVoiceMediaDestination(intent({ providerHint: "netflix" }), []))
       .toBeNull();
   });
+
+  it("opens bounded recommendation discovery in Netflix rather than exact-title lookup", () => {
+    expect(resolveVoiceMediaDestination(intent({
+      action: "open",
+      mediaType: "recommendation",
+      title: "tense action movies with a clever lead"
+    }), ["netflix"])).toEqual({
+      query: "tense action movies with a clever lead",
+      serviceId: "netflix"
+    });
+    expect(resolveVoiceMediaDestination(intent({
+      action: "open",
+      mediaType: "similar-title",
+      title: "Inception"
+    }), ["netflix"])).toEqual({ query: "Inception", serviceId: "netflix" });
+  });
 });

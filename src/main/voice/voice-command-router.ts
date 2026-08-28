@@ -45,6 +45,9 @@ function supportedEnabledServices(
 }
 
 function impliedProvider(intent: VoiceMediaIntent): VoiceProviderHint | null {
+  if (intent.mediaType === "recommendation" || intent.mediaType === "similar-title") {
+    return "netflix";
+  }
   if (["album", "artist", "playlist", "song"].includes(intent.mediaType)) {
     return "spotify";
   }

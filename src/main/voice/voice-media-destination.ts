@@ -7,6 +7,9 @@ export interface VoiceMediaDestination {
 }
 
 function preferredService(intent: VoiceMediaIntent): VoiceServiceId {
+  if (intent.mediaType === "recommendation" || intent.mediaType === "similar-title") {
+    return "netflix";
+  }
   if (["album", "artist", "playlist", "song"].includes(intent.mediaType)) {
     return "spotify";
   }

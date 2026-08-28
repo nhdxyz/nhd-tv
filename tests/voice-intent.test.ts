@@ -81,6 +81,23 @@ describe("voice intent boundary", () => {
     }))).toMatchObject({ mediaType: "channel", providerHint: "youtube" });
   });
 
+  it("parses bounded recommendation and similar-title discovery requests", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      mediaAction: "open",
+      mediaType: "recommendation",
+      title: "tense action movies with a clever lead"
+    }))).toMatchObject({
+      action: "open",
+      mediaType: "recommendation",
+      title: "tense action movies with a clever lead"
+    });
+    expect(parseVoiceIntent(mediaIntent({
+      mediaAction: "open",
+      mediaType: "similar-title",
+      title: "Inception"
+    }))).toMatchObject({ mediaType: "similar-title", title: "Inception" });
+  });
+
   it("parses an allowlisted control with no media fields", () => {
     expect(parseVoiceIntent({
       kind: "control",
@@ -124,6 +141,19 @@ describe("voice intent boundary", () => {
       mediaType: "video",
       providerHint: "spotify"
     }))).toThrow("only target YouTube");
+  });
+
+  it("never turns an open-ended recommendation into automatic playback", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      mediaType: "recommendation",
+      title: "action movies"
+    }))).toThrow("only open Netflix discovery");
+    expect(() => parseVoiceIntent(mediaIntent({
+      mediaAction: "open",
+      mediaType: "similar-title",
+      providerHint: "youtube",
+      title: "Inception"
+    }))).toThrow("only open Netflix discovery");
   });
 
   it("requires a creator for latest-video requests", () => {

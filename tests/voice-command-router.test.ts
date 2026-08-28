@@ -109,6 +109,26 @@ describe("voice command planning", () => {
     });
   });
 
+  it("routes open-ended discovery only to Netflix without playback confirmation", () => {
+    expect(planVoiceCommand(mediaIntent({
+      action: "open",
+      mediaType: "recommendation",
+      title: "action movies"
+    }), context)).toMatchObject({
+      candidateServiceIds: ["netflix"],
+      confirmationRequired: false,
+      launchAllowed: true
+    });
+    expect(planVoiceCommand(mediaIntent({
+      action: "open",
+      mediaType: "similar-title",
+      title: "Inception"
+    }), { ...context, enabledServiceIds: ["youtube"] })).toMatchObject({
+      candidateServiceIds: [],
+      launchAllowed: false
+    });
+  });
+
   it("never launches a lookup-only request", () => {
     expect(planVoiceCommand(mediaIntent({ action: "lookup" }), context)).toMatchObject({
       confirmationRequired: false,

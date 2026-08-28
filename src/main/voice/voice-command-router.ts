@@ -91,6 +91,14 @@ function controlPlan(
       return context.muted === true
         ? { detail: "Audio is already muted.", kind: "no-op" }
         : { kind: "set-system-muted", muted: true };
+    case "next-track":
+      return context.activeServiceId === "spotify"
+        ? remoteActionPlan("fast-forward")
+        : {
+          detail: "Track skipping is available only while Spotify is open.",
+          handled: false,
+          kind: "no-op"
+        };
     case "pause":
       if (context.activeServiceId === null || context.playing === false) {
         return { detail: "Playback is already paused.", kind: "no-op" };
@@ -104,6 +112,14 @@ function controlPlan(
         return { detail: "Playback is already running.", kind: "no-op" };
       }
       return remoteActionPlan("play-pause");
+    case "previous-track":
+      return context.activeServiceId === "spotify"
+        ? remoteActionPlan("rewind")
+        : {
+          detail: "Previous track is available only while Spotify is open.",
+          handled: false,
+          kind: "no-op"
+        };
     case "unmute":
       if (context.muted === false) {
         return { detail: "Audio is already unmuted.", kind: "no-op" };

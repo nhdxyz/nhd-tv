@@ -76,6 +76,7 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("Use kind=app");
       expect(body.instructions).toContain("Use mediaAction=search");
       expect(body.instructions).toContain("Use controlAction=close-app");
+      expect(body.instructions).toContain("Use next-track or previous-track only");
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 
@@ -100,6 +101,10 @@ describe("OpenAI voice client", () => {
     await expect(voiceClient.interpret("Open Netflix")).resolves.toEqual({
       kind: "app",
       title: "netflix"
+    });
+    await expect(voiceClient.interpret("Skip this song")).resolves.toEqual({
+      action: "next-track",
+      kind: "control"
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

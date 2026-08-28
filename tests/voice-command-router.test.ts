@@ -60,6 +60,26 @@ describe("voice command planning", () => {
     });
   });
 
+  it("routes track skipping only through Spotify's semantic controls", () => {
+    expect(planVoiceCommand({ action: "next-track", kind: "control" }, {
+      ...context,
+      activeServiceId: "spotify"
+    })).toEqual({ action: "fast-forward", kind: "remote-action" });
+    expect(planVoiceCommand({ action: "previous-track", kind: "control" }, {
+      ...context,
+      activeServiceId: "spotify"
+    })).toEqual({ action: "rewind", kind: "remote-action" });
+    expect(planVoiceCommand({ action: "next-track", kind: "control" }, context)).toEqual({
+      detail: "Track skipping is available only while Spotify is open.",
+      handled: false,
+      kind: "no-op"
+    });
+    expect(planVoiceCommand({ action: "previous-track", kind: "control" }, {
+      ...context,
+      activeServiceId: null
+    })).toMatchObject({ handled: false, kind: "no-op" });
+  });
+
   it("makes pause and resume idempotent when playback state is known", () => {
     expect(planVoiceCommand({ action: "pause", kind: "control" }, {
       ...context,

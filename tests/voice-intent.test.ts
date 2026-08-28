@@ -152,6 +152,18 @@ describe("voice intent boundary", () => {
       providerHint: null,
       recency: null
     })).toEqual({ action: "close-app", kind: "control" });
+    expect(parseVoiceIntent({
+      kind: "control",
+      controlAction: "next-track",
+      mediaAction: null,
+      mediaType: null,
+      title: null,
+      creator: null,
+      season: null,
+      episode: null,
+      providerHint: null,
+      recency: null
+    })).toEqual({ action: "next-track", kind: "control" });
   });
 
   it("accepts only an entirely empty unknown intent", () => {

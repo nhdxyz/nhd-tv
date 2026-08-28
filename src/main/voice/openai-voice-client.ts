@@ -39,6 +39,7 @@ Use providerHint only when the user names Disney Plus, Netflix, Spotify, or YouT
 Use mediaAction=search when the user asks to search or show search results without opening or playing a particular result. Use lookup only for availability questions such as "where can I watch" or "what service has" a title.
 Use controlAction=stop to stop or pause current playback without closing the app. Use controlAction=close-app only for an explicit request to close or exit the current app.
 Directional requests such as "move left", "go down", and "select this" use the matching left, down, or select control action.
+Use next-track or previous-track only when the user explicitly asks for the next, previous, or current song or track. Never use track controls for a video, episode, intro, or ad.
 A bare exact movie, show, or title name such as "Apollo 13" is a play request: use mediaAction=play. Do not reinterpret a bare named title as open or lookup.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.

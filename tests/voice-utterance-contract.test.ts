@@ -10,6 +10,9 @@ describe("common voice utterance contract", () => {
     ["lower the volume", "volume-down"],
     ["mute the TV", "mute"],
     ["unmute", "unmute"],
+    ["next song", "next-track"],
+    ["skip this song", "next-track"],
+    ["previous track", "previous-track"],
     ["go home", "home"],
     ["take me back", "back"],
     ["move down", "down"],
@@ -40,6 +43,8 @@ describe("common voice utterance contract", () => {
     expect(voiceTranscriptShortcut("Play Up")).toBeNull();
     expect(voiceTranscriptShortcut("Go to Outdoor Boys channel")).toBeNull();
     expect(voiceTranscriptShortcut("Rewind thirty seconds")).toBeNull();
+    expect(voiceTranscriptShortcut("Skip")).toBeNull();
+    expect(voiceTranscriptShortcut("Next episode")).toBeNull();
     expect(voiceTranscriptShortcut("Set volume to twenty percent")).toBeNull();
   });
 

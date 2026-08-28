@@ -1,4 +1,4 @@
-export type VoiceActivityPhase = "cancelled" | "listening" | "understanding";
+export type VoiceActivityPhase = "cancelled" | "reserved" | "listening" | "understanding";
 
 export interface VoiceActivityEvent {
   commandId: string;
@@ -19,16 +19,19 @@ export interface VoiceActivityLeaseOptions {
   leaseMs?: number;
   maximumTombstones?: number;
   now?: () => number;
+  reservationMs?: number;
   tombstoneMs?: number;
 }
 
 const PHASE_RANK: Record<VoiceActivityPhase, number> = {
-  listening: 0,
-  understanding: 1,
-  cancelled: 2
+  reserved: 0,
+  listening: 1,
+  understanding: 2,
+  cancelled: 3
 };
 
 export const DEFAULT_VOICE_ACTIVITY_LEASE_MS = 25_000;
+export const DEFAULT_VOICE_ACTIVITY_RESERVATION_MS = 5_000;
 export const VOICE_COMMAND_ID_PATTERN = /^[A-Za-z0-9_-]{16,80}$/;
 
 function commandKey(controllerId: string, commandId: string): string {
@@ -44,6 +47,7 @@ export class VoiceActivityLease {
   readonly #leaseMs: number;
   readonly #maximumTombstones: number;
   readonly #now: () => number;
+  readonly #reservationMs: number;
   readonly #tombstoneMs: number;
   readonly #tombstones = new Map<string, number>();
   #active: ActiveVoiceLease | null = null;
@@ -52,7 +56,13 @@ export class VoiceActivityLease {
     this.#leaseMs = options.leaseMs ?? DEFAULT_VOICE_ACTIVITY_LEASE_MS;
     this.#maximumTombstones = options.maximumTombstones ?? 64;
     this.#now = options.now ?? Date.now;
+    this.#reservationMs = options.reservationMs ?? DEFAULT_VOICE_ACTIVITY_RESERVATION_MS;
     this.#tombstoneMs = options.tombstoneMs ?? 120_000;
+  }
+
+  get busy(): boolean {
+    this.#cleanup();
+    return this.#active !== null;
   }
 
   acceptActivity(controllerId: string, event: VoiceActivityEvent): VoiceActivityDecision {
@@ -75,7 +85,7 @@ export class VoiceActivityLease {
         return "accepted";
       }
       active.phase = event.phase;
-      active.expiresAt = this.#now() + this.#leaseMs;
+      active.expiresAt = this.#expiresAtFor(event.phase);
       return "accepted";
     }
 
@@ -86,7 +96,7 @@ export class VoiceActivityLease {
     this.#active = {
       commandId: event.commandId,
       controllerId,
-      expiresAt: this.#now() + this.#leaseMs,
+      expiresAt: this.#expiresAtFor(event.phase),
       locked: false,
       phase: event.phase
     };
@@ -195,5 +205,9 @@ export class VoiceActivityLease {
       if (oldest === undefined) break;
       this.#tombstones.delete(oldest);
     }
+  }
+
+  #expiresAtFor(phase: Exclude<VoiceActivityPhase, "cancelled">): number {
+    return this.#now() + (phase === "reserved" ? this.#reservationMs : this.#leaseMs);
   }
 }

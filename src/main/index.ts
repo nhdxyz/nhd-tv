@@ -692,6 +692,7 @@ function showVoicePresentation(
 }
 
 function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
+  if (activity.phase === "reserved") return;
   if (activity.phase === "cancelled") {
     if (currentVoiceCommandId === activity.commandId) {
       showVoicePresentation("hidden");
@@ -721,6 +722,7 @@ async function handlePhoneVoiceActivity(
   activity: PhoneRemoteVoiceActivity,
   controllerId: string
 ): Promise<void> {
+  if (activity.phase === "reserved") return;
   const captureKey = `${controllerId}\u0000${activity.commandId}`;
   const muteOperation = activity.phase === "listening"
     ? voiceCaptureMuteGuard.begin(captureKey)
@@ -1359,6 +1361,7 @@ function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
   if (state === undefined || !state.devicePreferences.voiceControlEnabled) {
     return {
       available: false,
+      busy: false,
       detail: "Enable AI voice control in NHD-TV Settings."
     };
   }
@@ -1367,13 +1370,18 @@ function remoteVoiceStatus(): PhoneRemoteVoiceStatus {
   if (credentialStatus?.state !== "configured") {
     return {
       available: false,
+      busy: false,
       detail: credentialStatus?.detail ?? "Add an OpenAI API key in NHD-TV Settings."
     };
   }
   if (voiceCommandSession === null) {
-    return { available: false, detail: "Voice control is still starting." };
+    return { available: false, busy: false, detail: "Voice control is still starting." };
   }
-  return { available: true, detail: "Hold the microphone button and speak." };
+  return {
+    available: true,
+    busy: false,
+    detail: "Hold the microphone button and speak."
+  };
 }
 
 async function voiceCommandContext(): Promise<VoiceCommandContext> {

@@ -134,6 +134,17 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('body: JSON.stringify({ submit, text })');
     expect(REMOTE_JS).toContain('fetch("/api/disconnect"');
     expect(REMOTE_JS).toContain('await jsonRequest("/api/heartbeat"');
+    expect(REMOTE_JS).toContain('await jsonRequest("/api/voice/activity"');
+    expect(REMOTE_JS).toContain('return requestVoiceActivity(commandId, "reserved")');
+    const startVoiceRecording = REMOTE_JS.slice(
+      REMOTE_JS.indexOf("async function startVoiceRecording()")
+    );
+    expect(startVoiceRecording.indexOf("await reserveVoiceActivity(commandId)")).toBeLessThan(
+      startVoiceRecording.indexOf("navigator.mediaDevices.getUserMedia")
+    );
+    expect(REMOTE_JS).toContain("await beginVoiceActivity(commandId)");
+    expect(REMOTE_JS).toContain("voiceBusy = Boolean(status && status.busy === true)");
+    expect(REMOTE_JS).toContain("Another phone is using voice control.");
     expect(REMOTE_JS).toContain('setInterval(() => void sendHeartbeat(), 10_000)');
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", (event) => {');
     expect(REMOTE_JS).toContain('window.addEventListener("pageshow", (event) => {');
@@ -197,7 +208,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
     expect(REMOTE_JS).toContain("submitted: true");
     expect(REMOTE_JS).toContain(
-      "voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult"
+      "voiceButton.disabled = !ready || voiceBusy || voiceProcessing || awaitingSubmittedResult"
     );
     expect(REMOTE_JS).toContain(
       "Say yes or no, or tap Play or Cancel."
@@ -215,7 +226,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Command-Id": commandId');
     expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Confirmation-Id": confirmationId');
     expect(REMOTE_JS).toContain("const spokenConfirmationId = pendingVoiceConfirmation?.submitted === true");
-    expect(REMOTE_JS).toContain('sendVoiceActivity("listening", false, commandId)');
+    expect(REMOTE_JS).toContain('return requestVoiceActivity(commandId, "listening")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
     expect(REMOTE_JS).not.toContain(

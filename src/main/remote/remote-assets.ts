@@ -915,6 +915,7 @@ export const REMOTE_JS = `(() => {
   let currentSearchLabel = "Search NHD-TV";
   let remoteEnabled = false;
   let voiceAvailable = false;
+  let voiceBusy = false;
   let voiceAvailabilityDetail = "Voice control is still checking.";
   let voiceRecorder = null;
   let voiceCommandId = null;
@@ -935,6 +936,7 @@ export const REMOTE_JS = `(() => {
   const DIRECTION_REPEAT_DELAY_MS = 380;
   const DIRECTION_REPEAT_INTERVAL_MS = 115;
   const VOICE_COMMAND_REQUEST_TIMEOUT_MS = 65_000;
+  const VOICE_ACTIVITY_REQUEST_TIMEOUT_MS = 5_000;
   const VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS = 65_000;
   const VOICE_CANCELLATION_REQUEST_TIMEOUT_MS = 10_000;
   const VOICE_CONFIRMATION_TTL_MS = 30_000;
@@ -973,12 +975,14 @@ export const REMOTE_JS = `(() => {
     const ready = remoteEnabled && voiceAvailable && browserReady;
     const awaitingConfirmation = pendingVoiceConfirmation !== null;
     const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
-    voiceButton.disabled = !ready || voiceProcessing || awaitingSubmittedResult;
+    voiceButton.disabled = !ready || voiceBusy || voiceProcessing || awaitingSubmittedResult;
     voiceButton.classList.toggle("is-processing", voiceProcessing);
     voiceHelp.textContent = awaitingSubmittedResult
       ? "Check the playback result before starting another voice command."
       : awaitingConfirmation
         ? "Say yes or no, or tap Play or Cancel."
+      : voiceBusy
+        ? "Another phone is using voice control."
       : !window.isSecureContext
       ? "Voice requires the secure Tailscale QR code."
       : supportedVoiceMimeType === null
@@ -988,6 +992,8 @@ export const REMOTE_JS = `(() => {
 
   function renderVoiceStatus(status) {
     voiceAvailable = Boolean(status && status.available === true);
+    voiceBusy = Boolean(status && status.busy === true) &&
+      !voiceStarting && voiceRecorder === null && !voiceProcessing;
     voiceAvailabilityDetail = status && typeof status.detail === "string"
       ? status.detail.replace(/\\s+/g, " ").trim().slice(0, 160)
       : "Voice control is unavailable.";
@@ -1069,6 +1075,45 @@ export const REMOTE_JS = `(() => {
         keepalive
       }).catch(() => {});
     } catch {}
+  }
+
+  async function requestVoiceActivity(commandId, phase) {
+    const token = controllerToken;
+    if (!token || !commandId) throw new Error("The remote session is unavailable.");
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      VOICE_ACTIVITY_REQUEST_TIMEOUT_MS
+    );
+    try {
+      const result = await jsonRequest("/api/voice/activity", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ commandId, phase }),
+        signal: controller.signal
+      });
+      if (result.ignored === true) {
+        throw new Error("The voice reservation expired. Hold the microphone and try again.");
+      }
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        throw new Error("The TV did not answer the voice check. Try again.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function reserveVoiceActivity(commandId) {
+    return requestVoiceActivity(commandId, "reserved");
+  }
+
+  function beginVoiceActivity(commandId) {
+    return requestVoiceActivity(commandId, "listening");
   }
 
   function clearVoiceConfirmationTimer() {
@@ -1251,6 +1296,7 @@ export const REMOTE_JS = `(() => {
       voiceButtonCopy.textContent = "Hold to talk";
       updateVoiceButton();
       updateVoiceConfirmationButtons();
+      void sendHeartbeat();
     }
   }
 
@@ -1286,8 +1332,18 @@ export const REMOTE_JS = `(() => {
     updateVoiceConfirmationButtons();
     voiceReleaseRequested = false;
     voiceDiscardRequested = false;
-    setState("Starting microphone…");
+    setState("Connecting to the TV…");
     try {
+      const commandId = voiceCommandId;
+      if (!commandId) throw new Error("Voice command correlation was lost");
+      await reserveVoiceActivity(commandId);
+      if (voiceReleaseRequested) {
+        voiceCommandId = null;
+        sendVoiceActivity("cancelled", false, commandId);
+        setState("Hold the microphone to speak", "connected");
+        return;
+      }
+      setState("Starting microphone…");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           autoGainControl: true,
@@ -1297,7 +1353,15 @@ export const REMOTE_JS = `(() => {
         video: false
       });
       if (voiceReleaseRequested) {
-        const commandId = voiceCommandId;
+        voiceCommandId = null;
+        stream.getTracks().forEach((track) => track.stop());
+        sendVoiceActivity("cancelled", false, commandId);
+        setState("Microphone ready — hold again to speak", "connected");
+        return;
+      }
+
+      await beginVoiceActivity(commandId);
+      if (voiceReleaseRequested) {
         voiceCommandId = null;
         stream.getTracks().forEach((track) => track.stop());
         sendVoiceActivity("cancelled", false, commandId);
@@ -1310,8 +1374,6 @@ export const REMOTE_JS = `(() => {
         audioBitsPerSecond: 64_000,
         mimeType: supportedVoiceMimeType
       });
-      const commandId = voiceCommandId;
-      if (!commandId) throw new Error("Voice command correlation was lost");
       voiceChunks = [];
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size > 0) voiceChunks.push(event.data);
@@ -1352,7 +1414,6 @@ export const REMOTE_JS = `(() => {
       updateVoiceConfirmationButtons();
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Listening";
-      sendVoiceActivity("listening", false, commandId);
       setState("Listening…", "connected");
       if (navigator.vibrate) navigator.vibrate(12);
       voiceStopTimer = setTimeout(() => {
@@ -1371,8 +1432,16 @@ export const REMOTE_JS = `(() => {
       voiceButtonCopy.textContent = "Hold to talk";
       sendVoiceActivity("cancelled", false, commandId);
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";
+      const remoteError = error && typeof error === "object" && "status" in error;
       setState(
-        denied ? "Allow microphone access in Safari to use voice" : "The microphone is unavailable",
+        denied
+          ? "Allow microphone access in Safari to use voice"
+          : remoteError && error instanceof Error
+            ? error.message
+          : error instanceof Error &&
+              (error.message.includes("voice check") || error.message.includes("reservation"))
+              ? error.message
+              : "The microphone is unavailable",
         "error"
       );
     } finally {
@@ -1453,6 +1522,7 @@ export const REMOTE_JS = `(() => {
       voiceProcessing = false;
       updateVoiceButton();
       updateVoiceConfirmationButtons();
+      void sendHeartbeat();
     }
   }
 
@@ -2041,5 +2111,8 @@ export const REMOTE_JS = `(() => {
     void sendHeartbeat(true);
   });
   setInterval(() => void sendHeartbeat(), 10_000);
+  setInterval(() => {
+    if (voiceBusy) void sendHeartbeat();
+  }, 1_000);
   beginPairing();
 })();`;

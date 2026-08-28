@@ -213,6 +213,8 @@ describe("TV voice presentation", () => {
 
   it("accepts only closed voice activity events from the paired phone", () => {
     const commandId = "voice-command-test-1234";
+    expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "reserved" }))
+      .toEqual({ commandId, phase: "reserved" });
     expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "listening" }))
       .toEqual({ commandId, phase: "listening" });
     expect(parsePhoneRemoteVoiceActivity({ commandId, phase: "understanding" }))

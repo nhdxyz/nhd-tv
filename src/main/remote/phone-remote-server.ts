@@ -122,6 +122,7 @@ export interface PhoneRemoteVoiceResult {
 
 export interface PhoneRemoteVoiceStatus {
   available: boolean;
+  busy: boolean;
   detail: string;
 }
 
@@ -182,6 +183,7 @@ export function parsePhoneRemoteVoiceActivity(
     typeof value.commandId !== "string" ||
     !VOICE_COMMAND_ID_PATTERN.test(value.commandId) ||
     (value.phase !== "cancelled" &&
+      value.phase !== "reserved" &&
       value.phase !== "listening" &&
       value.phase !== "understanding")
   ) {
@@ -1019,6 +1021,13 @@ export class PhoneRemoteServer {
           return;
         }
       }
+      if (
+        activity.phase === "reserved" &&
+        (this.#voiceInFlight || Date.now() - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS)
+      ) {
+        writeJson(response, 409, { error: "Another voice command is already active" });
+        return;
+      }
       const decision = this.#voiceActivityLease.acceptActivity(controllerId, activity);
       if (decision === "busy") {
         writeJson(response, 409, { error: "Another voice command is already active" });
@@ -1028,7 +1037,9 @@ export class PhoneRemoteServer {
         writeJson(response, 200, { ignored: true, ok: true });
         return;
       }
-      await this.#onVoiceActivity(activity, controllerId);
+      if (activity.phase !== "reserved") {
+        await this.#onVoiceActivity(activity, controllerId);
+      }
       writeJson(response, 200, { ok: true });
       return;
     }
@@ -1534,12 +1545,18 @@ export class PhoneRemoteServer {
     if (!secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)) {
       return {
         available: false,
+        busy: false,
         detail: "Voice control requires the secure Tailscale remote."
       };
     }
-    return await this.#onGetVoiceStatus?.() ?? {
+    const status = await this.#onGetVoiceStatus?.() ?? {
       available: false,
+      busy: false,
       detail: "Voice control is not configured for this build."
+    };
+    return {
+      ...status,
+      busy: this.#voiceInFlight || this.#voiceActivityLease.busy
     };
   }
 

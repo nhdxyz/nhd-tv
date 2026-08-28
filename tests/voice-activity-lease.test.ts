@@ -22,6 +22,14 @@ describe("voice activity lease", () => {
     const lease = new VoiceActivityLease();
     expect(lease.acceptActivity("phone-a", {
       commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("accepted");
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "listening"
+    })).toBe("accepted");
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
       phase: "understanding"
     })).toBe("accepted");
     expect(lease.acceptActivity("phone-a", {
@@ -40,10 +48,12 @@ describe("voice activity lease", () => {
 
   it("lets the first phone own a gesture and rejects late events from a competitor", () => {
     const lease = new VoiceActivityLease();
+    expect(lease.busy).toBe(false);
     expect(lease.acceptActivity("phone-a", {
       commandId: COMMAND_A,
       phase: "listening"
     })).toBe("accepted");
+    expect(lease.busy).toBe(true);
     expect(lease.acceptActivity("phone-b", {
       commandId: COMMAND_B,
       phase: "listening"
@@ -59,6 +69,7 @@ describe("voice activity lease", () => {
       phase: "cancelled"
     })).toBe("ignored");
     lease.finishUpload("phone-a", COMMAND_A);
+    expect(lease.busy).toBe(false);
 
     const nextCommand = "voice-command-b-next-9";
     expect(lease.acceptActivity("phone-b", {
@@ -109,6 +120,25 @@ describe("voice activity lease", () => {
       commandId: COMMAND_B,
       phase: "listening"
     })).toBe("accepted");
+  });
+
+  it("expires an abandoned reservation before microphone permission can stall the TV", () => {
+    let now = 1_000;
+    const lease = new VoiceActivityLease({ now: () => now });
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "reserved"
+    })).toBe("accepted");
+
+    now += 5_001;
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "reserved"
+    })).toBe("accepted");
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "listening"
+    })).toBe("ignored");
   });
 
   it("releases ownership when its controller disconnects", () => {

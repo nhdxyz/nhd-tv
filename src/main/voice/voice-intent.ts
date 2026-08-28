@@ -22,6 +22,13 @@ const VOICE_CONTROL_ACTIONS = [
 ] as const;
 
 const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
+const VOICE_CURRENT_MEDIA_ACTIONS = [
+  "end-time",
+  "episode",
+  "identity",
+  "song",
+  "time-remaining"
+] as const;
 const VOICE_MEDIA_TYPES = [
   "album",
   "artist",
@@ -40,6 +47,7 @@ const VOICE_PROVIDER_HINTS = ["disney-plus", "netflix", "spotify", "youtube"] as
 const VOICE_RECENCY_VALUES = ["latest"] as const;
 const VOICE_INTENT_KEYS = [
   "kind",
+  "currentMediaAction",
   "controlAction",
   "mediaAction",
   "mediaType",
@@ -52,6 +60,7 @@ const VOICE_INTENT_KEYS = [
 ] as const;
 
 export type VoiceControlAction = (typeof VOICE_CONTROL_ACTIONS)[number];
+export type VoiceCurrentMediaAction = (typeof VOICE_CURRENT_MEDIA_ACTIONS)[number];
 export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
@@ -60,6 +69,12 @@ export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
 export interface VoiceControlIntent {
   action: VoiceControlAction;
   kind: "control";
+}
+
+/** A read-only question about media already loaded on the TV. */
+export interface VoiceCurrentMediaIntent {
+  action: VoiceCurrentMediaAction;
+  kind: "current-media";
 }
 
 export interface VoiceAppIntent {
@@ -83,12 +98,23 @@ export interface VoiceMediaIntent {
   title: string;
 }
 
-export type VoiceIntent = VoiceAppIntent | VoiceControlIntent | VoiceMediaIntent | VoiceUnknownIntent;
+export type VoiceIntent =
+  | VoiceAppIntent
+  | VoiceControlIntent
+  | VoiceCurrentMediaIntent
+  | VoiceMediaIntent
+  | VoiceUnknownIntent;
 
 export const VOICE_INTENT_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
-    kind: { enum: ["app", "control", "media", "unknown"], type: "string" },
+    kind: { enum: ["app", "control", "current-media", "media", "unknown"], type: "string" },
+    currentMediaAction: {
+      anyOf: [
+        { enum: VOICE_CURRENT_MEDIA_ACTIONS, type: "string" },
+        { type: "null" }
+      ]
+    },
     controlAction: {
       anyOf: [
         { enum: VOICE_CONTROL_ACTIONS, type: "string" },
@@ -194,6 +220,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
 
   if (value.kind === "app") {
     if (!allNull(value, [
+      "currentMediaAction",
       "controlAction",
       "mediaAction",
       "mediaType",
@@ -212,6 +239,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     if (
       !isOneOf(value.controlAction, VOICE_CONTROL_ACTIONS) ||
       !allNull(value, [
+        "currentMediaAction",
         "mediaAction",
         "mediaType",
         "title",
@@ -227,6 +255,26 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     return { action: value.controlAction, kind: "control" };
   }
 
+  if (value.kind === "current-media") {
+    if (
+      !isOneOf(value.currentMediaAction, VOICE_CURRENT_MEDIA_ACTIONS) ||
+      !allNull(value, [
+        "controlAction",
+        "mediaAction",
+        "mediaType",
+        "title",
+        "creator",
+        "season",
+        "episode",
+        "providerHint",
+        "recency"
+      ])
+    ) {
+      throw new TypeError("The current-media voice intent is inconsistent.");
+    }
+    return { action: value.currentMediaAction, kind: "current-media" };
+  }
+
   if (value.kind === "unknown") {
     if (!allNull(value, VOICE_INTENT_KEYS.filter((key) => key !== "kind"))) {
       throw new TypeError("The unknown voice intent is inconsistent.");
@@ -234,7 +282,11 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     return { kind: "unknown" };
   }
 
-  if (value.kind !== "media" || value.controlAction !== null) {
+  if (
+    value.kind !== "media" ||
+    value.currentMediaAction !== null ||
+    value.controlAction !== null
+  ) {
     throw new TypeError("The voice intent kind is invalid.");
   }
 

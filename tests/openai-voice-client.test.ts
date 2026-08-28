@@ -20,6 +20,7 @@ function audioClip(overrides: Partial<VoiceAudioClip> = {}): VoiceAudioClip {
 function outputIntent(overrides: Record<string, unknown> = {}) {
   return {
     kind: "media",
+    currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
     mediaType: "title",
@@ -76,6 +77,8 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain('"play it" is unknown');
       expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       expect(body.instructions).toContain("Use kind=app");
+      expect(body.instructions).toContain("Use kind=current-media");
+      expect(body.instructions).toContain("currentMediaAction=identity");
       expect(body.instructions).toContain("Use mediaAction=search");
       expect(body.instructions).toContain("Use controlAction=close-app");
       expect(body.instructions).toContain("Use next-track or previous-track only");
@@ -113,6 +116,21 @@ describe("OpenAI voice client", () => {
     await expect(voiceClient.interpret("Skip this song")).resolves.toEqual({
       action: "next-track",
       kind: "control"
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["What am I watching?", "identity"],
+    ["What episode is this?", "episode"],
+    ["What song is this?", "song"],
+    ["How much time is left?", "time-remaining"],
+    ["What time will this end?", "end-time"]
+  ] as const)("routes the current-media question %s locally", async (phrase, action) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+      action,
+      kind: "current-media"
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -1,4 +1,8 @@
-import type { VoiceControlAction, VoiceIntent } from "./voice-intent";
+import type {
+  VoiceControlAction,
+  VoiceCurrentMediaAction,
+  VoiceIntent
+} from "./voice-intent";
 import {
   isKnownVoiceAppName,
   normalizeVoiceAppName
@@ -64,6 +68,28 @@ const CONTROL_PHRASES: Readonly<Record<string, VoiceControlAction>> = {
   "volume up": "volume-up"
 };
 
+const CURRENT_MEDIA_PHRASES: Readonly<Record<string, VoiceCurrentMediaAction>> = {
+  "how long is left": "time-remaining",
+  "how long until this ends": "time-remaining",
+  "how much longer": "time-remaining",
+  "how much time is left": "time-remaining",
+  "what am i watching": "identity",
+  "what are we watching": "identity",
+  "what episode are we on": "episode",
+  "what episode is this": "episode",
+  "what is playing": "identity",
+  "what is this called": "identity",
+  "what s playing": "identity",
+  "what song is playing": "song",
+  "what song is this": "song",
+  "what time does this end": "end-time",
+  "what time will this end": "end-time",
+  "when does this end": "end-time",
+  "when will this end": "end-time",
+  "which episode is this": "episode",
+  "which song is this": "song"
+};
+
 const VOICE_MEDIA_PROVIDER_NAMES = new Set([
   "disney",
   "disney plus",
@@ -120,6 +146,10 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   if (phrase.length === 0) return null;
   if (UNDERSPECIFIED_MEDIA_PHRASES.has(phrase)) return { kind: "unknown" };
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
+  const currentMediaAction = CURRENT_MEDIA_PHRASES[phrase];
+  if (currentMediaAction !== undefined) {
+    return { action: currentMediaAction, kind: "current-media" };
+  }
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };
   const appName = appNameFromPhrase(phrase);

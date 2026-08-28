@@ -7,6 +7,7 @@ import {
 function mediaIntent(overrides: Record<string, unknown> = {}) {
   return {
     kind: "media",
+    currentMediaAction: null,
     controlAction: null,
     mediaAction: "play",
     mediaType: "title",
@@ -25,6 +26,7 @@ describe("voice intent boundary", () => {
     expect(VOICE_INTENT_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(VOICE_INTENT_JSON_SCHEMA.required).toEqual([
       "kind",
+      "currentMediaAction",
       "controlAction",
       "mediaAction",
       "mediaType",
@@ -142,6 +144,7 @@ describe("voice intent boundary", () => {
   it("parses an allowlisted control with no media fields", () => {
     expect(parseVoiceIntent({
       kind: "control",
+      currentMediaAction: null,
       controlAction: "pause",
       mediaAction: null,
       mediaType: null,
@@ -154,6 +157,7 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "pause", kind: "control" });
     expect(parseVoiceIntent({
       kind: "control",
+      currentMediaAction: null,
       controlAction: "close-app",
       mediaAction: null,
       mediaType: null,
@@ -166,6 +170,7 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "close-app", kind: "control" });
     expect(parseVoiceIntent({
       kind: "control",
+      currentMediaAction: null,
       controlAction: "next-track",
       mediaAction: null,
       mediaType: null,
@@ -178,9 +183,43 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "next-track", kind: "control" });
   });
 
+  it.each([
+    ["identity", "identity"],
+    ["episode", "episode"],
+    ["song", "song"],
+    ["time-remaining", "time-remaining"],
+    ["end-time", "end-time"]
+  ] as const)("parses the closed current-media question %s", (currentMediaAction, action) => {
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "current-media",
+      currentMediaAction,
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toEqual({ action, kind: "current-media" });
+  });
+
+  it("rejects executable or media fields on current-media questions", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "current-media",
+      currentMediaAction: "identity",
+      mediaAction: "play",
+      mediaType: null,
+      title: null
+    }))).toThrow("current-media voice intent is inconsistent");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "current-media",
+      currentMediaAction: "position",
+      mediaAction: null,
+      mediaType: null,
+      title: null
+    }))).toThrow("current-media voice intent is inconsistent");
+  });
+
   it("accepts only an entirely empty unknown intent", () => {
     expect(parseVoiceIntent({
       kind: "unknown",
+      currentMediaAction: null,
       controlAction: null,
       mediaAction: null,
       mediaType: null,

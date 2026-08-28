@@ -2552,6 +2552,83 @@ h2 {
   box-shadow: 0 0 0 0.22rem rgb(59 130 246 / 20%);
 }
 
+.voice-dialog-shell {
+  background:
+    radial-gradient(circle at 90% 0%, rgb(59 130 246 / 20%), transparent 20rem),
+    #10131b;
+}
+
+.voice-settings-section {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.2rem;
+  padding: 1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 4%);
+}
+
+.voice-settings-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.voice-settings-section p,
+.voice-privacy-note {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.voice-settings-form label {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: #d5dbe5;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.voice-settings-form > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+}
+
+.voice-settings-form input {
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0 1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 0.8rem;
+  outline: 0;
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
+  font: inherit;
+  text-transform: none;
+}
+
+#voice-region-input {
+  text-transform: uppercase;
+}
+
+.voice-settings-form input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 0.22rem rgb(59 130 246 / 20%);
+}
+
+.voice-remove-key {
+  justify-self: start;
+}
+
+.voice-remove-key:disabled {
+  opacity: 0.42;
+}
+
+.voice-privacy-note {
+  margin-top: 1rem;
+}
+
 .developer-panel {
   overflow: hidden;
 }

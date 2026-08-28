@@ -6,6 +6,7 @@ import {
   type ContinueWatchingItem,
   type HostStatus,
   type LocalAppState,
+  type OpenAiCredentialStatus,
   type RemoteAction,
   type RemoteStatus,
   type ServiceRecoveryMode,
@@ -212,6 +213,22 @@ const elements = {
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
   topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
   utilityStoreActions: requireElement<HTMLDivElement>("#utility-store-actions", "utility-store-actions"),
+  voiceClose: requireElement<HTMLButtonElement>("#voice-close", "voice-close"),
+  voiceControlCopy: requireElement<HTMLElement>("#voice-control-copy", "voice-control-copy"),
+  voiceControlToggle: requireElement<HTMLButtonElement>("#voice-control-toggle", "voice-control-toggle"),
+  voiceDialog: requireElement<HTMLDialogElement>("#voice-dialog", "voice-dialog"),
+  voiceKeyForm: requireElement<HTMLFormElement>("#voice-key-form", "voice-key-form"),
+  voiceKeyInput: requireElement<HTMLInputElement>("#voice-key-input", "voice-key-input"),
+  voiceKeyStatus: requireElement<HTMLElement>("#voice-key-status", "voice-key-status"),
+  voicePlaybackMode: requireElement<HTMLButtonElement>("#voice-playback-mode", "voice-playback-mode"),
+  voicePlaybackModeCopy: requireElement<HTMLElement>("#voice-playback-mode-copy", "voice-playback-mode-copy"),
+  voiceRegionButton: requireElement<HTMLButtonElement>("#voice-region-button", "voice-region-button"),
+  voiceRegionCopy: requireElement<HTMLElement>("#voice-region-copy", "voice-region-copy"),
+  voiceRegionForm: requireElement<HTMLFormElement>("#voice-region-form", "voice-region-form"),
+  voiceRegionInput: requireElement<HTMLInputElement>("#voice-region-input", "voice-region-input"),
+  voiceRemoveKey: requireElement<HTMLButtonElement>("#voice-remove-key", "voice-remove-key"),
+  voiceSettingsButton: requireElement<HTMLButtonElement>("#voice-settings-button", "voice-settings-button"),
+  voiceSettingsCopy: requireElement<HTMLElement>("#voice-settings-copy", "voice-settings-copy"),
   widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status"),
   youtubeTvCopy: requireElement<HTMLElement>("#youtube-tv-copy", "youtube-tv-copy"),
   youtubeTvScale: requireElement<HTMLButtonElement>("#youtube-tv-scale", "youtube-tv-scale"),
@@ -221,6 +238,10 @@ const elements = {
 
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
+let openAiCredentialStatus: OpenAiCredentialStatus = {
+  detail: "Checking secure storage…",
+  state: "missing"
+};
 let currentHostStatus: HostStatus | null = null;
 let currentServiceRecovery: ServiceRecoveryRequest | null = null;
 let currentSpotifyPlayback: SpotifyPlaybackPresentation = {
@@ -487,6 +508,14 @@ async function refreshStatus(): Promise<void> {
   renderStatus(await window.nhd.getHostStatus());
 }
 
+function renderOpenAiCredentialStatus(status: OpenAiCredentialStatus): void {
+  openAiCredentialStatus = status;
+  elements.voiceSettingsButton.dataset.connected = String(status.state === "configured");
+  elements.voiceSettingsCopy.textContent = status.detail;
+  elements.voiceKeyStatus.textContent = status.detail;
+  elements.voiceRemoveKey.disabled = status.state !== "configured";
+}
+
 function applyLocalAppState(state: LocalAppState): void {
   localAppState = state;
   enabledServiceIds = new Set(state.preferences.enabledServiceIds);
@@ -524,6 +553,19 @@ function applyLocalAppState(state: LocalAppState): void {
   elements.remoteAutoConnectCopy.textContent = state.devicePreferences.autoApproveFirstRemote
     ? "On · first scan connects when no remote is active"
     : "Off · approve every new phone on the TV";
+  elements.voiceControlToggle.setAttribute(
+    "aria-pressed",
+    String(state.devicePreferences.voiceControlEnabled)
+  );
+  elements.voiceControlCopy.textContent = state.devicePreferences.voiceControlEnabled
+    ? "On · hold the phone microphone button to talk"
+    : "Off";
+  elements.voicePlaybackModeCopy.textContent = state.preferences.voicePlaybackMode === "automatic"
+    ? "Play automatically when there is one verified match"
+    : "Confirm before playing";
+  elements.voiceRegionCopy.textContent = state.devicePreferences.voiceRegion === null
+    ? "Automatic detection"
+    : state.devicePreferences.voiceRegion;
   elements.youtubeTvToggle.setAttribute(
     "aria-pressed",
     String(state.devicePreferences.youtubeTvModeEnabled)
@@ -555,6 +597,19 @@ async function saveDevicePreferences(
   applyLocalAppState(await window.nhd.updateDevicePreferences({
     ...localAppState.devicePreferences,
     ...changes
+  }));
+}
+
+async function saveVoicePlaybackMode(
+  voicePlaybackMode: LocalAppState["preferences"]["voicePlaybackMode"]
+): Promise<void> {
+  if (localAppState === null) {
+    return;
+  }
+
+  applyLocalAppState(await window.nhd.updateProfilePreferences({
+    ...localAppState.preferences,
+    voicePlaybackMode
   }));
 }
 
@@ -1492,12 +1547,14 @@ elements.searchDialog.addEventListener("cancel", (event) => {
 });
 
 async function initializeServices(): Promise<void> {
-  const [availableServices, state] = await Promise.all([
+  const [availableServices, state, credentialStatus] = await Promise.all([
     window.nhd.getServices(),
-    window.nhd.getLocalAppState()
+    window.nhd.getLocalAppState(),
+    window.nhd.getOpenAiCredentialStatus()
   ]);
   services = availableServices;
   applyLocalAppState(state);
+  renderOpenAiCredentialStatus(credentialStatus);
   renderServiceViews();
 }
 
@@ -2069,6 +2126,105 @@ elements.remoteDeny.addEventListener("click", () => {
   void window.nhd.denyRemotePairing().then(renderRemoteStatus).catch(showRemoteError);
 });
 
+function closeVoiceDialog(): void {
+  elements.voiceKeyInput.value = "";
+  elements.voiceDialog.close();
+}
+
+async function openVoiceDialog(): Promise<void> {
+  elements.voiceKeyInput.value = "";
+  elements.voiceRegionInput.value = localAppState?.devicePreferences.voiceRegion ?? "";
+  if (!elements.voiceDialog.open) {
+    elements.voiceDialog.showModal();
+  }
+  try {
+    renderOpenAiCredentialStatus(await window.nhd.getOpenAiCredentialStatus());
+  } catch (error) {
+    elements.voiceKeyStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+  elements.voiceKeyInput.focus();
+}
+
+elements.voiceSettingsButton.addEventListener("click", () => void openVoiceDialog());
+elements.voiceRegionButton.addEventListener("click", () => void openVoiceDialog());
+elements.voiceClose.addEventListener("click", closeVoiceDialog);
+elements.voiceDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeVoiceDialog();
+});
+
+elements.voiceKeyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = elements.voiceKeyForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const apiKey = elements.voiceKeyInput.value;
+  elements.voiceKeyInput.value = "";
+  if (submit !== null) submit.disabled = true;
+  try {
+    renderOpenAiCredentialStatus(await window.nhd.saveOpenAiApiKey(apiKey));
+    showFeedback("OpenAI API key saved securely on this computer.");
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  } finally {
+    elements.voiceKeyInput.value = "";
+    if (submit !== null) submit.disabled = false;
+  }
+});
+
+elements.voiceRemoveKey.addEventListener("click", async () => {
+  elements.voiceRemoveKey.disabled = true;
+  try {
+    renderOpenAiCredentialStatus(await window.nhd.clearOpenAiApiKey());
+    if (localAppState?.devicePreferences.voiceControlEnabled === true) {
+      await saveDevicePreferences({ voiceControlEnabled: false });
+    }
+    showFeedback("Saved OpenAI API key removed. Voice control is off.");
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  } finally {
+    elements.voiceRemoveKey.disabled = openAiCredentialStatus.state !== "configured";
+  }
+});
+
+elements.voiceRegionForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const value = elements.voiceRegionInput.value.trim().toUpperCase();
+  if (value.length > 0 && !/^[A-Z]{2}$/.test(value)) {
+    showFeedback("Use a two-letter country code, or leave the region blank for automatic.");
+    return;
+  }
+  try {
+    await saveDevicePreferences({ voiceRegion: value.length === 0 ? null : value });
+    elements.voiceRegionInput.value = value;
+    showFeedback(value.length === 0
+      ? "Voice availability region set to automatic."
+      : `Voice availability region set to ${value}.`);
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : String(error));
+  }
+});
+
+elements.voiceControlToggle.addEventListener("click", () => {
+  const enabled = !(localAppState?.devicePreferences.voiceControlEnabled ?? false);
+  if (enabled && openAiCredentialStatus.state !== "configured") {
+    showFeedback("Add an OpenAI API key before enabling voice control.");
+    void openVoiceDialog();
+    return;
+  }
+  void saveDevicePreferences({ voiceControlEnabled: enabled })
+    .then(() => showFeedback(`Voice control ${enabled ? "enabled" : "disabled"}.`))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
+elements.voicePlaybackMode.addEventListener("click", () => {
+  const current = localAppState?.preferences.voicePlaybackMode ?? "confirm";
+  const next = current === "confirm" ? "automatic" : "confirm";
+  void saveVoicePlaybackMode(next)
+    .then(() => showFeedback(next === "automatic"
+      ? "Voice commands will play a single verified match automatically."
+      : "Voice commands will ask before playback."))
+    .catch((error: unknown) => showFeedback(error instanceof Error ? error.message : String(error)));
+});
+
 function renderSoundPreference(): void {
   elements.soundToggle.setAttribute("aria-pressed", String(navigationSounds.enabled));
   elements.soundToggleCopy.textContent = navigationSounds.enabled ? "On" : "Off";
@@ -2220,6 +2376,10 @@ function activeNavigationScope(): ParentNode {
     return elements.profileDialog;
   }
 
+  if (elements.voiceDialog.open) {
+    return elements.voiceDialog;
+  }
+
   if (elements.searchDialog.open) {
     return elements.searchDialog;
   }
@@ -2296,6 +2456,10 @@ function returnHome(remote = false): void {
     elements.profileDialog.close();
   }
 
+  if (elements.voiceDialog.open) {
+    closeVoiceDialog();
+  }
+
   if (elements.searchDialog.open) {
     elements.searchDialog.close();
   }
@@ -2362,6 +2526,9 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
   } else if (elements.profileDialog.open) {
     elements.profileDialog.close();
+    event.preventDefault();
+  } else if (elements.voiceDialog.open) {
+    closeVoiceDialog();
     event.preventDefault();
   } else if (elements.clearDataDialog.open) {
     cancelClearData();
@@ -2443,6 +2610,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
 
     if (elements.profileDialog.open) {
       elements.profileDialog.close();
+      return;
+    }
+
+    if (elements.voiceDialog.open) {
+      closeVoiceDialog();
       return;
     }
 

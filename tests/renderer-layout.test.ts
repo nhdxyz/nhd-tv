@@ -80,6 +80,18 @@ describe("TV catalog layout", () => {
     expect(css).toContain(".controller-readout");
   });
 
+  it("provides couch-accessible voice control and private key settings", () => {
+    expect(html).toContain('id="voice-settings-button"');
+    expect(html).toContain('id="voice-control-toggle"');
+    expect(html).toContain('id="voice-playback-mode"');
+    expect(html).toContain('id="voice-region-button"');
+    expect(html).toContain('id="voice-dialog"');
+    expect(html).toContain('id="voice-key-input"');
+    expect(html).toContain('type="password"');
+    expect(css).toContain(".voice-dialog-shell");
+    expect(css).toContain(".voice-settings-form");
+  });
+
   it("offers multiple ambient clock styles with a burn-in-conscious full-screen surface", () => {
     expect(html).toContain('id="ambient-display-toggle"');
     expect(html).toContain('id="ambient-clock-style"');

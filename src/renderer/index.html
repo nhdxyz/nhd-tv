@@ -369,6 +369,37 @@
           </button>
         </section>
 
+        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Voice control settings" data-nav-group="settings-voice">
+          <button class="settings-card settings-card-accent" id="voice-settings-button" type="button">
+            <span class="settings-icon" aria-hidden="true">◉</span>
+            <span>
+              <strong>AI voice setup</strong>
+              <small id="voice-settings-copy">Add an OpenAI API key to use voice control</small>
+            </span>
+          </button>
+          <button class="settings-card" id="voice-control-toggle" type="button" aria-pressed="false">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">VOICE</span>
+            <span>
+              <strong>Voice control</strong>
+              <small id="voice-control-copy">Off</small>
+            </span>
+          </button>
+          <button class="settings-card" id="voice-playback-mode" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">PLAY</span>
+            <span>
+              <strong>Voice playback</strong>
+              <small id="voice-playback-mode-copy">Confirm before playing</small>
+            </span>
+          </button>
+          <button class="settings-card" id="voice-region-button" type="button">
+            <span class="settings-icon settings-icon-text" aria-hidden="true">AREA</span>
+            <span>
+              <strong>Availability region</strong>
+              <small id="voice-region-copy">Automatic detection</small>
+            </span>
+          </button>
+        </section>
+
         <section class="settings-row settings-row-secondary horizontal-row" aria-label="Television settings" data-nav-group="settings-television">
           <button class="settings-card" id="display-card" type="button">
             <span class="settings-icon settings-icon-text" aria-hidden="true">TV</span>
@@ -449,7 +480,7 @@
           <article class="privacy-card">
             <p class="eyebrow">Privacy</p>
             <h2>Local by default</h2>
-            <p>Service cookies remain in separate local partitions. NHD-TV has no analytics or cloud sync. The phone remote can send navigation and text only to explicitly supported search boxes, never credential fields.</p>
+            <p>Service cookies remain in separate local partitions. NHD-TV has no analytics or cloud sync. When voice control is enabled, a short recording and its transcript are sent to OpenAI for the active command, then discarded by NHD-TV.</p>
           </article>
 
           <details class="developer-panel">
@@ -602,6 +633,63 @@
             <button class="primary-action" type="submit">Create</button>
           </div>
         </form>
+      </div>
+    </dialog>
+
+    <dialog class="profile-dialog" id="voice-dialog" aria-labelledby="voice-title">
+      <div class="profile-dialog-shell voice-dialog-shell">
+        <header class="remote-dialog-header">
+          <div>
+            <p class="eyebrow">AI voice control</p>
+            <h2 id="voice-title">Talk to NHD-TV.</h2>
+          </div>
+          <button class="dialog-close" id="voice-close" type="button" aria-label="Close voice settings">×</button>
+        </header>
+        <p class="profile-privacy">Your API key is encrypted with this computer's operating-system credential protection. It is never sent to the phone remote or streaming apps.</p>
+        <section class="voice-settings-section" aria-labelledby="voice-key-title">
+          <div>
+            <h3 id="voice-key-title">OpenAI API key</h3>
+            <p id="voice-key-status" role="status" aria-live="polite">Checking secure storage…</p>
+          </div>
+          <form class="voice-settings-form" id="voice-key-form">
+            <label for="voice-key-input">Replace saved key</label>
+            <div>
+              <input
+                id="voice-key-input"
+                type="password"
+                maxlength="512"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="Paste an OpenAI API key"
+                required
+              />
+              <button class="primary-action" type="submit">Save key</button>
+            </div>
+          </form>
+          <button class="danger-secondary-action voice-remove-key" id="voice-remove-key" type="button">Remove saved key</button>
+        </section>
+        <section class="voice-settings-section" aria-labelledby="voice-region-title">
+          <div>
+            <h3 id="voice-region-title">Where-to-watch region</h3>
+            <p>Leave this blank for automatic detection, or enter a two-letter country code such as US, CA, or GB.</p>
+          </div>
+          <form class="voice-settings-form" id="voice-region-form">
+            <label for="voice-region-input">Country code</label>
+            <div>
+              <input
+                id="voice-region-input"
+                maxlength="2"
+                autocomplete="country"
+                autocapitalize="characters"
+                spellcheck="false"
+                placeholder="Auto"
+              />
+              <button class="secondary-action" type="submit">Save region</button>
+            </div>
+          </form>
+        </section>
+        <p class="voice-privacy-note">NHD-TV does not save microphone audio or transcripts. OpenAI API usage and data controls are governed by the OpenAI account connected to the saved key.</p>
       </div>
     </dialog>
 

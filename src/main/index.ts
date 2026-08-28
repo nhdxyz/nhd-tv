@@ -114,6 +114,7 @@ import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail,
+  watchOfferNavigationUrl,
   watchOffersShouldExpand,
   watchOffersShouldBeComplete
 } from "./voice/google-watch-selection";
@@ -1345,7 +1346,11 @@ async function executeGoogleWatchPlan(
 
   const definition = getServiceDefinition(selected.serviceId);
   if (definition === null) return null;
-  const playbackUrl = sanitizePlaybackUrl(selected.offer.watchUrl, definition);
+  const providerSearchUrl = buildServiceSearchUrl(definition, plan.intent.title);
+  const playbackUrl = sanitizePlaybackUrl(
+    watchOfferNavigationUrl(selected, plan.intent, providerSearchUrl),
+    definition
+  );
   if (playbackUrl === null) return null;
 
   presentPhoneVoiceProgress(`Opening ${definition.name}…`);

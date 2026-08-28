@@ -3,6 +3,7 @@ import {
   googleWatchResultMatchesIntent,
   selectEnabledWatchOffer,
   watchAvailabilityDetail,
+  watchOfferNavigationUrl,
   watchOffersShouldExpand,
   watchOffersShouldBeComplete
 } from "../src/main/voice/google-watch-selection";
@@ -68,6 +69,21 @@ describe("Google watch selection", () => {
       serviceId: "netflix"
     });
     expect(selectEnabledWatchOffer(result, ["spotify"])).toBeNull();
+  });
+
+  it("lets Netflix choose Resume for a generic show instead of trusting an episode link", () => {
+    const selected = selectEnabledWatchOffer(result, ["netflix"]);
+    expect(selected).not.toBeNull();
+    expect(watchOfferNavigationUrl(
+      selected!,
+      intent({ mediaType: "show", title: "Breaking Bad" }),
+      "https://www.netflix.com/search?q=Breaking%20Bad"
+    )).toBe("https://www.netflix.com/search?q=Breaking%20Bad");
+    expect(watchOfferNavigationUrl(
+      selected!,
+      intent(),
+      "https://www.netflix.com/search?q=Apollo%2013"
+    )).toBe("https://www.netflix.com/watch/123");
   });
 
   it("reports purchase providers without treating them as subscriptions", () => {

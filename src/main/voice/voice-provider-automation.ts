@@ -643,8 +643,12 @@ export function buildNetflixVoiceAutomationScript(
       const destinations = [
         ...exactCard.querySelectorAll('a[href^="/title/"],a[href^="/watch/"]')
       ].filter(visible);
-      const destination = intent.mediaType === "episode" || intent.action === "open"
-        ? destinations.find((element) => element.getAttribute("href")?.startsWith("/title/"))
+      const titleDetails = destinations.find((element) =>
+        element.getAttribute("href")?.startsWith("/title/")
+      );
+      const destination = intent.mediaType === "episode" ||
+        intent.mediaType === "show" || intent.action === "open"
+        ? titleDetails ?? exactCard
         : destinations[0] ?? exactCard;
       if (destination instanceof HTMLElement) {
         destination.click();

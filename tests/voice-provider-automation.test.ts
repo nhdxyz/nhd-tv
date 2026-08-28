@@ -598,7 +598,7 @@ describe("voice provider automation", () => {
     expect(resume.clicked).toBe(true);
   });
 
-  it("opens Netflix title details for exact episodes and open-only requests", () => {
+  it("opens Netflix title details for episodes, shows, and open-only requests", () => {
     const execute = (voiceIntent: VoiceMediaIntent) => {
       const watch = new FakeElement({ attributes: { href: "/watch/current" } });
       const title = new FakeElement({ attributes: { href: "/title/breaking-bad" } });
@@ -635,6 +635,16 @@ describe("voice provider automation", () => {
     expect(episodeResult.result).toBe("navigated");
     expect(episodeResult.title.clicked).toBe(true);
     expect(episodeResult.watch.clicked).toBe(false);
+
+    const showResult = execute(intent({
+      creator: null,
+      mediaType: "show",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    }));
+    expect(showResult.result).toBe("navigated");
+    expect(showResult.title.clicked).toBe(true);
+    expect(showResult.watch.clicked).toBe(false);
 
     const openResult = execute(intent({
       action: "open",

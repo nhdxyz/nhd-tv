@@ -122,6 +122,21 @@ export function selectEnabledWatchOffer(
   return null;
 }
 
+export function watchOfferNavigationUrl(
+  selected: SelectedWatchOffer,
+  intent: VoiceMediaIntent,
+  providerSearchUrl: string | null
+): string {
+  // A generic Netflix-series offer often points at one arbitrary episode.
+  // Use Google to select Netflix, then let Netflix's own title page choose the
+  // viewer's Resume/Continue target (or the first episode for a new viewer).
+  return selected.serviceId === "netflix" &&
+    intent.mediaType === "show" &&
+    providerSearchUrl !== null
+    ? providerSearchUrl
+    : selected.offer.watchUrl;
+}
+
 export function watchOffersShouldExpand(
   result: Pick<GoogleWatchResult, "offersComplete">,
   selected: SelectedWatchOffer | null,

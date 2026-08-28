@@ -80,7 +80,7 @@ export class VoiceActivityLease {
 
     if (event.phase === "cancelled") {
       this.#remember(key);
-      return "accepted";
+      return "ignored";
     }
     this.#active = {
       commandId: event.commandId,
@@ -124,6 +124,27 @@ export class VoiceActivityLease {
     return true;
   }
 
+  /**
+   * Reacquires a completed command for a server-authenticated follow-up such
+   * as a playback confirmation. Callers must validate the original controller
+   * and command binding before using this method.
+   */
+  beginBoundOperation(controllerId: string, commandId: string): boolean {
+    this.#cleanup();
+    if (this.#active !== null) return false;
+
+    const key = commandKey(controllerId, commandId);
+    this.#tombstones.delete(key);
+    this.#active = {
+      commandId,
+      controllerId,
+      expiresAt: this.#now() + this.#leaseMs,
+      locked: true,
+      phase: "understanding"
+    };
+    return true;
+  }
+
   finishUpload(controllerId: string, commandId: string): void {
     this.#cleanup();
     const active = this.#active;
@@ -133,12 +154,16 @@ export class VoiceActivityLease {
   }
 
   releaseController(controllerId: string): boolean {
+    return this.releaseControllerCommand(controllerId) !== null;
+  }
+
+  releaseControllerCommand(controllerId: string): string | null {
     this.#cleanup();
     const active = this.#active;
-    if (active?.controllerId !== controllerId) return false;
+    if (active?.controllerId !== controllerId || active.locked) return null;
     this.#remember(commandKey(controllerId, active.commandId));
     this.#active = null;
-    return true;
+    return active.commandId;
   }
 
   reset(): void {
@@ -148,7 +173,11 @@ export class VoiceActivityLease {
 
   #cleanup(): void {
     const now = this.#now();
-    if (this.#active !== null && this.#active.expiresAt <= now) {
+    if (
+      this.#active !== null &&
+      !this.#active.locked &&
+      this.#active.expiresAt <= now
+    ) {
       this.#remember(commandKey(this.#active.controllerId, this.#active.commandId));
       this.#active = null;
     }

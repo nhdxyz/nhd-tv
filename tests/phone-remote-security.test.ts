@@ -116,6 +116,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('window.addEventListener("pagehide", () => {');
     expect(REMOTE_JS).toContain("cancelVoiceRecording();\n    disconnectRemote();");
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm"');
+    expect(serverSource).toContain('url.pathname === "/api/voice/confirm/cancel"');
+    expect(serverSource).toContain("beginBoundOperation(controllerId, binding.commandId)");
     expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
     expect(serverSource).toContain("MAX_VOICE_AUDIO_BYTES");
   });
@@ -128,6 +130,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("new MediaRecorder(stream");
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
+    expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm/cancel"');
     expect(REMOTE_JS).toContain('fetch("/api/voice/activity"');
     expect(REMOTE_JS).toContain("createVoiceCommandId");
     expect(REMOTE_JS).toContain("JSON.stringify({ commandId, phase })");
@@ -135,6 +138,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('sendVoiceActivity("listening", false, commandId)');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
+    expect(REMOTE_JS).not.toContain(
+      'sendVoiceActivity("cancelled", false, createVoiceCommandId())'
+    );
     expect(REMOTE_JS).toContain('error.status !== 422');
     expect(REMOTE_JS).toContain(".catch(() => {})");
     expect(REMOTE_JS).toContain("finishVoiceRecording");

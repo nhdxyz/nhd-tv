@@ -145,6 +145,12 @@ export class VoiceCommandSession {
     );
   }
 
+  cancel(value: unknown): boolean {
+    this.#removeExpired();
+    const confirmationId = normalizedConfirmationId(value);
+    return confirmationId !== null && this.#pending.delete(confirmationId);
+  }
+
   async #executePlan(
     plan: VoiceCommandPlan,
     transcript?: string

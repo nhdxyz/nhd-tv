@@ -167,6 +167,8 @@ let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
 let currentVoicePresentation = createVoicePresentationState("hidden");
+let currentVoiceCommandId: string | null = null;
+let activeVoiceProcessingCommandId: string | null = null;
 let providerVoiceOverlay: ProviderVoiceOverlay | null = null;
 let voicePresentationTimer: NodeJS.Timeout | null = null;
 let voicePresentationVersion = 0;
@@ -524,10 +526,16 @@ function clearVoicePresentationTimer(): void {
 function showVoicePresentation(
   phase: VoicePresentationPhase,
   values: { detail?: unknown; transcript?: unknown } = {},
-  clearAfterMs?: number
+  clearAfterMs?: number,
+  commandId?: string
 ): number {
   clearVoicePresentationTimer();
   const version = ++voicePresentationVersion;
+  if (phase === "hidden") {
+    currentVoiceCommandId = null;
+  } else if (commandId !== undefined) {
+    currentVoiceCommandId = commandId;
+  }
   voiceTranscriptPresentedAt = phase === "transcript" ? Date.now() : 0;
   publishVoicePresentation(createVoicePresentationState(phase, values));
 
@@ -536,6 +544,7 @@ function showVoicePresentation(
       if (version !== voicePresentationVersion) return;
       voicePresentationTimer = null;
       voicePresentationVersion += 1;
+      currentVoiceCommandId = null;
       publishVoicePresentation(createVoicePresentationState("hidden"));
     }, clearAfterMs);
   }
@@ -544,7 +553,9 @@ function showVoicePresentation(
 
 function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
   if (activity.phase === "cancelled") {
-    showVoicePresentation("hidden");
+    if (currentVoiceCommandId === activity.commandId) {
+      showVoicePresentation("hidden");
+    }
     return;
   }
 
@@ -553,14 +564,16 @@ function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
     showVoicePresentation(
       "listening",
       { detail: "Listening…" },
-      VOICE_ACTIVITY_TIMEOUT_MS
+      VOICE_ACTIVITY_TIMEOUT_MS,
+      activity.commandId
     );
     return;
   }
   showVoicePresentation(
     "understanding",
     { detail: "Understanding…" },
-    VOICE_UNDERSTANDING_TIMEOUT_MS
+    VOICE_UNDERSTANDING_TIMEOUT_MS,
+    activity.commandId
   );
 }
 
@@ -571,24 +584,31 @@ function voiceResultDetail(result: PhoneRemoteVoiceResult): string {
 }
 
 function presentPhoneVoiceTranscript(transcript: string): void {
+  const commandId = activeVoiceProcessingCommandId;
+  if (commandId === null) return;
   showVoicePresentation(
     "transcript",
     { detail: "You said", transcript },
-    VOICE_UNDERSTANDING_TIMEOUT_MS
+    VOICE_UNDERSTANDING_TIMEOUT_MS,
+    commandId
   );
 }
 
-function presentPhoneVoiceResult(result: PhoneRemoteVoiceResult): void {
+function presentPhoneVoiceResult(
+  result: PhoneRemoteVoiceResult,
+  commandId: string
+): void {
   const phase: VoicePresentationPhase = result.outcome === "failed"
     ? "error"
     : result.outcome === "confirmation-required" ? "confirmation" : "success";
   const showResult = () => showVoicePresentation(
     phase,
     { detail: voiceResultDetail(result) },
-    VOICE_RESULT_DISPLAY_MS
+    VOICE_RESULT_DISPLAY_MS,
+    commandId
   );
   const remainingTranscriptMs = remainingVoiceTranscriptDisplayMilliseconds(
-    currentVoicePresentation.phase,
+    currentVoiceCommandId === commandId ? currentVoicePresentation.phase : "hidden",
     voiceTranscriptPresentedAt,
     Date.now(),
     VOICE_TRANSCRIPT_MIN_DISPLAY_MS
@@ -1331,44 +1351,64 @@ async function handleRemoteVoice(
       detail: remoteVoiceStatus().detail,
       outcome: "failed"
     };
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
   }
   presentPhoneVoiceActivity({ commandId, phase: "understanding" });
+  activeVoiceProcessingCommandId = commandId;
   try {
     const result = await voiceCommandSession.process(clip);
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
   } catch (error) {
     const result = voiceFailure(error);
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
+  } finally {
+    if (activeVoiceProcessingCommandId === commandId) {
+      activeVoiceProcessingCommandId = null;
+    }
   }
 }
 
-async function confirmRemoteVoice(confirmationId: string): Promise<PhoneRemoteVoiceResult> {
+async function confirmRemoteVoice(
+  confirmationId: string,
+  commandId: string
+): Promise<PhoneRemoteVoiceResult> {
   if (voiceCommandSession === null) {
     const result: PhoneRemoteVoiceResult = {
       detail: "Voice control is still starting.",
       outcome: "failed"
     };
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
   }
   showVoicePresentation(
     "understanding",
     { detail: "Starting your choice…" },
-    VOICE_UNDERSTANDING_TIMEOUT_MS
+    VOICE_UNDERSTANDING_TIMEOUT_MS,
+    commandId
   );
   try {
     const result = await voiceCommandSession.confirm(confirmationId);
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
   } catch (error) {
     const result = voiceFailure(error);
-    presentPhoneVoiceResult(result);
+    presentPhoneVoiceResult(result, commandId);
     return result;
   }
+}
+
+function cancelRemoteVoiceConfirmation(
+  confirmationId: string,
+  commandId: string
+): boolean {
+  const cancelled = voiceCommandSession?.cancel(confirmationId) ?? false;
+  if (currentVoiceCommandId === commandId) {
+    showVoicePresentation("hidden");
+  }
+  return cancelled;
 }
 
 async function handleRemotePointer(input: RemotePointerInput): Promise<RemotePointerResult> {
@@ -1942,6 +1982,7 @@ async function createMainWindow(): Promise<void> {
     onSearch: handleRemoteSearch,
     onStatusChanged: publishRemoteStatus,
     onText: handleRemoteText,
+    onCancelVoice: cancelRemoteVoiceConfirmation,
     onConfirmVoice: confirmRemoteVoice,
     onVoiceActivity: presentPhoneVoiceActivity,
     onVoice: handleRemoteVoice,
@@ -1977,6 +2018,8 @@ async function createMainWindow(): Promise<void> {
     stopAmbientDisplayMonitor();
     clearVoicePresentationTimer();
     voicePresentationVersion += 1;
+    currentVoiceCommandId = null;
+    activeVoiceProcessingCommandId = null;
     providerVoiceOverlay?.hide();
     providerVoiceOverlay = null;
     currentVoicePresentation = createVoicePresentationState("hidden");

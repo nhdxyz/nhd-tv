@@ -5,6 +5,19 @@ const COMMAND_A = "voice-command-a-1234";
 const COMMAND_B = "voice-command-b-5678";
 
 describe("voice activity lease", () => {
+  it("ignores a cancellation for a command it has never observed", () => {
+    const lease = new VoiceActivityLease();
+
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "cancelled"
+    })).toBe("ignored");
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "listening"
+    })).toBe("accepted");
+  });
+
   it("keeps activity phases monotonic and tombstones a cancelled gesture", () => {
     const lease = new VoiceActivityLease();
     expect(lease.acceptActivity("phone-a", {
@@ -90,10 +103,63 @@ describe("voice activity lease", () => {
     const lease = new VoiceActivityLease();
     lease.acceptActivity("phone-a", { commandId: COMMAND_A, phase: "listening" });
     expect(lease.releaseController("phone-b")).toBe(false);
-    expect(lease.releaseController("phone-a")).toBe(true);
+    expect(lease.releaseControllerCommand("phone-a")).toBe(COMMAND_A);
     expect(lease.acceptActivity("phone-b", {
       commandId: COMMAND_B,
       phase: "listening"
     })).toBe("accepted");
+  });
+
+  it("keeps a locked operation owned after its ordinary lease duration", () => {
+    let now = 1_000;
+    const lease = new VoiceActivityLease({ leaseMs: 500, now: () => now });
+
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(true);
+    now += 501;
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "listening"
+    })).toBe("busy");
+
+    lease.finishUpload("phone-a", COMMAND_A);
+    expect(lease.acceptActivity("phone-b", {
+      commandId: "voice-command-b-next-9",
+      phase: "listening"
+    })).toBe("accepted");
+  });
+
+  it("keeps a locked operation owned when its controller disconnects", () => {
+    const lease = new VoiceActivityLease();
+
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(true);
+    lease.releaseController("phone-a");
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "listening"
+    })).toBe("busy");
+
+    lease.finishUpload("phone-a", COMMAND_A);
+    expect(lease.acceptActivity("phone-b", {
+      commandId: "voice-command-b-next-9",
+      phase: "listening"
+    })).toBe("accepted");
+  });
+
+  it("rebinds a completed command as a new locked operation", () => {
+    const lease = new VoiceActivityLease();
+
+    expect(lease.beginUpload("phone-a", COMMAND_A)).toBe(true);
+    expect(lease.beginBoundOperation("phone-a", COMMAND_A)).toBe(false);
+    lease.finishUpload("phone-a", COMMAND_A);
+
+    expect(lease.beginBoundOperation("phone-a", COMMAND_A)).toBe(true);
+    expect(lease.acceptActivity("phone-a", {
+      commandId: COMMAND_A,
+      phase: "cancelled"
+    })).toBe("ignored");
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "listening"
+    })).toBe("busy");
   });
 });

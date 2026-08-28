@@ -164,6 +164,37 @@ describe("voice command session", () => {
     }));
   });
 
+  it("cancels exactly one pending confirmation without consuming another", async () => {
+    const confirmationIds = [
+      "confirmation_token_first",
+      "confirmation_token_second"
+    ];
+    const execute = vi.fn(async () => ({ detail: "Playing episode", handled: true }));
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("confirm"),
+      randomToken: () => confirmationIds.shift() ?? "confirmation_token_fallback",
+      understand: async () => ({ intent: mediaIntent(), transcript: "play breaking bad" })
+    });
+
+    const first = await session.process(clip);
+    const second = await session.process(clip);
+    expect(first.outcome).toBe("confirmation-required");
+    expect(second.outcome).toBe("confirmation-required");
+
+    expect(session.cancel(first.confirmationId)).toBe(true);
+    expect(session.cancel(first.confirmationId)).toBe(false);
+    await expect(session.confirm(first.confirmationId)).resolves.toMatchObject({
+      outcome: "failed"
+    });
+    expect(execute).not.toHaveBeenCalled();
+
+    await expect(session.confirm(second.confirmationId)).resolves.toMatchObject({
+      outcome: "completed"
+    });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it("expires confirmations and executes automatic playback directly", async () => {
     let now = 1_000;
     const execute = vi.fn(async () => ({ detail: "Opening episode", handled: true }));

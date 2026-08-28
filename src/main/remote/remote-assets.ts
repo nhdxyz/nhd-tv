@@ -1045,8 +1045,35 @@ export const REMOTE_JS = `(() => {
   }
 
   function closeVoiceConfirmation() {
+    const pending = pendingVoiceConfirmation;
     pendingVoiceConfirmation = null;
     voiceConfirm.hidden = true;
+    return pending;
+  }
+
+  function showVoiceConfirmation(pending) {
+    pendingVoiceConfirmation = pending;
+    voiceConfirmCopy.textContent = pending.detail;
+    voiceConfirm.hidden = false;
+  }
+
+  async function cancelVoiceConfirmation(pending, showStatus) {
+    if (!controllerToken || pending === null) return;
+    try {
+      await jsonRequest("/api/voice/confirm/cancel", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ confirmationId: pending.confirmationId })
+      });
+      if (showStatus) setState("Voice command cancelled", "connected");
+    } catch (error) {
+      if (showStatus && (!error || error.status !== 410)) {
+        setState(error instanceof Error ? error.message : "Could not cancel voice command", "error");
+      }
+    }
   }
 
   function stopVoiceStream() {
@@ -1084,11 +1111,13 @@ export const REMOTE_JS = `(() => {
         result.outcome === "confirmation-required" &&
         typeof result.confirmationId === "string"
       ) {
-        pendingVoiceConfirmation = result.confirmationId;
-        voiceConfirmCopy.textContent = typeof result.detail === "string"
-          ? result.detail.slice(0, 200)
-          : "Play this title?";
-        voiceConfirm.hidden = false;
+        showVoiceConfirmation({
+          commandId,
+          confirmationId: result.confirmationId,
+          detail: typeof result.detail === "string"
+            ? result.detail.slice(0, 200)
+            : "Play this title?"
+        });
         setState("Confirm on your phone", "connected");
         if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
       } else {
@@ -1136,7 +1165,10 @@ export const REMOTE_JS = `(() => {
       supportedVoiceMimeType === null
     ) return;
 
-    closeVoiceConfirmation();
+    const supersededConfirmation = closeVoiceConfirmation();
+    if (supersededConfirmation !== null) {
+      void cancelVoiceConfirmation(supersededConfirmation, false);
+    }
     voiceCommandId = createVoiceCommandId();
     voiceStarting = true;
     voiceReleaseRequested = false;
@@ -1237,7 +1269,8 @@ export const REMOTE_JS = `(() => {
 
   async function confirmVoiceCommand() {
     if (!controllerToken || pendingVoiceConfirmation === null || voiceProcessing) return;
-    const confirmationId = pendingVoiceConfirmation;
+    const pending = pendingVoiceConfirmation;
+    const confirmationId = pending.confirmationId;
     closeVoiceConfirmation();
     voiceProcessing = true;
     updateVoiceButton();
@@ -1254,6 +1287,9 @@ export const REMOTE_JS = `(() => {
       setState(result.detail || "Voice command confirmed", "connected");
       if (navigator.vibrate) navigator.vibrate(18);
     } catch (error) {
+      if (error && (error.status === 409 || error.status >= 500)) {
+        showVoiceConfirmation(pending);
+      }
       setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
     } finally {
       voiceProcessing = false;
@@ -1725,9 +1761,8 @@ export const REMOTE_JS = `(() => {
   });
   voiceButton.addEventListener("click", (event) => event.preventDefault());
   voiceConfirmCancel.addEventListener("click", () => {
-    closeVoiceConfirmation();
-    sendVoiceActivity("cancelled", false, createVoiceCommandId());
-    setState("Voice command cancelled", "connected");
+    const pending = closeVoiceConfirmation();
+    if (pending !== null) void cancelVoiceConfirmation(pending, true);
   });
   voiceConfirmPlay.addEventListener("click", () => void confirmVoiceCommand());
 

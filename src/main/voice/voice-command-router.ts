@@ -180,7 +180,9 @@ function mediaPlan(
   const activeSearchService = intent.action === "search" && intent.providerHint === null
     ? enabled.find((serviceId) => serviceId === context.activeServiceId)
     : undefined;
-  const provider = activeSearchService ?? impliedProvider(intent);
+  const provider = intent.action === "search"
+    ? intent.providerHint ?? activeSearchService ?? null
+    : impliedProvider(intent);
   const eligible = provider === null && intent.action !== "search"
     ? enabled.filter((serviceId) => serviceId !== "spotify")
     : enabled;

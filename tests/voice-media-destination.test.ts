@@ -105,6 +105,19 @@ describe("voice media destination", () => {
     }), ["spotify"])).toEqual({ query: "Kanye West", serviceId: "spotify" });
   });
 
+  it("prefers an implied search app when enabled and otherwise uses the safe fallback", () => {
+    const artistSearch = intent({
+      action: "search",
+      mediaType: "artist",
+      providerHint: null,
+      title: "Taylor Swift"
+    });
+    expect(resolveVoiceMediaDestination(artistSearch, ["youtube", "spotify"]))
+      .toEqual({ query: "Taylor Swift", serviceId: "spotify" });
+    expect(resolveVoiceMediaDestination(artistSearch, ["youtube"]))
+      .toEqual({ query: "Taylor Swift", serviceId: "youtube" });
+  });
+
   it("honors a named search provider even when the media label implies another app", () => {
     expect(resolveVoiceMediaDestination(intent({
       action: "search",

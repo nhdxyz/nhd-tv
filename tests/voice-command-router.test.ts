@@ -244,6 +244,34 @@ describe("voice command planning", () => {
     })).toMatchObject({ candidateServiceIds: ["netflix"], launchAllowed: true });
   });
 
+  it("lets an unscoped Home search prefer its media app or fall back safely", () => {
+    expect(planVoiceCommand(mediaIntent({
+      action: "search",
+      mediaType: "artist",
+      providerHint: null,
+      title: "Taylor Swift"
+    }), {
+      ...context,
+      activeServiceId: null,
+      enabledServiceIds: ["spotify", "youtube"],
+      serviceOrder: ["youtube", "spotify"]
+    })).toMatchObject({
+      candidateServiceIds: ["youtube", "spotify"],
+      launchAllowed: true
+    });
+    expect(planVoiceCommand(mediaIntent({
+      action: "search",
+      mediaType: "artist",
+      providerHint: null,
+      title: "Taylor Swift"
+    }), {
+      ...context,
+      activeServiceId: null,
+      enabledServiceIds: ["youtube"],
+      serviceOrder: ["youtube"]
+    })).toMatchObject({ candidateServiceIds: ["youtube"], launchAllowed: true });
+  });
+
   it("honors an explicit Disney Plus request when it is enabled", () => {
     expect(planVoiceCommand(mediaIntent({
       mediaType: "movie",

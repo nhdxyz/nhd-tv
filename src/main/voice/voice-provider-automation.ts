@@ -18,6 +18,11 @@ export type VoiceProviderAutomationResult =
   | VoiceProviderAutomationState
   | YouTubeVoiceNavigationResult;
 
+export type VoiceMediaExecutionResult =
+  | "complete"
+  | "failed"
+  | "playing-windowed";
+
 const VOICE_PROVIDER_AUTOMATION_STATES: readonly VoiceProviderAutomationState[] = [
   "complete",
   "fullscreen-requested",
@@ -56,9 +61,9 @@ export function parseVoiceProviderAutomationResult(
 
 export function voiceProviderCommandHandled(
   intent: VoiceMediaIntent,
-  automated: boolean
+  executionResult: VoiceMediaExecutionResult
 ): boolean {
-  return intent.action !== "play" || automated;
+  return intent.action !== "play" || executionResult !== "failed";
 }
 
 function serializedIntent(intent: VoiceMediaIntent): string {

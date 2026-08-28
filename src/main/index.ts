@@ -152,7 +152,8 @@ import {
 } from "./voice/google-watch-selection";
 import {
   applyYouTubeLatestSort,
-  voiceProviderCommandHandled
+  voiceProviderCommandHandled,
+  type VoiceMediaExecutionResult
 } from "./voice/voice-provider-automation";
 import { executeVoiceProviderDestination } from "./voice/voice-provider-destination-executor";
 import {
@@ -1710,10 +1711,10 @@ async function executeGoogleWatchPlan(
     };
   }
   presentPhoneVoiceProgress(`Starting ${result.resolvedTitle ?? plan.intent.title}…`);
-  const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+  const automationResult = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
     intendedUrl: playbackUrl,
     profileNameHint: activeVoiceProfileName()
-  }, signal, operationToken) ?? false;
+  }, signal, operationToken) ?? "failed";
   signal?.throwIfAborted();
   candidateServiceIds = currentVoiceCandidateServiceIds(
     executionScope,
@@ -1725,13 +1726,16 @@ async function executeGoogleWatchPlan(
       handled: false
     };
   }
-  const handled = voiceProviderCommandHandled(plan.intent, automated);
+  const handled = voiceProviderCommandHandled(plan.intent, automationResult);
+  const resolvedTitle = result.resolvedTitle ?? plan.intent.title;
   return {
     detail: plan.intent.action === "play"
-      ? automated
-        ? `Playing ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`
-        : `Opened ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}, but could not start playback automatically.`
-      : `Opened ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`,
+      ? automationResult === "complete"
+        ? `Playing ${resolvedTitle} on ${definition.name}.`
+        : automationResult === "playing-windowed"
+          ? `Playing ${resolvedTitle} on ${definition.name}, but I couldn't verify full screen.`
+          : `Opened ${resolvedTitle} on ${definition.name}, but could not start playback automatically.`
+      : `Opened ${resolvedTitle} on ${definition.name}.`,
     handled
   };
 }
@@ -1983,13 +1987,13 @@ async function executeVoiceCommandPlanCore(
       handled: false
     };
   }
-  let automated = false;
+  let automationResult: VoiceMediaExecutionResult = "failed";
   if (!isVoiceDiscoveryIntent(plan.intent) && plan.intent.action !== "search") {
     presentPhoneVoiceProgress(`Starting ${plan.intent.title}…`);
-    automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+    automationResult = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
       intendedUrl: searchUrl,
       profileNameHint: activeVoiceProfileName()
-    }, signal, operation) ?? false;
+    }, signal, operation) ?? "failed";
   }
   signal?.throwIfAborted();
   try {
@@ -2017,19 +2021,21 @@ async function executeVoiceCommandPlanCore(
     (definition.search.queryParameter !== null || definition.search.queryPathSegment === true);
   const handled = isVoiceDiscoveryIntent(plan.intent) ||
     plan.intent.action === "search" ||
-    voiceProviderCommandHandled(plan.intent, automated);
+    voiceProviderCommandHandled(plan.intent, automationResult);
   return {
     detail: plan.intent.action === "search"
       ? providerAppliedQuery
         ? `Searched ${definition.name} for ${destination.query}.`
         : `Opened ${definition.name} search.`
-      : discoveryDetail ?? (automated
-      ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
-      : plan.intent.action === "play"
-        ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}, but could not start playback automatically.`
-        : providerAppliedQuery
-          ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`
-          : `Opened ${definition.name} search.`),
+      : discoveryDetail ?? (automationResult === "complete"
+        ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
+        : automationResult === "playing-windowed"
+          ? `Playing ${plan.intent.title} on ${definition.name}, but I couldn't verify full screen.`
+          : plan.intent.action === "play"
+            ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}, but could not start playback automatically.`
+            : providerAppliedQuery
+              ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}.`
+              : `Opened ${definition.name} search.`),
     handled
   };
 }

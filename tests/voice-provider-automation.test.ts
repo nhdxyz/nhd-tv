@@ -922,9 +922,10 @@ describe("voice provider automation", () => {
 
   it("reports play as handled only after provider automation verifies it", () => {
     const playIntent = intent({ action: "play" });
-    expect(voiceProviderCommandHandled(playIntent, false)).toBe(false);
-    expect(voiceProviderCommandHandled(playIntent, true)).toBe(true);
-    expect(voiceProviderCommandHandled(intent({ action: "open" }), false)).toBe(true);
+    expect(voiceProviderCommandHandled(playIntent, "failed")).toBe(false);
+    expect(voiceProviderCommandHandled(playIntent, "complete")).toBe(true);
+    expect(voiceProviderCommandHandled(playIntent, "playing-windowed")).toBe(true);
+    expect(voiceProviderCommandHandled(intent({ action: "open" }), "failed")).toBe(true);
   });
 
   it("extracts only bounded Netflix title and watch ids from trusted URLs", () => {

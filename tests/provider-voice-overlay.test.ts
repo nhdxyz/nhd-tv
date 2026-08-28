@@ -52,7 +52,9 @@ describe("provider voice overlay", () => {
     expect(indexSource).toContain("VOICE_CONFIRMATION_DISPLAY_MS");
     expect(indexSource).toContain('result.outcome === "confirmation-required"');
     expect(indexSource).toContain('hasChoices ? "clarification" : "success"');
-    expect(indexSource).toContain("voiceProviderCommandHandled(plan.intent, automated)");
+    expect(indexSource).toContain("voiceProviderCommandHandled(plan.intent, automationResult)");
+    expect(indexSource).toContain('automationResult === "playing-windowed"');
+    expect(indexSource).toContain("but I couldn't verify full screen");
     expect(overlaySource).toContain("new WebContentsView");
     expect(overlaySource).toContain("this.#raiseView()");
     expect(overlaySource).toContain("this.#window.contentView.removeChildView(view)");

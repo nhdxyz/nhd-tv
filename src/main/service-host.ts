@@ -88,6 +88,7 @@ import {
   netflixContentIdFromUrl,
   parseVoiceProviderAutomationResult,
   youtubeContentIdFromUrl,
+  type VoiceMediaExecutionResult,
   type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
 import {
@@ -1688,7 +1689,7 @@ export class ServiceHost {
     } = {},
     signal?: AbortSignal,
     operationToken?: ServiceOperationToken
-  ): Promise<boolean> {
+  ): Promise<VoiceMediaExecutionResult> {
     const operation = operationToken ?? this.beginOperation();
     this.#operationOwner.throwIfSuperseded(operation);
     signal?.throwIfAborted();
@@ -1700,7 +1701,7 @@ export class ServiceHost {
       view.webContents.isDestroyed() ||
       !["netflix", "spotify", "youtube"].includes(definition.id)
     ) {
-      return false;
+      return "failed";
     }
 
     // Cancellation stops this bounded automation loop, but the provider view
@@ -1742,7 +1743,7 @@ export class ServiceHost {
           playbackRevealAttempts,
           Date.now()
         )) {
-          return true;
+          return "playing-windowed";
         }
         let settleDelayMs = 250;
         try {
@@ -1783,10 +1784,10 @@ export class ServiceHost {
           }
           this.#operationOwner.throwIfSuperseded(operation);
           signal?.throwIfAborted();
-          if (this.#view !== view || view.webContents.isDestroyed()) return false;
+          if (this.#view !== view || view.webContents.isDestroyed()) return "failed";
           if (result === "complete") {
             if (definition.id === "spotify") void this.#captureSpotifyPlayback();
-            return true;
+            return "complete";
           }
           if (result === "navigated" || result === "play-clicked") {
             settleDelayMs = 650;
@@ -1800,7 +1801,7 @@ export class ServiceHost {
           }
           if (result === "playing" && definition.id === "spotify" && playbackRequested) {
             void this.#captureSpotifyPlayback();
-            return true;
+            return "complete";
           }
           if (
             result === "playing" &&
@@ -1835,7 +1836,7 @@ export class ServiceHost {
             profileRetried = true;
             await waitForProviderNavigation(view, 1_500, signal);
             this.#operationOwner.throwIfSuperseded(operation);
-            if (this.#view !== view || view.webContents.isDestroyed()) return false;
+            if (this.#view !== view || view.webContents.isDestroyed()) return "failed";
             try {
               await view.webContents.loadURL(intendedDestination);
               this.#operationOwner.throwIfSuperseded(operation);
@@ -1867,9 +1868,9 @@ export class ServiceHost {
         this.#view === view &&
         !view.webContents.isDestroyed()
       ) {
-        return true;
+        return "playing-windowed";
       }
-      return false;
+      return "failed";
   }
 
   cancelQuit(): void {

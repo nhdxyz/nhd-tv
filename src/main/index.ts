@@ -102,7 +102,8 @@ import {
 } from "./voice/openai-voice-client";
 import type {
   VoiceCommandContext,
-  VoiceCommandPlan
+  VoiceCommandPlan,
+  VoiceServiceId
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
 import {
@@ -114,6 +115,12 @@ import {
   recordVoiceMediaIntentContext,
   resolveVoiceContextIntent
 } from "./voice/voice-context-resolver";
+import {
+  captureVoiceExecutionScope,
+  revalidateVoiceCandidateServiceIds,
+  type VoiceExecutionProfileState,
+  type VoiceExecutionScope
+} from "./voice/voice-execution-scope";
 import {
   answerCurrentMediaQuestion,
   type VoiceCurrentMediaSnapshot
@@ -1444,13 +1451,80 @@ function usesGoogleWatchDiscovery(
     ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
 }
 
+class VoiceExecutionProfileChangedError extends Error {
+  constructor() {
+    super("The active profile changed while that voice command was running.");
+    this.name = "VoiceExecutionProfileChangedError";
+  }
+}
+
+function voiceExecutionProfileState(): VoiceExecutionProfileState | null {
+  const localState = localStateStore?.snapshot();
+  const contextState = voiceContextStore?.snapshot();
+  if (
+    localState === undefined ||
+    contextState === undefined ||
+    contextState.activeProfileId !== localState.activeProfileId
+  ) {
+    return null;
+  }
+  return {
+    activeProfileId: localState.activeProfileId,
+    enabledServiceIds: localState.preferences.enabledServiceIds,
+    profileRevision: contextState.revisions.profileRevision
+  };
+}
+
+function currentVoiceCandidateServiceIds(
+  scope: VoiceExecutionScope,
+  plannedServiceIds: readonly VoiceServiceId[]
+): VoiceServiceId[] {
+  const state = voiceExecutionProfileState();
+  if (state === null) throw new VoiceExecutionProfileChangedError();
+  const serviceIds = revalidateVoiceCandidateServiceIds(
+    scope,
+    state,
+    plannedServiceIds
+  );
+  if (serviceIds === null) throw new VoiceExecutionProfileChangedError();
+  return serviceIds;
+}
+
+function voiceExecutionProfileChangedResult(): RemoteActionOutcome & { detail: string } {
+  return {
+    detail: "The active profile changed while that voice command was running. Try again.",
+    handled: false
+  };
+}
+
 function bindVoiceWatchClarification(
-  clarification: NonNullable<ReturnType<typeof buildVoiceWatchClarification>>
+  clarification: NonNullable<ReturnType<typeof buildVoiceWatchClarification>>,
+  executionScope: VoiceExecutionScope,
+  plannedServiceIds: readonly VoiceServiceId[]
 ): readonly VoicePresentationChoice[] | undefined {
   const store = voiceContextStore;
   if (store === null) return undefined;
+  const enabledServiceIds = new Set<string>(
+    currentVoiceCandidateServiceIds(executionScope, plannedServiceIds)
+  );
+  const allowedCandidates = clarification.candidates.filter((candidate) =>
+    candidate.provider !== null &&
+    candidate.provider !== undefined &&
+    enabledServiceIds.has(candidate.provider.id)
+  );
+  const allowedCandidateIds = new Set(
+    allowedCandidates.flatMap((candidate) =>
+      candidate.id === undefined ? [] : [candidate.id]
+    )
+  );
+  const allowedChoices = clarification.choices.filter((choice) =>
+    allowedCandidateIds.has(choice.id)
+  );
+  if (allowedCandidates.length < 2 || allowedCandidates.length !== allowedChoices.length) {
+    return undefined;
+  }
   const revisions = store.revisions();
-  const candidates = store.setCandidates(clarification.candidates, revisions);
+  const candidates = store.setCandidates(allowedCandidates, revisions);
   if (
     candidates === null ||
     !store.setPendingClarification({
@@ -1460,11 +1534,12 @@ function bindVoiceWatchClarification(
   ) {
     return undefined;
   }
-  return clarification.choices;
+  return allowedChoices;
 }
 
 async function executeGoogleWatchPlan(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
+  executionScope: VoiceExecutionScope,
   signal?: AbortSignal,
   operationToken?: ServiceOperationToken
 ): Promise<(RemoteActionOutcome & { detail: string }) | null> {
@@ -1476,11 +1551,14 @@ async function executeGoogleWatchPlan(
     ? VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS
     : VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS;
   const discoveryDeadlineAt = Date.now() + discoveryTimeoutMs;
-  const resolveOffers = async (completeOffers: boolean) =>
+  const resolveOffers = async (
+    completeOffers: boolean,
+    candidateServiceIds: readonly VoiceServiceId[]
+  ) =>
     runVoiceStageWithDeadline(
       (stageSignal) => resolver.resolve(lookup, {
         completeOffers,
-        preferredProviderNames: watchProviderPriorityNames(plan.candidateServiceIds),
+        preferredProviderNames: watchProviderPriorityNames(candidateServiceIds),
         signal: stageSignal
       }),
       {
@@ -1493,35 +1571,59 @@ async function executeGoogleWatchPlan(
     );
   signal?.throwIfAborted();
   presentPhoneVoiceProgress("Checking your services…");
+  const initialCandidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
   let result = await resolveOffers(
-    watchOffersShouldBeComplete(plan.intent, plan.candidateServiceIds)
+    watchOffersShouldBeComplete(plan.intent, initialCandidateServiceIds),
+    initialCandidateServiceIds
   );
   signal?.throwIfAborted();
+  let candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
   if (!googleWatchResultMatchesIntent(result, plan.intent)) {
     throw new Error("Google watch discovery returned a different title or episode.");
   }
   if (plan.intent.action === "lookup") {
-    const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
     const clarification = buildVoiceWatchClarification(
       result,
       plan.intent,
-      plan.candidateServiceIds
+      candidateServiceIds
     );
     const choices = clarification === null
       ? undefined
-      : bindVoiceWatchClarification(clarification);
+      : bindVoiceWatchClarification(
+          clarification,
+          executionScope,
+          plan.candidateServiceIds
+        );
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
     return {
       ...(choices === undefined ? {} : { choices }),
-      detail: watchAvailabilityDetail(result, enabledServiceIds),
+      detail: watchAvailabilityDetail(result, candidateServiceIds),
       handled: true
     };
   }
 
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
   const providerClarification = plan.intent.providerHint === null
-    ? buildVoiceWatchClarification(result, plan.intent, plan.candidateServiceIds)
+    ? buildVoiceWatchClarification(result, plan.intent, candidateServiceIds)
     : null;
   if (providerClarification !== null) {
-    const choices = bindVoiceWatchClarification(providerClarification);
+    const choices = bindVoiceWatchClarification(
+      providerClarification,
+      executionScope,
+      plan.candidateServiceIds
+    );
     const title = result.resolvedTitle ?? plan.intent.title;
     if (choices === undefined) {
       return {
@@ -1537,20 +1639,41 @@ async function executeGoogleWatchPlan(
     };
   }
 
-  let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
-  if (watchOffersShouldExpand(result, selected, plan.candidateServiceIds)) {
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  let selected = selectEnabledWatchOffer(result, candidateServiceIds);
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  selected = selectEnabledWatchOffer(result, candidateServiceIds);
+  if (watchOffersShouldExpand(result, selected, candidateServiceIds)) {
     presentPhoneVoiceProgress("Checking all of your services…");
-    result = await resolveOffers(true);
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+    result = await resolveOffers(true, candidateServiceIds);
     signal?.throwIfAborted();
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
     if (!googleWatchResultMatchesIntent(result, plan.intent)) {
       throw new Error("Google watch discovery changed title or episode while expanding offers.");
     }
-    selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
+    selected = selectEnabledWatchOffer(result, candidateServiceIds);
   }
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  selected = selectEnabledWatchOffer(result, candidateServiceIds);
   if (selected === null) {
-    const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
     return {
-      detail: watchAvailabilityDetail(result, enabledServiceIds),
+      detail: watchAvailabilityDetail(result, candidateServiceIds),
       handled: false
     };
   }
@@ -1564,14 +1687,44 @@ async function executeGoogleWatchPlan(
   );
   if (playbackUrl === null) return null;
 
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  if (!candidateServiceIds.includes(selected.serviceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   presentPhoneVoiceProgress(`Opening ${definition.name}…`);
   await openTrackedService(definition, playbackUrl, signal, operationToken);
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  if (!candidateServiceIds.includes(selected.serviceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   presentPhoneVoiceProgress(`Starting ${result.resolvedTitle ?? plan.intent.title}…`);
   const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
     intendedUrl: playbackUrl,
     profileNameHint: activeVoiceProfileName()
   }, signal, operationToken) ?? false;
   signal?.throwIfAborted();
+  candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  if (!candidateServiceIds.includes(selected.serviceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   const handled = voiceProviderCommandHandled(plan.intent, automated);
   return {
     detail: plan.intent.action === "play"
@@ -1585,7 +1738,8 @@ async function executeGoogleWatchPlan(
 
 async function executeVoiceCommandPlanCore(
   plan: VoiceCommandPlan,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  executionScope?: VoiceExecutionScope
 ): Promise<RemoteActionOutcome & { detail: string }> {
   signal?.throwIfAborted();
   if (plan.kind === "no-op") {
@@ -1695,17 +1849,37 @@ async function executeVoiceCommandPlanCore(
     return { detail: `Opened ${definition.name}.`, handled: true };
   }
 
+  if (executionScope === undefined) {
+    return voiceExecutionProfileChangedResult();
+  }
+
   const expectedWatchDiscovery = usesGoogleWatchDiscovery(plan);
   let watchDiscoveryUnavailable = false;
   try {
-    const googleResult = await executeGoogleWatchPlan(plan, signal, operation);
+    const googleResult = await executeGoogleWatchPlan(plan, executionScope, signal, operation);
     if (googleResult !== null) return googleResult;
     watchDiscoveryUnavailable = expectedWatchDiscovery;
-  } catch {
+  } catch (error) {
     signal?.throwIfAborted();
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
     watchDiscoveryUnavailable = expectedWatchDiscovery;
     // Google discovery is a best-effort private-project adapter. A provider's
     // own search page remains available if its markup, network, or rate limit changes.
+  }
+
+  let candidateServiceIds: VoiceServiceId[];
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
   }
 
   if (plan.intent.action === "lookup" && watchDiscoveryUnavailable) {
@@ -1715,7 +1889,7 @@ async function executeVoiceCommandPlanCore(
     };
   }
 
-  const destination = resolveVoiceMediaDestination(plan.intent, plan.candidateServiceIds);
+  let destination = resolveVoiceMediaDestination(plan.intent, candidateServiceIds);
   if (destination === null) {
     return {
       detail: isVoiceDiscoveryIntent(plan.intent)
@@ -1734,6 +1908,24 @@ async function executeVoiceCommandPlanCore(
     };
   }
 
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  destination = resolveVoiceMediaDestination(plan.intent, candidateServiceIds);
+  if (destination === null) {
+    return {
+      detail: "That title is no longer on a service enabled in this profile.",
+      handled: false
+    };
+  }
   const definition = getServiceDefinition(destination.serviceId);
   const baseSearchUrl = definition === null
     ? null
@@ -1749,7 +1941,48 @@ async function executeVoiceCommandPlanCore(
       ? `Searching ${definition.name}…`
       : `Opening ${definition.name}…`
   );
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  const navigationDestination = resolveVoiceMediaDestination(
+    plan.intent,
+    candidateServiceIds
+  );
+  if (
+    navigationDestination === null ||
+    navigationDestination.serviceId !== destination.serviceId
+  ) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   await openTrackedService(definition, searchUrl, signal, operation);
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  if (!candidateServiceIds.includes(destination.serviceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   let automated = false;
   if (!isVoiceDiscoveryIntent(plan.intent) && plan.intent.action !== "search") {
     presentPhoneVoiceProgress(`Starting ${plan.intent.title}…`);
@@ -1759,6 +1992,23 @@ async function executeVoiceCommandPlanCore(
     }, signal, operation) ?? false;
   }
   signal?.throwIfAborted();
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  if (!candidateServiceIds.includes(destination.serviceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
     : "";
@@ -1793,7 +2043,14 @@ async function executeVoiceCommandPlan(
   };
   signal?.addEventListener("abort", cancelNavigation, { once: true });
   try {
-    return await executeVoiceCommandPlanCore(plan, signal);
+    let executionScope: VoiceExecutionScope | undefined;
+    if (plan.kind === "resolve-media") {
+      syncVoiceContextFromServiceHost();
+      const profileState = voiceExecutionProfileState();
+      if (profileState === null) return voiceExecutionProfileChangedResult();
+      executionScope = captureVoiceExecutionScope(profileState);
+    }
+    return await executeVoiceCommandPlanCore(plan, signal, executionScope);
   } finally {
     signal?.removeEventListener("abort", cancelNavigation);
   }

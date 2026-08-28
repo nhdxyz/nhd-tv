@@ -10,6 +10,14 @@ const contextualUnderstanding = source.slice(
   source.indexOf("async function understandVoiceCommandWithContext("),
   source.indexOf("function usesGoogleWatchDiscovery(")
 );
+const googleExecution = source.slice(
+  source.indexOf("async function executeGoogleWatchPlan("),
+  source.indexOf("async function executeVoiceCommandPlanCore(")
+);
+const planWrapper = source.slice(
+  source.indexOf("async function executeVoiceCommandPlan("),
+  source.indexOf("function voiceFailure(")
+);
 
 describe("voice use-case execution wiring", () => {
   it("sets mute explicitly without superseding provider navigation", () => {
@@ -48,6 +56,36 @@ describe("voice use-case execution wiring", () => {
     expect(source).toContain("Choose where to play ${title}: ${providerNames}.");
     expect(source).toContain('hasChoices ? "clarification" : "success"');
     expect(source).toContain("{ choices: result.choices, detail: voiceResultDetail(result) }");
+  });
+
+  it("binds media execution to one profile generation", () => {
+    const capture = planWrapper.indexOf("captureVoiceExecutionScope(profileState)");
+    const execute = planWrapper.indexOf("executeVoiceCommandPlanCore(");
+    expect(planWrapper).toContain('plan.kind === "resolve-media"');
+    expect(planWrapper).toContain("syncVoiceContextFromServiceHost()");
+    expect(capture).toBeGreaterThan(-1);
+    expect(execute).toBeGreaterThan(capture);
+    expect(execution).toContain("error instanceof VoiceExecutionProfileChangedError");
+    expect(execution).toContain("voiceExecutionProfileChangedResult()");
+  });
+
+  it("revalidates the live lineup at every media side-effect boundary", () => {
+    const bind = googleExecution.indexOf("bindVoiceWatchClarification(");
+    const select = googleExecution.indexOf("selectEnabledWatchOffer(");
+    const expand = googleExecution.indexOf("watchOffersShouldExpand(");
+    const googleOpen = googleExecution.indexOf("await openTrackedService(");
+    const fallbackResolve = execution.indexOf("resolveVoiceMediaDestination(");
+    const fallbackOpen = execution.indexOf("await openTrackedService(definition, searchUrl");
+
+    expect(googleExecution).toContain("currentVoiceCandidateServiceIds(");
+    expect(googleExecution.slice(0, bind)).toContain("currentVoiceCandidateServiceIds(");
+    expect(googleExecution.slice(0, select)).toContain("currentVoiceCandidateServiceIds(");
+    expect(googleExecution.slice(select, expand)).toContain("currentVoiceCandidateServiceIds(");
+    expect(googleExecution.slice(expand, googleOpen)).toContain("currentVoiceCandidateServiceIds(");
+    expect(execution.slice(0, fallbackResolve)).toContain("currentVoiceCandidateServiceIds(");
+    expect(execution.slice(fallbackResolve, fallbackOpen)).toContain(
+      "currentVoiceCandidateServiceIds("
+    );
   });
 
   it("answers current-media questions from the shared live context without navigation", () => {

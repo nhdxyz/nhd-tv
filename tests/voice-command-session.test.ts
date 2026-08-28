@@ -133,6 +133,27 @@ describe("voice command session", () => {
     expect(execute).toHaveBeenCalledWith({ action: "volume-up", kind: "remote-action" });
   });
 
+  it("preserves safe numbered choices returned by command execution", async () => {
+    const choices = [{
+      id: "watch-provider-netflix",
+      ordinal: 1 as const,
+      primaryLabel: "Netflix"
+    }];
+    const session = new VoiceCommandSession({
+      execute: async () => ({ choices, detail: "Choose a service", handled: true }),
+      getContext: () => context(),
+      understand: async () => ({
+        intent: { action: "volume-up", kind: "control" },
+        transcript: "choose one"
+      })
+    });
+
+    await expect(session.process(clip)).resolves.toMatchObject({
+      choices,
+      outcome: "completed"
+    });
+  });
+
   it("opens an enabled app without playback confirmation", async () => {
     const execute = vi.fn(async () => ({ detail: "Opened Netflix", handled: true }));
     const session = new VoiceCommandSession({

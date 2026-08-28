@@ -14,7 +14,8 @@ import type {
   RemotePointerResult,
   RemoteServiceShortcut,
   RemoteStatus,
-  RemoteTextInput
+  RemoteTextInput,
+  VoicePresentationChoice
 } from "../contracts";
 import { normalizeSearchQuery } from "../security/navigation-policy";
 import {
@@ -111,6 +112,7 @@ export interface PhoneRemoteServerOptions {
 export type PhoneRemoteVoiceActivity = VoiceActivityEvent;
 
 export interface PhoneRemoteVoiceResult {
+  choices?: readonly VoicePresentationChoice[];
   confirmationId?: string;
   confirmationExpiresAt?: number;
   detail: string;

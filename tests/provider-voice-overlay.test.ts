@@ -50,7 +50,8 @@ describe("provider voice overlay", () => {
     );
     expect(indexSource).toContain("VOICE_TRANSCRIPT_MIN_DISPLAY_MS");
     expect(indexSource).toContain("VOICE_CONFIRMATION_DISPLAY_MS");
-    expect(indexSource).toContain('result.outcome === "confirmation-required" ? "confirmation"');
+    expect(indexSource).toContain('result.outcome === "confirmation-required"');
+    expect(indexSource).toContain('hasChoices ? "clarification" : "success"');
     expect(indexSource).toContain("voiceProviderCommandHandled(plan.intent, automated)");
     expect(overlaySource).toContain("new WebContentsView");
     expect(overlaySource).toContain("this.#raiseView()");

@@ -34,6 +34,7 @@ import {
   type ServiceRecoveryMode,
   type ServiceRecoveryRequest,
   type SpotifyPlaybackPresentation,
+  type VoicePresentationChoice,
   type VoicePresentationPhase,
   type VoicePresentationState,
   type WidevineState
@@ -122,6 +123,7 @@ import {
   resolveVoiceMediaDestination,
   voiceDiscoveryOpenedDetail
 } from "./voice/voice-media-destination";
+import { buildVoiceWatchClarification } from "./voice/voice-watch-clarification";
 import { GoogleWatchCache } from "./voice/google-watch-cache";
 import {
   GoogleWatchResolver,
@@ -644,7 +646,7 @@ function clearVoicePresentationTimer(): void {
 
 function showVoicePresentation(
   phase: VoicePresentationPhase,
-  values: { detail?: unknown; transcript?: unknown } = {},
+  values: { choices?: unknown; detail?: unknown; transcript?: unknown } = {},
   clearAfterMs?: number,
   commandId?: string
 ): number {
@@ -767,15 +769,19 @@ function presentPhoneVoiceResult(
   result: PhoneRemoteVoiceResult,
   commandId: string
 ): void {
+  const hasChoices = result.outcome === "completed" &&
+    result.choices !== undefined && result.choices.length > 0;
   const phase: VoicePresentationPhase = result.outcome === "failed"
     ? "error"
-    : result.outcome === "confirmation-required" ? "confirmation" : "success";
-  const displayMilliseconds = phase === "confirmation"
+    : result.outcome === "confirmation-required"
+      ? "confirmation"
+      : hasChoices ? "clarification" : "success";
+  const displayMilliseconds = phase === "confirmation" || phase === "clarification"
     ? VOICE_CONFIRMATION_DISPLAY_MS
     : VOICE_RESULT_DISPLAY_MS;
   const showResult = () => showVoicePresentation(
     phase,
-    { detail: voiceResultDetail(result) },
+    { choices: result.choices, detail: voiceResultDetail(result) },
     displayMilliseconds,
     commandId
   );
@@ -1245,6 +1251,7 @@ async function handleRemoteSearch(query: string): Promise<void> {
 }
 
 interface RemoteActionOutcome {
+  choices?: readonly VoicePresentationChoice[];
   detail?: string;
   handled: boolean;
 }
@@ -1448,7 +1455,30 @@ async function executeGoogleWatchPlan(
   }
   if (plan.intent.action === "lookup") {
     const enabledServiceIds = localStateStore?.snapshot().preferences.enabledServiceIds ?? [];
+    const clarification = buildVoiceWatchClarification(
+      result,
+      plan.intent,
+      plan.candidateServiceIds
+    );
+    let choices: readonly VoicePresentationChoice[] | undefined;
+    if (clarification !== null && voiceContextStore !== null) {
+      const revisions = voiceContextStore.revisions();
+      const candidates = voiceContextStore.setCandidates(
+        clarification.candidates,
+        revisions
+      );
+      if (
+        candidates !== null &&
+        voiceContextStore.setPendingClarification({
+          candidateSetRevision: candidates.revision,
+          kind: "provider-selection"
+        }, revisions)
+      ) {
+        choices = clarification.choices;
+      }
+    }
     return {
+      ...(choices === undefined ? {} : { choices }),
       detail: watchAvailabilityDetail(result, enabledServiceIds),
       handled: true
     };

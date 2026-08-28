@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { VoicePresentationChoice } from "../contracts";
 import type { VoiceAudioClip } from "./openai-voice-client";
 import {
   planVoiceCommand,
@@ -11,11 +12,13 @@ const CONFIRMATION_TTL_MS = 30_000;
 const MAX_PENDING_CONFIRMATIONS = 4;
 
 export interface VoiceCommandExecutionResult {
+  choices?: readonly VoicePresentationChoice[];
   detail: string;
   handled: boolean;
 }
 
 export interface VoiceCommandSessionResult {
+  choices?: readonly VoicePresentationChoice[];
   confirmationId?: string;
   detail: string;
   outcome: "completed" | "confirmation-required" | "failed";
@@ -189,6 +192,7 @@ export class VoiceCommandSession {
       : await this.#execute(plan, signal);
     signal?.throwIfAborted();
     return {
+      ...(result.choices === undefined ? {} : { choices: result.choices }),
       detail: result.detail,
       outcome: result.handled ? "completed" : "failed",
       ...(transcript === undefined ? {} : { transcript })

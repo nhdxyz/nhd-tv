@@ -33,6 +33,14 @@ describe("voice use-case execution wiring", () => {
     expect(execution).toContain("I couldn't verify where ${plan.intent.title} is available");
   });
 
+  it("stores and presents numbered choices only for safe enabled watch providers", () => {
+    expect(source).toContain("buildVoiceWatchClarification(");
+    expect(source).toContain("voiceContextStore.setCandidates(");
+    expect(source).toContain('kind: "provider-selection"');
+    expect(source).toContain('hasChoices ? "clarification" : "success"');
+    expect(source).toContain("{ choices: result.choices, detail: voiceResultDetail(result) }");
+  });
+
   it("answers current-media questions from the shared live context without navigation", () => {
     const query = execution.indexOf('plan.kind === "query-current-media"');
     const operation = execution.indexOf("serviceHost?.beginOperation()");

@@ -33,9 +33,14 @@ const VOICE_SEMANTIC_CONTROL_ACTIONS = [
   "next",
   "previous",
   "restart",
+  "repeat-all",
+  "repeat-off",
+  "repeat-one",
   "seek-absolute",
   "seek-relative",
   "set-playback-rate",
+  "shuffle-off",
+  "shuffle-on",
   "skip-ad",
   "skip-intro",
   "skip-recap"
@@ -193,11 +198,28 @@ export type VoiceSemanticControlIntent =
     positionSeconds: null;
   }
   | {
-    action: Exclude<VoiceSemanticControlAction, "set-playback-rate">;
+    action: "seek-relative";
     kind: "semantic-control";
-    offsetSeconds: number | null;
+    offsetSeconds: number;
     playbackRate: null;
-    positionSeconds: number | null;
+    positionSeconds: null;
+  }
+  | {
+    action: "seek-absolute";
+    kind: "semantic-control";
+    offsetSeconds: null;
+    playbackRate: null;
+    positionSeconds: number;
+  }
+  | {
+    action: Exclude<
+      VoiceSemanticControlAction,
+      "seek-absolute" | "seek-relative" | "set-playback-rate"
+    >;
+    kind: "semantic-control";
+    offsetSeconds: null;
+    playbackRate: null;
+    positionSeconds: null;
   };
 
 export type VoiceIntent =
@@ -605,10 +627,24 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       ) {
         throw new TypeError("Relative seeks require only a nonzero offset.");
       }
+      return {
+        action: "seek-relative",
+        kind: "semantic-control",
+        offsetSeconds,
+        playbackRate: null,
+        positionSeconds: null
+      };
     } else if (value.semanticControlAction === "seek-absolute") {
       if (positionSeconds === null || offsetSeconds !== null || playbackRate !== null) {
         throw new TypeError("Absolute seeks require only a playback position.");
       }
+      return {
+        action: "seek-absolute",
+        kind: "semantic-control",
+        offsetSeconds: null,
+        playbackRate: null,
+        positionSeconds
+      };
     } else if (value.semanticControlAction === "set-playback-rate") {
       if (playbackRate === null || offsetSeconds !== null || positionSeconds !== null) {
         throw new TypeError("Playback-rate controls require only an allowlisted rate.");
@@ -626,9 +662,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     return {
       action: value.semanticControlAction,
       kind: "semantic-control",
-      offsetSeconds,
+      offsetSeconds: null,
       playbackRate: null,
-      positionSeconds
+      positionSeconds: null
     };
   }
 

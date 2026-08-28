@@ -38,6 +38,17 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(main).toContain('? "Search NHD-TV"');
   });
 
+  it("executes semantic Spotify controls in the retained background view", () => {
+    const start = host.indexOf("async executeVoiceSemanticControl(");
+    const end = host.indexOf("\n  async ", start + 1);
+    const execution = host.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(execution).toContain("view.webContents.executeJavaScript(script, true)");
+    expect(execution).not.toContain("this.#backgrounded");
+    expect(execution).not.toContain("restoreFromHome");
+    expect(execution).not.toContain("navigate(");
+  });
+
   it("publishes renderer-safe playback state for the home controls", () => {
     expect(contracts).toContain("playback: {");
     expect(contracts).toContain("backgrounded: boolean");

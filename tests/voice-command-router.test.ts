@@ -169,6 +169,24 @@ describe("voice command planning", () => {
       kind: "semantic-control",
       request: { action: "set-playback-rate", playbackRate: 1.5 }
     });
+    for (const action of [
+      "shuffle-on",
+      "shuffle-off",
+      "repeat-all",
+      "repeat-one",
+      "repeat-off"
+    ] as const) {
+      expect(planVoiceCommand({
+        action,
+        kind: "semantic-control",
+        offsetSeconds: null,
+        playbackRate: null,
+        positionSeconds: null
+      }, context)).toEqual({
+        kind: "semantic-control",
+        request: { action }
+      });
+    }
   });
 
   it("routes track skipping only through Spotify's semantic controls", () => {

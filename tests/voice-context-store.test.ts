@@ -148,6 +148,23 @@ describe("shared voice context store", () => {
     });
   });
 
+  it("records verified Spotify mode actions in the shared TV context", () => {
+    const store = new VoiceContextStore({ now: () => 13_000 });
+    store.setActiveProfile("living-room");
+    const scope = store.setActiveService({ id: "spotify", name: "Spotify" });
+
+    expect(store.recordVerifiedAction({ kind: "shuffle" }, scope)).toBe(true);
+    expect(store.snapshot().conversation.lastVerifiedAction).toMatchObject({
+      kind: "shuffle",
+      serviceId: "spotify"
+    });
+    expect(store.recordVerifiedAction({ kind: "repeat" }, scope)).toBe(true);
+    expect(store.snapshot().conversation.lastVerifiedAction).toMatchObject({
+      kind: "repeat",
+      serviceId: "spotify"
+    });
+  });
+
   it("preserves the explicit target while clearing transient service and media context", () => {
     const store = new VoiceContextStore({ now: () => 20_000 });
     let scope = activateNetflix(store);

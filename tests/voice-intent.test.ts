@@ -55,6 +55,14 @@ describe("voice intent boundary", () => {
       "providerDestination",
       "recency"
     ]);
+    expect(VOICE_INTENT_JSON_SCHEMA.properties.semanticControlAction.anyOf[0].enum)
+      .toEqual(expect.arrayContaining([
+        "shuffle-on",
+        "shuffle-off",
+        "repeat-all",
+        "repeat-one",
+        "repeat-off"
+      ]));
   });
 
   it("parses only the closed provider destinations without executable navigation data", () => {
@@ -299,7 +307,12 @@ describe("voice intent boundary", () => {
     "captions-on",
     "captions-off",
     "fullscreen-enter",
-    "fullscreen-exit"
+    "fullscreen-exit",
+    "shuffle-on",
+    "shuffle-off",
+    "repeat-all",
+    "repeat-one",
+    "repeat-off"
   ] as const)("parses the parameter-free semantic control %s", (semanticControlAction) => {
     expect(parseVoiceIntent(mediaIntent({
       kind: "semantic-control",
@@ -355,6 +368,33 @@ describe("voice intent boundary", () => {
       mediaType: null,
       semanticControlAction: "restart"
     }))).toThrow("semantic-control voice intent is inconsistent");
+  });
+
+  it.each([
+    "shuffle-on",
+    "shuffle-off",
+    "repeat-all",
+    "repeat-one",
+    "repeat-off"
+  ] as const)("requires every unrelated field to stay null for Spotify mode %s", (
+    semanticControlAction
+  ) => {
+    for (const inconsistent of [
+      { offsetSeconds: 1 },
+      { positionSeconds: 1 },
+      { playbackRate: 1 },
+      { providerHint: "spotify" },
+      { title: "Discover Weekly" }
+    ]) {
+      expect(() => parseVoiceIntent(mediaIntent({
+        kind: "semantic-control",
+        mediaAction: null,
+        mediaType: null,
+        semanticControlAction,
+        title: null,
+        ...inconsistent
+      }))).toThrow();
+    }
   });
 
   it("parses a generic title request without choosing a provider", () => {

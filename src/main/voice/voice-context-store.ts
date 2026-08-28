@@ -67,6 +67,8 @@ export type VoiceVerifiedActionKind =
   | "fullscreen-enter"
   | "fullscreen-exit"
   | "playback-rate"
+  | "repeat"
+  | "shuffle"
   | "launch-service"
   | "select-provider"
   | "select-media"
@@ -312,6 +314,8 @@ const VERIFIED_ACTION_KINDS = new Set<VoiceVerifiedActionKind>([
   "fullscreen-enter",
   "fullscreen-exit",
   "playback-rate",
+  "repeat",
+  "shuffle",
   "launch-service",
   "select-provider",
   "select-media",

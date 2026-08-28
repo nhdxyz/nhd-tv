@@ -96,6 +96,12 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("Never round or clamp another rate");
       expect(body.instructions).toContain("combine a named title launch with a rate");
       expect(body.instructions).toContain("provider-named rate request");
+      expect(body.instructions).toContain("shuffle-on");
+      expect(body.instructions).toContain("repeat-one");
+      expect(body.instructions).toContain("explicit requested state");
+      expect(body.instructions).toContain("Never emit a toggle, provider hint, selector");
+      expect(body.instructions).toContain('A bare ambiguous "repeat"');
+      expect(body.instructions).toContain("any request to add something to a queue");
       expect(body.instructions).toContain("controlAction=set-volume");
       expect(body.instructions).toContain("volumePercent set to an explicit whole-number percent");
       expect(body.instructions).toContain("Never guess, round, clamp, or infer");
@@ -248,7 +254,12 @@ describe("OpenAI voice client", () => {
     ["Start over", "restart", null, null],
     ["Next episode", "next", null, null],
     ["Turn captions on", "captions-on", null, null],
-    ["Exit fullscreen", "fullscreen-exit", null, null]
+    ["Exit fullscreen", "fullscreen-exit", null, null],
+    ["Shuffle on", "shuffle-on", null, null],
+    ["Turn shuffle off", "shuffle-off", null, null],
+    ["Repeat everything", "repeat-all", null, null],
+    ["Repeat this song", "repeat-one", null, null],
+    ["Turn repeat off", "repeat-off", null, null]
   ] as const)(
     "routes the semantic playback request %s locally",
     async (phrase, action, offsetSeconds, positionSeconds) => {

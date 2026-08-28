@@ -11,25 +11,31 @@ import {
 
 class FakeElement {
   clicked = false;
+  clickCount = 0;
   disabled = false;
   hidden = false;
   isConnected = true;
   readonly #attributes: Record<string, string>;
+  readonly #onClick: ((element: FakeElement) => void) | null;
   readonly #visible: boolean;
   textContent: string;
 
   constructor(options: {
     attributes?: Record<string, string>;
+    onClick?: ((element: FakeElement) => void) | null;
     text?: string;
     visible?: boolean;
   } = {}) {
-    this.#attributes = options.attributes ?? {};
+    this.#attributes = { ...(options.attributes ?? {}) };
+    this.#onClick = options.onClick ?? null;
     this.#visible = options.visible ?? true;
     this.textContent = options.text ?? "";
   }
 
   click(): void {
     this.clicked = true;
+    this.clickCount += 1;
+    this.#onClick?.(this);
   }
 
   contains(value: unknown): boolean {
@@ -38,6 +44,10 @@ class FakeElement {
 
   getAttribute(name: string): string | null {
     return this.#attributes[name] ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.#attributes[name] = value;
   }
 
   getBoundingClientRect(): { height: number; width: number } {
@@ -134,6 +144,18 @@ function execute(
       : null,
     querySelectorAll: (selector: string) => {
       if (selector === "video") return [...(options.videos ?? [])];
+      if (selector === '[data-testid="control-button-shuffle"][role="switch"]') {
+        return [...(options.controls?.["control-button-shuffle"] ?? [])].filter(
+          (element) => element.getAttribute("data-testid") === "control-button-shuffle" &&
+            element.getAttribute("role") === "switch"
+        );
+      }
+      if (selector === '[data-testid="control-button-repeat"][role="checkbox"]') {
+        return [...(options.controls?.["control-button-repeat"] ?? [])].filter(
+          (element) => element.getAttribute("data-testid") === "control-button-repeat" &&
+            element.getAttribute("role") === "checkbox"
+        );
+      }
       const matches: FakeElement[] = [];
       for (const [needle, elements] of Object.entries(options.controls ?? {})) {
         if (!selector.includes(needle)) continue;
@@ -174,10 +196,26 @@ describe("voice semantic controls", () => {
       { action: "captions-on" },
       { action: "captions-off" },
       { action: "fullscreen-enter" },
-      { action: "fullscreen-exit" }
+      { action: "fullscreen-exit" },
+      { action: "shuffle-on" },
+      { action: "shuffle-off" },
+      { action: "repeat-all" },
+      { action: "repeat-one" },
+      { action: "repeat-off" }
     ];
     for (const request of requests) {
       expect(normalizeVoiceSemanticControlRequest(request)).toEqual(request);
+    }
+    for (const action of [
+      "shuffle-on",
+      "shuffle-off",
+      "repeat-all",
+      "repeat-one",
+      "repeat-off"
+    ] as const) {
+      expect(normalizeVoiceSemanticControlRequest({ action, providerHint: "spotify" }))
+        .toBeNull();
+      expect(normalizeVoiceSemanticControlRequest({ action, selector: "body" })).toBeNull();
     }
 
     expect(normalizeVoiceSemanticControlRequest({ action: "pause" })).toBeNull();
@@ -277,6 +315,311 @@ describe("voice semantic controls", () => {
     expect(youtube).toContain("Skip ads");
     expect(youtube).toContain("ytp-subtitles-button");
     expect(youtube).toContain("ytp-fullscreen-button");
+  });
+
+  it("uses only Spotify's exact qualified shuffle and repeat state controls", () => {
+    const script = buildVoiceSemanticControlScript("spotify", { action: "shuffle-on" }) ?? "";
+    expect(script).toContain(
+      '[data-testid="control-button-shuffle"][role="switch"]'
+    );
+    expect(script).toContain(
+      '[data-testid="control-button-repeat"][role="checkbox"]'
+    );
+    expect(script).toContain('getAttribute("aria-checked")');
+    expect(script).not.toContain('button[aria-label^="Shuffle');
+    expect(script).not.toContain('button[aria-label^="Repeat');
+  });
+
+  it("makes Spotify shuffle state idempotent and verifies a settled transition", async () => {
+    const shuffle = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => {
+        setTimeout(() => element.setAttribute("aria-checked", "true"), 35);
+      }
+    });
+    const options = { controls: { "control-button-shuffle": [shuffle] } };
+
+    expect(await execute("spotify", { action: "shuffle-on" }, options)).toBe("verified");
+    expect(shuffle.clickCount).toBe(1);
+    expect(await execute("spotify", { action: "shuffle-on" }, options)).toBe("complete");
+    expect(shuffle.clickCount).toBe(1);
+
+    shuffle.setAttribute("aria-checked", "true");
+    const shuffleOff = new FakeElement({
+      attributes: {
+        "aria-checked": "true",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => element.setAttribute("aria-checked", "false")
+    });
+    expect(await execute("spotify", { action: "shuffle-off" }, {
+      controls: { "control-button-shuffle": [shuffleOff] }
+    })).toBe("verified");
+    expect(shuffleOff.clickCount).toBe(1);
+  });
+
+  it("re-queries a React-replaced Spotify control while verifying state", async () => {
+    const controls: FakeElement[] = [];
+    const replacement = new FakeElement({ attributes: {
+      "aria-checked": "true",
+      "data-testid": "control-button-shuffle",
+      role: "switch"
+    } });
+    const initial = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1, replacement);
+      }
+    });
+    controls.push(initial);
+
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": controls }
+    })).toBe("verified");
+    expect(initial.clickCount).toBe(1);
+    expect(replacement.clickCount).toBe(0);
+  });
+
+  it("tolerates a transient React gap before the replacement control appears", async () => {
+    const controls: FakeElement[] = [];
+    const replacement = new FakeElement({ attributes: {
+      "aria-checked": "true",
+      "data-testid": "control-button-shuffle",
+      role: "switch"
+    } });
+    const initial = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1);
+        setTimeout(() => controls.push(replacement), 35);
+      }
+    });
+    controls.push(initial);
+
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": controls }
+    })).toBe("verified");
+    expect(initial.clickCount).toBe(1);
+  });
+
+  it("does not accept an optimistic Spotify state that reverts during settle", async () => {
+    const shuffle = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => {
+        element.setAttribute("aria-checked", "true");
+        setTimeout(() => element.setAttribute("aria-checked", "false"), 50);
+      }
+    });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [shuffle] }
+    })).toBe("unavailable");
+    expect(shuffle.clickCount).toBe(1);
+    expect(shuffle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("reads a settled target after Spotify temporarily disables the clicked control", async () => {
+    const shuffle = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      onClick: (element) => {
+        element.setAttribute("aria-checked", "true");
+        element.disabled = true;
+      }
+    });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [shuffle] }
+    })).toBe("verified");
+    expect(shuffle.clickCount).toBe(1);
+  });
+
+  it.each([
+    ["false", "repeat-off"],
+    ["true", "repeat-all"],
+    ["mixed", "repeat-one"]
+  ] as const)("does not click when Spotify repeat state %s already matches %s", async (
+    ariaChecked,
+    action
+  ) => {
+    const repeat = new FakeElement({ attributes: {
+      "aria-checked": ariaChecked,
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    expect(await execute("spotify", { action }, {
+      controls: { "control-button-repeat": [repeat] }
+    })).toBe("complete");
+    expect(repeat.clickCount).toBe(0);
+  });
+
+  it("cycles repeat through at most three observed states and verifies only the target", async () => {
+    const cycle: Record<string, string> = { false: "true", true: "mixed", mixed: "false" };
+    const repeat = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => {
+        const current = element.getAttribute("aria-checked") ?? "";
+        element.setAttribute("aria-checked", cycle[current] ?? "invalid");
+      }
+    });
+    const options = { controls: { "control-button-repeat": [repeat] } };
+
+    expect(await execute("spotify", { action: "repeat-one" }, options)).toBe("verified");
+    expect(repeat.clickCount).toBe(2);
+    expect(repeat.getAttribute("aria-checked")).toBe("mixed");
+    expect(await execute("spotify", { action: "repeat-off" }, options)).toBe("verified");
+    expect(repeat.clickCount).toBe(3);
+  });
+
+  it("follows React replacements across repeat transitions", async () => {
+    const controls: FakeElement[] = [];
+    const repeatOne = new FakeElement({ attributes: {
+      "aria-checked": "mixed",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    const repeatAll = new FakeElement({
+      attributes: {
+        "aria-checked": "true",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1, repeatOne);
+      }
+    });
+    const repeatOff = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1, repeatAll);
+      }
+    });
+    controls.push(repeatOff);
+
+    expect(await execute("spotify", { action: "repeat-one" }, {
+      controls: { "control-button-repeat": controls }
+    })).toBe("verified");
+    expect(repeatOff.clickCount).toBe(1);
+    expect(repeatAll.clickCount).toBe(1);
+    expect(repeatOne.clickCount).toBe(0);
+  });
+
+  it("fails Spotify modes closed on missing, disabled, unknown, or non-transitioning state", async () => {
+    expect(await execute("spotify", { action: "shuffle-on" })).toBe("unavailable");
+
+    const disabled = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "aria-disabled": "true",
+      "data-testid": "control-button-shuffle",
+      role: "switch"
+    } });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [disabled] }
+    })).toBe("unavailable");
+    expect(disabled.clickCount).toBe(0);
+
+    const hidden = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-shuffle",
+        role: "switch"
+      },
+      visible: false
+    });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [hidden] }
+    })).toBe("unavailable");
+    expect(hidden.clickCount).toBe(0);
+
+    const labelOnly = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "aria-label": "Enable shuffle"
+    } });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [labelOnly] }
+    })).toBe("unavailable");
+    expect(labelOnly.clickCount).toBe(0);
+
+    const unknown = new FakeElement({ attributes: {
+      "aria-checked": "mixed",
+      "data-testid": "control-button-shuffle",
+      role: "switch"
+    } });
+    expect(await execute("spotify", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [unknown] }
+    })).toBe("unavailable");
+    expect(unknown.clickCount).toBe(0);
+
+    const stuck = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    expect(await execute("spotify", { action: "repeat-one" }, {
+      controls: { "control-button-repeat": [stuck] }
+    })).toBe("unavailable");
+    expect(stuck.clickCount).toBe(1);
+  });
+
+  it("stops a repeat cycle when state repeats and leaves it where it began", async () => {
+    const repeat = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => element.setAttribute(
+        "aria-checked",
+        element.getAttribute("aria-checked") === "false" ? "true" : "false"
+      )
+    });
+    expect(await execute("spotify", { action: "repeat-one" }, {
+      controls: { "control-button-repeat": [repeat] }
+    })).toBe("unavailable");
+    expect(repeat.clickCount).toBe(2);
+    expect(repeat.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("never touches Spotify mode controls on another provider", async () => {
+    const shuffle = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "data-testid": "control-button-shuffle",
+      role: "switch"
+    } });
+    expect(await execute("youtube", { action: "shuffle-on" }, {
+      controls: { "control-button-shuffle": [shuffle] }
+    })).toBe("unsupported");
+    expect(shuffle.clickCount).toBe(0);
   });
 
   it("performs bounded video seeks and makes absolute targets idempotent", () => {

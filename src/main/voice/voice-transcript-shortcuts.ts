@@ -18,7 +18,7 @@ import {
 type VoiceSimpleControlAction = Exclude<VoiceControlAction, "set-volume">;
 type VoiceSimpleSemanticControlAction = Exclude<
   VoiceSemanticControlAction,
-  "set-playback-rate"
+  "seek-absolute" | "seek-relative" | "set-playback-rate"
 >;
 
 const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = {
@@ -201,6 +201,9 @@ const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<
 > = {
   "captions off": "captions-off",
   "captions on": "captions-on",
+  "disable repeat": "repeat-off",
+  "disable shuffle": "shuffle-off",
+  "enable shuffle": "shuffle-on",
   "enter full screen": "fullscreen-enter",
   "enter fullscreen": "fullscreen-enter",
   "exit full screen": "fullscreen-exit",
@@ -209,6 +212,8 @@ const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<
   "go fullscreen": "fullscreen-enter",
   "leave full screen": "fullscreen-exit",
   "leave fullscreen": "fullscreen-exit",
+  "loop this song": "repeat-one",
+  "loop this track": "repeat-one",
   "make it full screen": "fullscreen-enter",
   "make it fullscreen": "fullscreen-enter",
   "make this full screen": "fullscreen-enter",
@@ -221,9 +226,18 @@ const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<
   "play previous video": "previous",
   "previous episode": "previous",
   "previous video": "previous",
+  "repeat all": "repeat-all",
+  "repeat everything": "repeat-all",
+  "repeat off": "repeat-off",
+  "repeat one": "repeat-one",
+  "repeat this song": "repeat-one",
+  "repeat this track": "repeat-one",
   restart: "restart",
   "restart playback": "restart",
   "restart this": "restart",
+  shuffle: "shuffle-on",
+  "shuffle off": "shuffle-off",
+  "shuffle on": "shuffle-on",
   "skip ad": "skip-ad",
   "skip intro": "skip-intro",
   "skip recap": "skip-recap",
@@ -232,14 +246,24 @@ const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<
   "skip the recap": "skip-recap",
   "start over": "restart",
   "start this over": "restart",
+  "stop repeating": "repeat-off",
+  "stop shuffling": "shuffle-off",
   "subtitles off": "captions-off",
   "subtitles on": "captions-on",
   "turn captions off": "captions-off",
   "turn captions on": "captions-on",
   "turn off captions": "captions-off",
+  "turn off repeat": "repeat-off",
+  "turn off shuffle": "shuffle-off",
   "turn off subtitles": "captions-off",
   "turn on captions": "captions-on",
+  "turn on repeat": "repeat-all",
+  "turn on shuffle": "shuffle-on",
   "turn on subtitles": "captions-on",
+  "turn repeat off": "repeat-off",
+  "turn repeat on": "repeat-all",
+  "turn shuffle off": "shuffle-off",
+  "turn shuffle on": "shuffle-on",
   "turn subtitles off": "captions-off",
   "turn subtitles on": "captions-on"
 };

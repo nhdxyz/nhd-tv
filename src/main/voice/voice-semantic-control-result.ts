@@ -36,6 +36,11 @@ function actionDescription(request: VoiceSemanticControlRequest): string {
       return `go to ${duration(request.positionSeconds)}`;
     case "set-playback-rate":
       return `set playback speed to ${playbackRate(request.playbackRate)}`;
+    case "shuffle-on": return "turn shuffle on";
+    case "shuffle-off": return "turn shuffle off";
+    case "repeat-all": return "repeat all";
+    case "repeat-one": return "repeat one";
+    case "repeat-off": return "turn repeat off";
     case "restart": return "restart playback";
     case "next": return "go to the next item";
     case "previous": return "go to the previous item";
@@ -64,6 +69,11 @@ function successDetail(request: VoiceSemanticControlRequest, complete: boolean):
       return request.playbackRate === 1
         ? "Restored normal playback speed."
         : `Set playback speed to ${playbackRate(request.playbackRate)}.`;
+    case "shuffle-on": return complete ? "Shuffle is already on." : "Turned shuffle on.";
+    case "shuffle-off": return complete ? "Shuffle is already off." : "Turned shuffle off.";
+    case "repeat-all": return complete ? "Repeat all is already on." : "Set repeat to all.";
+    case "repeat-one": return complete ? "Repeat one is already on." : "Set repeat to one.";
+    case "repeat-off": return complete ? "Repeat is already off." : "Turned repeat off.";
     case "restart": return complete ? "Playback is already at the beginning." : "Restarted playback.";
     case "next": return "Started the next item.";
     case "previous": return "Started the previous item.";
@@ -110,6 +120,11 @@ export function verifiedActionForSemanticControl(
     case "seek-relative":
     case "seek-absolute": return "seek";
     case "set-playback-rate": return "playback-rate";
+    case "shuffle-on":
+    case "shuffle-off": return "shuffle";
+    case "repeat-all":
+    case "repeat-one":
+    case "repeat-off": return "repeat";
     case "restart": return "restart";
     case "next": return "next";
     case "previous": return "previous";

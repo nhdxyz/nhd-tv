@@ -49,6 +49,16 @@ describe("semantic voice control outcomes", () => {
       detail: "Playback is already at normal speed.",
       handled: true
     });
+    expect(voiceSemanticControlOutcome({ action: "shuffle-on" }, "verified", "Spotify"))
+      .toMatchObject({ detail: "Turned shuffle on.", handled: true });
+    expect(voiceSemanticControlOutcome({ action: "shuffle-off" }, "complete", "Spotify"))
+      .toMatchObject({ detail: "Shuffle is already off.", handled: true });
+    expect(voiceSemanticControlOutcome({ action: "repeat-all" }, "verified", "Spotify"))
+      .toMatchObject({ detail: "Set repeat to all.", handled: true });
+    expect(voiceSemanticControlOutcome({ action: "repeat-one" }, "complete", "Spotify"))
+      .toMatchObject({ detail: "Repeat one is already on.", handled: true });
+    expect(voiceSemanticControlOutcome({ action: "repeat-off" }, "verified", "Spotify"))
+      .toMatchObject({ detail: "Turned repeat off.", handled: true });
   });
 
   it("does not claim an unverified provider click completed", () => {
@@ -70,6 +80,16 @@ describe("semantic voice control outcomes", () => {
         detail: "I couldn't find a safe way to skip the ad in YouTube right now.",
         handled: false
       });
+    expect(voiceSemanticControlOutcome({ action: "shuffle-on" }, "unsupported", "YouTube"))
+      .toEqual({
+        detail: "YouTube does not support the command to turn shuffle on.",
+        handled: false
+      });
+    expect(voiceSemanticControlOutcome({ action: "repeat-one" }, "unavailable", "Spotify"))
+      .toEqual({
+        detail: "I couldn't find a safe way to repeat one in Spotify right now.",
+        handled: false
+      });
   });
 
   it("maps every request to the context store's verified action vocabulary", () => {
@@ -84,5 +104,10 @@ describe("semantic voice control outcomes", () => {
       action: "set-playback-rate",
       playbackRate: 1.25
     })).toBe("playback-rate");
+    expect(verifiedActionForSemanticControl({ action: "shuffle-on" })).toBe("shuffle");
+    expect(verifiedActionForSemanticControl({ action: "shuffle-off" })).toBe("shuffle");
+    expect(verifiedActionForSemanticControl({ action: "repeat-all" })).toBe("repeat");
+    expect(verifiedActionForSemanticControl({ action: "repeat-one" })).toBe("repeat");
+    expect(verifiedActionForSemanticControl({ action: "repeat-off" })).toBe("repeat");
   });
 });

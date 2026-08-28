@@ -210,6 +210,45 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
+    ["shuffle", "shuffle-on"],
+    ["turn shuffle on", "shuffle-on"],
+    ["disable shuffle", "shuffle-off"],
+    ["stop shuffling", "shuffle-off"],
+    ["turn repeat on", "repeat-all"],
+    ["repeat everything", "repeat-all"],
+    ["repeat this song", "repeat-one"],
+    ["loop this track", "repeat-one"],
+    ["turn repeat off", "repeat-off"],
+    ["stop repeating", "repeat-off"]
+  ] as const)("represents the explicit Spotify mode phrase %s", (phrase, action) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action,
+      kind: "semantic-control",
+      offsetSeconds: null,
+      playbackRate: null,
+      positionSeconds: null
+    });
+  });
+
+  it.each([
+    "repeat",
+    "repeat it",
+    "loop it",
+    "toggle shuffle",
+    "toggle repeat",
+    "shuffle this playlist",
+    "shuffle my music",
+    "play this playlist on shuffle",
+    "Play Shuffle",
+    "Play Repeat",
+    "Play Repeat After Me",
+    "Play On Repeat",
+    "add this to my queue"
+  ])("does not steal the ambiguous, titled, composite, or queue phrase %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toBeNull();
+  });
+
+  it.each([
     ["half speed", 0.5],
     ["play this at half-speed", 0.5],
     ["play it at 0.75x", 0.75],

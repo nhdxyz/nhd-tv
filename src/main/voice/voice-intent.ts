@@ -27,6 +27,7 @@ const VOICE_MEDIA_TYPES = [
   "video"
 ] as const;
 const VOICE_PROVIDER_HINTS = ["netflix", "spotify", "youtube"] as const;
+const VOICE_RECENCY_VALUES = ["latest"] as const;
 const VOICE_INTENT_KEYS = [
   "kind",
   "controlAction",
@@ -36,13 +37,15 @@ const VOICE_INTENT_KEYS = [
   "creator",
   "season",
   "episode",
-  "providerHint"
+  "providerHint",
+  "recency"
 ] as const;
 
 export type VoiceControlAction = (typeof VOICE_CONTROL_ACTIONS)[number];
 export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
+export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
 
 export interface VoiceControlIntent {
   action: VoiceControlAction;
@@ -56,6 +59,7 @@ export interface VoiceMediaIntent {
   kind: "media";
   mediaType: VoiceMediaType;
   providerHint: VoiceProviderHint | null;
+  recency: VoiceRecency | null;
   season: number | null;
   title: string;
 }
@@ -91,6 +95,12 @@ export const VOICE_INTENT_JSON_SCHEMA = {
     providerHint: {
       anyOf: [
         { enum: VOICE_PROVIDER_HINTS, type: "string" },
+        { type: "null" }
+      ]
+    },
+    recency: {
+      anyOf: [
+        { enum: VOICE_RECENCY_VALUES, type: "string" },
         { type: "null" }
       ]
     }
@@ -173,7 +183,8 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "creator",
         "season",
         "episode",
-        "providerHint"
+        "providerHint",
+        "recency"
       ])
     ) {
       throw new TypeError("The voice control intent is inconsistent.");
@@ -196,6 +207,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
   const season = boundedInteger(value.season, 100);
   const episode = boundedInteger(value.episode, 1_000);
   const providerHint = optionalOneOf(value.providerHint, VOICE_PROVIDER_HINTS);
+  const recency = optionalOneOf(value.recency, VOICE_RECENCY_VALUES);
 
   if (mediaType === "episode") {
     if (season === null || episode === null) {
@@ -221,6 +233,9 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
   ) {
     throw new TypeError("Video intents may only target YouTube.");
   }
+  if (recency !== null && (mediaType !== "video" || creator === null)) {
+    throw new TypeError("Latest-media intents require a video creator or channel.");
+  }
 
   return {
     action,
@@ -229,6 +244,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     kind: "media",
     mediaType,
     providerHint,
+    recency,
     season,
     title
   };

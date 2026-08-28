@@ -15,6 +15,7 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     season: null,
     episode: null,
     providerHint: null,
+    recency: null,
     ...overrides
   };
 }
@@ -31,7 +32,8 @@ describe("voice intent boundary", () => {
       "creator",
       "season",
       "episode",
-      "providerHint"
+      "providerHint",
+      "recency"
     ]);
   });
 
@@ -43,6 +45,7 @@ describe("voice intent boundary", () => {
       kind: "media",
       mediaType: "title",
       providerHint: null,
+      recency: null,
       season: null,
       title: "Apollo 13"
     });
@@ -88,7 +91,8 @@ describe("voice intent boundary", () => {
       creator: null,
       season: null,
       episode: null,
-      providerHint: null
+      providerHint: null,
+      recency: null
     })).toEqual({ action: "pause", kind: "control" });
   });
 
@@ -120,6 +124,21 @@ describe("voice intent boundary", () => {
       mediaType: "video",
       providerHint: "spotify"
     }))).toThrow("only target YouTube");
+  });
+
+  it("requires a creator for latest-video requests", () => {
+    expect(parseVoiceIntent(mediaIntent({
+      creator: "Outdoor Boys",
+      mediaType: "video",
+      providerHint: "youtube",
+      recency: "latest",
+      title: "latest video"
+    }))).toMatchObject({ creator: "Outdoor Boys", recency: "latest" });
+    expect(() => parseVoiceIntent(mediaIntent({
+      mediaType: "video",
+      providerHint: "youtube",
+      recency: "latest"
+    }))).toThrow("require a video creator");
   });
 
   it("bounds title, season, and episode values", () => {

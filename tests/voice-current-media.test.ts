@@ -12,6 +12,7 @@ function videoSnapshot(
     artist: null,
     backgrounded: false,
     durationSeconds: 3_600,
+    episodeNumber: 3,
     fullscreen: true,
     mediaKind: "video",
     observedAt: 1_000,
@@ -19,6 +20,8 @@ function videoSnapshot(
     positionSeconds: 900,
     serviceId: "netflix",
     serviceName: "Netflix",
+    seasonNumber: 1,
+    seriesTitle: "Breaking Bad",
     subtitle: "Season 1, Episode 3",
     title: "Breaking Bad",
     ...overrides
@@ -89,6 +92,8 @@ describe("current media voice answers", () => {
     const unknown = videoSnapshot({
       durationSeconds: null,
       positionSeconds: null,
+      episodeNumber: null,
+      seasonNumber: null,
       subtitle: null
     });
     expect(answerCurrentMediaQuestion("time-remaining", unknown).detail).toBe(
@@ -96,6 +101,14 @@ describe("current media voice answers", () => {
     );
     expect(answerCurrentMediaQuestion("episode", unknown).detail).toBe(
       "You're watching Breaking Bad on Netflix, but the episode is not available."
+    );
+  });
+
+  it("uses structured coordinates when an episode subtitle is unavailable", () => {
+    expect(answerCurrentMediaQuestion("episode", videoSnapshot({
+      subtitle: null
+    })).detail).toBe(
+      "You're watching Breaking Bad, season 1, episode 3 on Netflix."
     );
   });
 });

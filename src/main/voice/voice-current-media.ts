@@ -5,6 +5,7 @@ export interface VoiceCurrentMediaSnapshot {
   artist: string | null;
   backgrounded: boolean;
   durationSeconds: number | null;
+  episodeNumber: number | null;
   fullscreen: boolean;
   mediaKind: "audio" | "video";
   observedAt: number;
@@ -12,6 +13,8 @@ export interface VoiceCurrentMediaSnapshot {
   positionSeconds: number | null;
   serviceId: string;
   serviceName: string;
+  seasonNumber: number | null;
+  seriesTitle: string | null;
   subtitle: string | null;
   title: string | null;
 }
@@ -144,10 +147,16 @@ export function answerCurrentMediaQuestion(
         handled: true
       };
     }
+    const coordinates = snapshot.seasonNumber === null || snapshot.episodeNumber === null
+      ? null
+      : `season ${snapshot.seasonNumber}, episode ${snapshot.episodeNumber}`;
+    const episodeDetail = subtitle ?? coordinates;
     return {
-      detail: subtitle === null
+      detail: episodeDetail === null
         ? `You're watching ${title}${serviceSuffix(snapshot)}, but the episode is not available.`
-        : `You're watching ${title} — ${subtitle}${serviceSuffix(snapshot)}.`,
+        : subtitle === null
+          ? `You're watching ${title}, ${episodeDetail}${serviceSuffix(snapshot)}.`
+          : `You're watching ${title} — ${subtitle}${serviceSuffix(snapshot)}.`,
       handled: true
     };
   }

@@ -118,6 +118,7 @@ import {
   answerCurrentMediaQuestion,
   type VoiceCurrentMediaSnapshot
 } from "./voice/voice-current-media";
+import { parseVoiceEpisodeCoordinates } from "./voice/voice-episode-metadata";
 import {
   isVoiceDiscoveryIntent,
   resolveVoiceMediaDestination,
@@ -417,6 +418,10 @@ function syncVoiceContextFromServiceHost(): void {
     return;
   }
 
+  const episodeCoordinates = current.mediaKind === "video"
+    ? parseVoiceEpisodeCoordinates(current.subtitle)
+    : null;
+
   store.observeMedia({
     capabilities: [],
     durationSeconds: current.durationSeconds,
@@ -425,6 +430,8 @@ function syncVoiceContextFromServiceHost(): void {
       album: current.album,
       artist: current.artist,
       creator: current.serviceId === "youtube" ? current.subtitle : null,
+      episodeNumber: episodeCoordinates?.episodeNumber ?? null,
+      seasonNumber: episodeCoordinates?.seasonNumber ?? null,
       seriesTitle: current.mediaKind === "video" && current.subtitle !== null
         ? current.title
         : null,
@@ -458,6 +465,7 @@ function currentMediaSnapshotFromVoiceContext(
     artist: snapshot.identity.artist,
     backgrounded: serviceHost?.isBackgrounded ?? false,
     durationSeconds: snapshot.durationSeconds,
+    episodeNumber: snapshot.identity.episodeNumber,
     fullscreen: snapshot.fullscreen === true,
     mediaKind: audioTypes.includes(snapshot.mediaType) ? "audio" : "video",
     observedAt: snapshot.observedAt,
@@ -465,6 +473,8 @@ function currentMediaSnapshotFromVoiceContext(
     positionSeconds: snapshot.positionSeconds,
     serviceId: snapshot.service.id,
     serviceName: snapshot.service.name,
+    seasonNumber: snapshot.identity.seasonNumber,
+    seriesTitle: snapshot.identity.seriesTitle,
     subtitle: snapshot.identity.subtitle,
     title: snapshot.identity.title
   };

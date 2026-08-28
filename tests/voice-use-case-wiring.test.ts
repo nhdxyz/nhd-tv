@@ -48,6 +48,8 @@ describe("voice use-case execution wiring", () => {
     expect(query).toBeGreaterThan(-1);
     expect(execution).toContain("syncVoiceContextFromServiceHost()");
     expect(execution).toContain("answerCurrentMediaQuestion(");
+    expect(source).toContain("parseVoiceEpisodeCoordinates(current.subtitle)");
+    expect(source).toContain("episodeNumber: episodeCoordinates?.episodeNumber ?? null");
     expect(query).toBeLessThan(operation);
   });
 

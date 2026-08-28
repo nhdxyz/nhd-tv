@@ -1,4 +1,5 @@
 import type { GoogleWatchResult } from "./google-watch-cache";
+import { parseVoiceEpisodeCoordinates } from "./voice-episode-metadata";
 
 export interface GoogleWatchIdentityExpectation {
   episodeNumber: number | null;
@@ -22,20 +23,6 @@ function comparableTitle(value: string): string {
   return words.join("").slice(0, 240);
 }
 
-function episodeCoordinatesMatch(
-  subtitle: string,
-  season: number,
-  episode: number
-): boolean {
-  const normalized = subtitle.toLocaleLowerCase("en-US");
-  const verbose = new RegExp(
-    `season\\s*0*${season}\\D{0,24}episode\\s*0*${episode}(?:\\D|$)`,
-    "i"
-  );
-  const compact = new RegExp(`s\\s*0*${season}\\s*e\\s*0*${episode}(?:\\D|$)`, "i");
-  return verbose.test(normalized) || compact.test(normalized);
-}
-
 /** Rejects a Google panel unless it independently identifies the requested media. */
 export function googleWatchResultMatchesIdentity(
   result: Pick<GoogleWatchResult, "resolvedSubtitle" | "resolvedTitle">,
@@ -51,12 +38,8 @@ export function googleWatchResultMatchesIdentity(
     return false;
   }
   if (expected.mediaType !== "episode") return true;
-  return expected.seasonNumber !== null &&
-    expected.episodeNumber !== null &&
-    result.resolvedSubtitle !== null &&
-    episodeCoordinatesMatch(
-      result.resolvedSubtitle,
-      expected.seasonNumber,
-      expected.episodeNumber
-    );
+  const coordinates = parseVoiceEpisodeCoordinates(result.resolvedSubtitle);
+  return coordinates !== null &&
+    expected.seasonNumber === coordinates.seasonNumber &&
+    expected.episodeNumber === coordinates.episodeNumber;
 }

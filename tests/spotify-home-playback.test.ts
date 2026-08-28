@@ -20,6 +20,12 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(main).toContain("await serviceHost.forceReturnHome()");
   });
 
+  it("treats Back at Spotify's root as a background return instead of a quit", () => {
+    expect(host).toContain('definition.id === "spotify" && this.returnHomeInBackground()');
+    expect(host.indexOf('definition.id === "spotify" && this.returnHomeInBackground()'))
+      .toBeLessThan(host.indexOf("await this.#requestQuit()"));
+  });
+
   it("routes hidden Spotify media controls to the player and navigation to Home", () => {
     expect(main).toContain("if (serviceHost.isBackgrounded)");
     expect(main).toContain("return { handled: await serviceHost.sendRemoteAction(action) }");

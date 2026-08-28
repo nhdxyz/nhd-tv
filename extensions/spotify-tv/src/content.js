@@ -59,9 +59,69 @@
     return svg;
   };
 
+  const routeUrl = (href) => {
+    try {
+      const url = new URL(href, location.href);
+      return url.origin === location.origin ? url : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const routeKey = (url = location) => `${url.pathname}${url.search}${url.hash}`;
+
+  const dispatchRoute = (url) => {
+    const state = history.state;
+    history.pushState(state, "", routeKey(url));
+    dispatchEvent(new PopStateEvent("popstate", { state }));
+    scheduleUpdate();
+  };
+
+  const navigateWithinSpotify = (href) => {
+    const target = routeUrl(href);
+    if (target === null || routeKey(target) === routeKey()) return;
+
+    const providerAnchor = [...document.querySelectorAll("a[href]")].find((candidate) => {
+      if (!(candidate instanceof HTMLAnchorElement)) return false;
+      if (candidate.closest(`#${NAV_ID},#${LIBRARY_NAV_ID}`) !== null) return false;
+      const candidateUrl = routeUrl(candidate.href);
+      return candidateUrl !== null && routeKey(candidateUrl) === routeKey(target);
+    });
+
+    if (!(providerAnchor instanceof HTMLAnchorElement)) {
+      dispatchRoute(target);
+      return;
+    }
+
+    const previousRoute = routeKey();
+    const handled = !providerAnchor.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+      composed: true,
+      view: window
+    }));
+    if (!handled && routeKey() === previousRoute) {
+      dispatchRoute(target);
+      return;
+    }
+    setTimeout(() => {
+      if (routeKey() === previousRoute) dispatchRoute(target);
+    }, 0);
+  };
+
+  const handleTvRoute = (anchor, href) => {
+    anchor.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      event.preventDefault();
+      navigateWithinSpotify(href);
+    });
+  };
+
   const link = (label, href, iconPath) => {
     const anchor = document.createElement("a");
     anchor.href = href;
+    handleTvRoute(anchor, href);
     anchor.dataset.nhdtvSpotifyNav = label.toLocaleLowerCase().replace(/\s+/g, "-");
     anchor.setAttribute(TARGET_ATTRIBUTE, "true");
     anchor.append(icon(iconPath));
@@ -85,6 +145,7 @@
     const brand = document.createElement("a");
     brand.className = "nhdtv-spotify-brand";
     brand.href = "/";
+    handleTvRoute(brand, "/");
     brand.setAttribute("aria-label", "Spotify Home");
     brand.setAttribute(TARGET_ATTRIBUTE, "true");
     brand.append(icon("M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0Zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02Zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.38-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14C9.6 9.9 15 10.56 18.72 12.84c.36.18.54.78.24 1.2Zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.72 1.62.54.3.72 1.02.42 1.56-.3.42-1.02.6-1.56.3Z"));
@@ -115,7 +176,7 @@
     searchForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const query = searchInput.value.trim();
-      location.assign(query.length === 0 ? "/search" : `/search/${encodeURIComponent(query)}`);
+      navigateWithinSpotify(query.length === 0 ? "/search" : `/search/${encodeURIComponent(query)}`);
     });
     destinations.append(searchForm);
 
@@ -171,6 +232,7 @@
     for (const [label, href] of sections) {
       const anchor = document.createElement("a");
       anchor.href = href;
+      handleTvRoute(anchor, href);
       anchor.textContent = label;
       anchor.setAttribute(TARGET_ATTRIBUTE, "true");
       if (location.pathname === href || location.pathname.startsWith(`${href}/`)) {

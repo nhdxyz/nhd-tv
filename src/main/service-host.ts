@@ -1387,6 +1387,9 @@ export class ServiceHost {
     }
 
     if (isServiceRootUrl(view.webContents.getURL(), definition.rootUrls)) {
+      if (definition.id === "spotify" && this.returnHomeInBackground()) {
+        return true;
+      }
       await this.#requestQuit();
       return true;
     }

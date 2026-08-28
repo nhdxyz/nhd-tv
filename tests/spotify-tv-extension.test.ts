@@ -46,6 +46,11 @@ describe("Spotify TV Mode extension", () => {
     expect(content).toContain('LIBRARY_NAV_ID = "nhdtv-spotify-library-nav"');
     expect(content).toContain('["Liked Songs", "/collection/tracks"]');
     expect(content).toContain('["Albums", "/collection/albums"]');
+    expect(content).toContain("navigateWithinSpotify");
+    expect(content).toContain("providerAnchor.dispatchEvent");
+    expect(content).toContain('dispatchEvent(new PopStateEvent("popstate"');
+    expect(content).toContain("handleTvRoute(anchor, href)");
+    expect(content).not.toContain('location.assign(query.length === 0 ? "/search"');
   });
 
   it("turns signed-out Play into one in-view login instead of a native-app popup", async () => {

@@ -49,7 +49,7 @@ describe("voice media destination", () => {
       providerHint: "youtube",
       recency: "latest",
       title: "latest video"
-    }))).toBe("Outdoor Boys latest video");
+    }))).toBe("Outdoor Boys");
     expect(resolveVoiceMediaDestination(intent({ providerHint: "netflix" }), []))
       .toBeNull();
   });

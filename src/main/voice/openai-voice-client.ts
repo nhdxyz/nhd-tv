@@ -26,8 +26,11 @@ Return only the supplied JSON schema. Never output a URL, selector, service ID, 
 Use kind=control for direct television controls.
 Use kind=media for searches, navigation, and playback.
 Use mediaType=episode only when both season and episode are explicit.
+Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
+Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
 Use providerHint only when the user names Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
+For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
 Use null for every field that does not apply. Do not guess missing season or episode numbers.`;
 
 export type OpenAiVoiceErrorCode =

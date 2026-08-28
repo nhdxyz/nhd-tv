@@ -18,7 +18,10 @@ function preferredService(intent: VoiceMediaIntent): VoiceServiceId {
 
 export function voiceMediaSearchQuery(intent: VoiceMediaIntent): string {
   if (intent.recency === "latest" && intent.creator !== null) {
-    return `${intent.creator} latest video`;
+    // The provider-owned upload-date filter supplies the recency constraint.
+    // Searching only for the creator avoids fan uploads whose title happens to
+    // contain both the creator name and the word "latest".
+    return intent.creator;
   }
   if (intent.mediaType === "channel") {
     return intent.creator ?? intent.title;

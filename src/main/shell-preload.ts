@@ -67,6 +67,7 @@ const IPC_CHANNELS = {
 } as const;
 
 const VOICE_PRESENTATION_PHASES = new Set([
+  "clarification",
   "confirmation",
   "error",
   "hidden",
@@ -75,23 +76,72 @@ const VOICE_PRESENTATION_PHASES = new Set([
   "transcript",
   "understanding"
 ]);
+const VOICE_PRESENTATION_KEYS = new Set([
+  "choices",
+  "detail",
+  "phase",
+  "transcript"
+]);
+const VOICE_PRESENTATION_CHOICE_KEYS = new Set([
+  "id",
+  "ordinal",
+  "primaryLabel",
+  "secondaryLabel"
+]);
+const SAFE_OPAQUE_CHOICE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 
 function isBoundedNullableText(value: unknown, maximumLength: number): boolean {
   return value === null || (
     typeof value === "string" &&
     value.length <= maximumLength &&
-    !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value)
+    !/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u.test(value)
   );
+}
+
+function isBoundedText(value: unknown, maximumLength: number): value is string {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    isBoundedNullableText(value, maximumLength);
+}
+
+function isVoicePresentationChoice(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return Object.keys(candidate).every((key) => VOICE_PRESENTATION_CHOICE_KEYS.has(key)) &&
+    typeof candidate.id === "string" &&
+    candidate.id.length <= 96 &&
+    SAFE_OPAQUE_CHOICE_ID.test(candidate.id) &&
+    (candidate.ordinal === 1 || candidate.ordinal === 2 || candidate.ordinal === 3) &&
+    isBoundedText(candidate.primaryLabel, 120) &&
+    (candidate.secondaryLabel === undefined || isBoundedText(candidate.secondaryLabel, 160));
+}
+
+function areVoicePresentationChoices(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > 3) return false;
+  const ids = new Set<string>();
+  const ordinals = new Set<number>();
+  for (const choice of value) {
+    if (!isVoicePresentationChoice(choice)) return false;
+    const { id, ordinal } = choice as { id: string; ordinal: number };
+    if (ids.has(id) || ordinals.has(ordinal)) return false;
+    ids.add(id);
+    ordinals.add(ordinal);
+  }
+  return true;
 }
 
 function isVoicePresentationState(value: unknown): value is VoicePresentationState {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const candidate = value as Partial<VoicePresentationState>;
-  return typeof candidate.phase === "string" &&
+  return Object.keys(candidate).every((key) => VOICE_PRESENTATION_KEYS.has(key)) &&
+    typeof candidate.phase === "string" &&
     VOICE_PRESENTATION_PHASES.has(candidate.phase) &&
     isBoundedNullableText(candidate.detail, 280) &&
     isBoundedNullableText(candidate.transcript, 320) &&
     (candidate.phase === "transcript" || candidate.transcript === null) &&
+    (candidate.phase === "clarification"
+      ? candidate.choices === undefined || areVoicePresentationChoices(candidate.choices)
+      : candidate.choices === undefined) &&
     (candidate.phase !== "hidden" || (candidate.detail === null && candidate.transcript === null));
 }
 

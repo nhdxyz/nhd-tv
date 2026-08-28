@@ -919,6 +919,12 @@ summary:focus-visible {
   --voice-accent: #86efac;
 }
 
+.voice-presentation[data-phase="clarification"] {
+  --voice-accent: #c4b5fd;
+  width: min(54rem, calc(100vw - (var(--safe-x) * 2)));
+  align-items: start;
+}
+
 .voice-presentation[data-phase="confirmation"] {
   --voice-accent: #fbbf24;
 }
@@ -993,6 +999,62 @@ summary:focus-visible {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.voice-presentation-choices {
+  display: grid;
+  gap: 0.48rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.voice-presentation-choices li {
+  display: grid;
+  grid-template-columns: 2.15rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--voice-accent) 22%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--voice-accent) 7%, transparent);
+}
+
+.voice-presentation-choice-ordinal {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  place-items: center;
+  border-radius: 0.72rem;
+  background: color-mix(in srgb, var(--voice-accent) 17%, transparent);
+  color: var(--voice-accent);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.voice-presentation-choice-labels {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.voice-presentation-choice-primary,
+.voice-presentation-choice-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-presentation-choice-primary {
+  font-size: 1rem;
+  font-weight: 740;
+}
+
+.voice-presentation-choice-secondary {
+  color: #aab5c5;
+  font-size: 0.78rem;
+  font-weight: 560;
 }
 
 @keyframes voice-presentation-enter {

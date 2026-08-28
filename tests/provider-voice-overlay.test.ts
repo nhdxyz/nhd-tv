@@ -13,11 +13,21 @@ describe("provider voice overlay", () => {
   });
 
   it("stays within unusually small content bounds", () => {
-    const bounds = providerVoiceOverlayBounds(280, 120);
+    const bounds = providerVoiceOverlayBounds(280, 120, "clarification");
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(280);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(120);
+  });
+
+  it("provides more vertical room for three clarification choices", () => {
+    expect(providerVoiceOverlayBounds(1920, 1080, "clarification")).toEqual({
+      height: 420,
+      width: 1_040,
+      x: 440,
+      y: 616
+    });
+    expect(providerVoiceOverlayBounds(1920, 1080, "success").height).toBe(224);
   });
 
   it("mirrors ephemeral voice state without inserting it into a provider page", () => {
@@ -47,6 +57,12 @@ describe("provider voice overlay", () => {
     expect(overlaySource).toContain("this.#window.contentView.removeChildView(view)");
     expect(overlaySource).toContain("this.#window.contentView.addChildView(view)");
     expect(overlaySource).toContain("detail.textContent = state.copy");
+    expect(overlaySource).toContain('id="choices"');
+    expect(overlaySource).toContain("ordinal.textContent = String(choice.ordinal)");
+    expect(overlaySource).toContain("primary.textContent = choice.primaryLabel");
+    expect(overlaySource).toContain("secondary.textContent = choice.secondaryLabel");
+    expect(overlaySource).toContain('state.phase === "clarification"');
+    expect(overlaySource).toContain('aria-label="Choices"');
     expect(overlaySource).toContain("-webkit-line-clamp: 3");
     expect(overlaySource).toContain("grid-template-columns: 64px minmax(0, 1fr)");
     expect(overlaySource).toContain("font-size: clamp(24px, 3.4vw, 34px)");

@@ -15,6 +15,9 @@ export function voicePresentationCopy(
   if (presentation.phase === "understanding") {
     return { copy: presentation.detail ?? "Understanding…", label: "AI Voice" };
   }
+  if (presentation.phase === "clarification") {
+    return { copy: presentation.detail ?? "Which one did you mean?", label: "Choose one" };
+  }
   if (presentation.phase === "confirmation") {
     return { copy: presentation.detail ?? "Confirm on your phone.", label: "Confirm on phone" };
   }

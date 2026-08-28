@@ -230,6 +230,7 @@ const elements = {
   voiceRegionInput: requireElement<HTMLInputElement>("#voice-region-input", "voice-region-input"),
   voiceRemoveKey: requireElement<HTMLButtonElement>("#voice-remove-key", "voice-remove-key"),
   voicePresentation: requireElement<HTMLElement>("#voice-presentation", "voice-presentation"),
+  voicePresentationChoices: requireElement<HTMLOListElement>("#voice-presentation-choices", "voice-presentation-choices"),
   voicePresentationCopy: requireElement<HTMLElement>("#voice-presentation-copy", "voice-presentation-copy"),
   voicePresentationLabel: requireElement<HTMLElement>("#voice-presentation-label", "voice-presentation-label"),
   voiceSettingsButton: requireElement<HTMLButtonElement>("#voice-settings-button", "voice-settings-button"),
@@ -308,6 +309,34 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
   elements.voicePresentation.dataset.phase = presentation.phase;
   elements.voicePresentationLabel.textContent = copy.label;
   elements.voicePresentationCopy.textContent = copy.copy;
+  elements.voicePresentationChoices.replaceChildren();
+  const choices = presentation.phase === "clarification"
+    ? presentation.choices?.slice(0, 3) ?? []
+    : [];
+  for (const choice of choices) {
+    const item = document.createElement("li");
+    item.value = choice.ordinal;
+
+    const ordinal = document.createElement("span");
+    ordinal.className = "voice-presentation-choice-ordinal";
+    ordinal.textContent = String(choice.ordinal);
+
+    const labels = document.createElement("span");
+    labels.className = "voice-presentation-choice-labels";
+    const primary = document.createElement("span");
+    primary.className = "voice-presentation-choice-primary";
+    primary.textContent = choice.primaryLabel;
+    labels.append(primary);
+    if (choice.secondaryLabel !== undefined) {
+      const secondary = document.createElement("span");
+      secondary.className = "voice-presentation-choice-secondary";
+      secondary.textContent = choice.secondaryLabel;
+      labels.append(secondary);
+    }
+    item.append(ordinal, labels);
+    elements.voicePresentationChoices.append(item);
+  }
+  elements.voicePresentationChoices.hidden = choices.length === 0;
   elements.voicePresentation.hidden = hidden;
 
   if (!hidden) {
@@ -318,6 +347,8 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
       elements.voicePresentation.dataset.phase = "hidden";
       elements.voicePresentationLabel.textContent = "AI Voice";
       elements.voicePresentationCopy.textContent = "";
+      elements.voicePresentationChoices.replaceChildren();
+      elements.voicePresentationChoices.hidden = true;
       voicePresentationFailsafeTimer = null;
     }, VOICE_PRESENTATION_FAILSAFE_MS);
   }

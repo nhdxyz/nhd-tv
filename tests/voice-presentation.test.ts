@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { IPC_CHANNELS, type VoicePresentationState } from "../src/main/contracts";
 import {
   createVoicePresentationState,
+  MAX_VOICE_PRESENTATION_CHOICES,
+  MAX_VOICE_PRESENTATION_CHOICE_PRIMARY_LENGTH,
   MAX_VOICE_PRESENTATION_TRANSCRIPT_LENGTH,
   remainingVoiceTranscriptDisplayMilliseconds,
+  sanitizeVoicePresentationChoices,
   sanitizeVoicePresentationText
 } from "../src/main/voice/voice-presentation";
 import { parsePhoneRemoteVoiceActivity } from "../src/main/remote/phone-remote-server";
@@ -45,9 +48,91 @@ describe("TV voice presentation", () => {
       transcript: null
     });
     expect(createVoicePresentationState("hidden", {
+      choices: [{ id: "stale", ordinal: 1, primaryLabel: "Stale result" }],
       detail: "stale",
       transcript: "stale"
     })).toEqual({ detail: null, phase: "hidden", transcript: null });
+    expect(createVoicePresentationState("confirmation", {
+      choices: [{ id: "stale", ordinal: 1, primaryLabel: "Stale result" }],
+      detail: "Confirm this?"
+    })).toEqual({
+      detail: "Confirm this?",
+      phase: "confirmation",
+      transcript: null
+    });
+  });
+
+  it("bounds clarification choices to a closed sanitized display schema", () => {
+    const primaryLabel = "A".repeat(MAX_VOICE_PRESENTATION_CHOICE_PRIMARY_LENGTH + 20);
+    expect(sanitizeVoicePresentationChoices([
+      {
+        id: "candidate:apollo-13",
+        ordinal: 1,
+        primaryLabel,
+        secondaryLabel: "  Movie\u202e   · 1995  "
+      },
+      {
+        id: "candidate:breaking-bad",
+        ordinal: 2,
+        primaryLabel: "Breaking Bad",
+        secondaryLabel: "TV series · 2008"
+      },
+      {
+        id: "candidate:duplicate-ordinal",
+        ordinal: 2,
+        primaryLabel: "Duplicate"
+      },
+      {
+        id: "candidate:not-inspected",
+        ordinal: 3,
+        primaryLabel: "Fourth result"
+      }
+    ])).toEqual([
+      {
+        id: "candidate:apollo-13",
+        ordinal: 1,
+        primaryLabel: `${"A".repeat(MAX_VOICE_PRESENTATION_CHOICE_PRIMARY_LENGTH - 1)}…`,
+        secondaryLabel: "Movie · 1995"
+      },
+      {
+        id: "candidate:breaking-bad",
+        ordinal: 2,
+        primaryLabel: "Breaking Bad",
+        secondaryLabel: "TV series · 2008"
+      }
+    ]);
+    expect(MAX_VOICE_PRESENTATION_CHOICES).toBe(3);
+
+    expect(sanitizeVoicePresentationChoices([
+      {
+        id: "https://example.com/watch/1",
+        ordinal: 1,
+        primaryLabel: "URL identity"
+      },
+      {
+        html: "<strong>Injected</strong>",
+        id: "candidate:extra-property",
+        ordinal: 2,
+        primaryLabel: "Arbitrary property"
+      }
+    ])).toEqual([]);
+
+    expect(createVoicePresentationState("clarification", {
+      choices: [
+        { id: "movie:it-2017", ordinal: 1, primaryLabel: "It", secondaryLabel: "Movie · 2017" },
+        { id: "movie:it-1990", ordinal: 2, primaryLabel: "It", secondaryLabel: "Miniseries · 1990" }
+      ],
+      detail: "Which version of It?",
+      transcript: "must not survive"
+    })).toEqual({
+      choices: [
+        { id: "movie:it-2017", ordinal: 1, primaryLabel: "It", secondaryLabel: "Movie · 2017" },
+        { id: "movie:it-1990", ordinal: 2, primaryLabel: "It", secondaryLabel: "Miniseries · 1990" }
+      ],
+      detail: "Which version of It?",
+      phase: "clarification",
+      transcript: null
+    });
   });
 
   it("keeps a final transcript readable without delaying command execution", () => {
@@ -75,6 +160,12 @@ describe("TV voice presentation", () => {
       transcript: null
     })).toEqual({ copy: "Listening…", label: "AI Voice" });
     expect(voicePresentationCopy({
+      choices: [{ id: "movie:it-2017", ordinal: 1, primaryLabel: "It" }],
+      detail: "Which version of It?",
+      phase: "clarification",
+      transcript: null
+    })).toEqual({ copy: "Which version of It?", label: "Choose one" });
+    expect(voicePresentationCopy({
       detail: "Confirm on your phone — Play Breaking Bad?",
       phase: "confirmation",
       transcript: null
@@ -87,14 +178,19 @@ describe("TV voice presentation", () => {
   it("exposes one validated event channel and renders only through textContent", () => {
     expect(IPC_CHANNELS.voicePresentationChanged).toBe("nhd:voice:presentation:changed");
     expect(preload).toContain("function isVoicePresentationState");
+    expect(preload).toContain("function isVoicePresentationChoice");
+    expect(preload).toContain('candidate.phase === "clarification"');
     expect(preload).toContain("if (isVoicePresentationState(presentation)) callback(presentation)");
     expect(preload).toContain("onVoicePresentationChanged");
     expect(preload).not.toContain("getVoicePresentation");
 
     const render = renderer.slice(renderer.indexOf("function renderVoicePresentation"));
-    expect(render.slice(0, 2_200)).toContain(".textContent = copy.label");
-    expect(render.slice(0, 2_200)).toContain(".textContent = copy.copy");
-    expect(render.slice(0, 2_200)).not.toContain("innerHTML");
+    expect(render.slice(0, 4_500)).toContain(".textContent = copy.label");
+    expect(render.slice(0, 4_500)).toContain(".textContent = copy.copy");
+    expect(render.slice(0, 4_500)).toContain("ordinal.textContent = String(choice.ordinal)");
+    expect(render.slice(0, 4_500)).toContain("primary.textContent = choice.primaryLabel");
+    expect(render.slice(0, 4_500)).toContain("secondary.textContent = choice.secondaryLabel");
+    expect(render.slice(0, 4_500)).not.toContain("innerHTML");
     expect(renderer).toContain("VOICE_PRESENTATION_FAILSAFE_MS = 150_000");
   });
 
@@ -102,12 +198,15 @@ describe("TV voice presentation", () => {
     expect(html).toContain('id="voice-presentation"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('aria-atomic="true"');
+    expect(html).toContain('id="voice-presentation-choices"');
+    expect(html).toContain('aria-label="Choices"');
     expect(css).toContain(".voice-presentation");
     expect(css).toContain("pointer-events: none");
     expect(css).toContain("-webkit-line-clamp: 3");
     expect(css).toContain("grid-template-columns: 3.7rem minmax(0, 1fr)");
     expect(css).toContain("font-size: clamp(1.18rem, 2vw, 1.5rem)");
     expect(css).toContain('.voice-presentation[data-phase="listening"]');
+    expect(css).toContain('.voice-presentation[data-phase="clarification"]');
     expect(css).toContain('.voice-presentation[data-phase="confirmation"]');
     expect(css).toContain('.voice-presentation[data-phase="error"]');
   });

@@ -46,9 +46,20 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       .copy { display: grid; min-width: 0; gap: 5px; }
       small { color: #d7ff55; font-size: 13px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
       strong { display: -webkit-box; overflow: hidden; font-size: clamp(24px, 3.4vw, 34px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+      .choices { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+      .choices[hidden] { display: none; }
+      .choices li { display: grid; min-width: 0; padding: 9px 12px; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 12px; border: 1px solid rgb(196 181 253 / 24%); border-radius: 14px; background: rgb(196 181 253 / 7%); }
+      .ordinal { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 12px; background: rgb(196 181 253 / 17%); color: #c4b5fd; font-size: 18px; font-weight: 850; }
+      .labels { display: grid; min-width: 0; gap: 2px; }
+      .primary, .secondary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .primary { font-size: 18px; font-weight: 760; }
+      .secondary { color: #aab5c5; font-size: 14px; font-weight: 560; }
+      aside[data-phase="clarification"] { align-items: start; }
+      aside[data-phase="clarification"] .signal { margin-top: 2px; background: #c4b5fd; }
       aside[data-phase="success"] .signal { background: #72e6a1; }
       aside[data-phase="confirmation"] .signal { background: #fbbf24; }
       aside[data-phase="error"] .signal { background: #ff6577; color: #fff; }
+      aside[data-phase="clarification"] small { color: #c4b5fd; }
       aside[data-phase="success"] small { color: #72e6a1; }
       aside[data-phase="confirmation"] small { color: #fbbf24; }
       aside[data-phase="error"] small { color: #ff8795; }
@@ -67,7 +78,11 @@ const OVERLAY_DOCUMENT = `<!doctype html>
   <body>
     <aside id="voice" data-phase="listening" role="status" aria-live="polite" aria-atomic="true">
       <span class="signal" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="copy"><small id="label">AI Voice</small><strong id="detail">Listening…</strong></span>
+      <div class="copy">
+        <small id="label">AI Voice</small>
+        <strong id="detail">Listening…</strong>
+        <ol class="choices" id="choices" aria-label="Choices" role="list" hidden></ol>
+      </div>
     </aside>
   </body>
 </html>`;
@@ -83,14 +98,16 @@ export interface ProviderVoiceOverlayBounds {
 
 export function providerVoiceOverlayBounds(
   contentWidth: number,
-  contentHeight: number
+  contentHeight: number,
+  phase: VoicePresentationState["phase"] = "understanding"
 ): ProviderVoiceOverlayBounds {
   const safeWidth = Math.max(0, Math.floor(contentWidth));
   const safeHeight = Math.max(0, Math.floor(contentHeight));
   const outerInset = Math.max(16, Math.min(48, Math.round(safeWidth * 0.035)));
   const availableWidth = Math.max(0, safeWidth - outerInset * 2);
   const width = Math.min(1_040, availableWidth);
-  const height = Math.min(224, Math.max(0, safeHeight - 32));
+  const maximumHeight = phase === "clarification" ? 420 : 224;
+  const height = Math.min(maximumHeight, Math.max(0, safeHeight - 32));
   const bottomInset = Math.max(16, Math.min(44, Math.round(safeHeight * 0.045)));
   return {
     height,
@@ -106,6 +123,9 @@ function overlayCopy(state: VoicePresentationState): { copy: string; label: stri
   }
   if (state.phase === "success") {
     return { copy: state.detail ?? "Done", label: "Done" };
+  }
+  if (state.phase === "clarification") {
+    return { copy: state.detail ?? "Which one did you mean?", label: "Choose one" };
   }
   if (state.phase === "confirmation") {
     return { copy: state.detail ?? "Confirm on your phone.", label: "Confirm on phone" };
@@ -152,7 +172,11 @@ export class ProviderVoiceOverlay {
   resize(): void {
     if (this.#view === null) return;
     const [width = 0, height = 0] = this.#window.getContentSize();
-    this.#view.setBounds(providerVoiceOverlayBounds(width, height));
+    this.#view.setBounds(providerVoiceOverlayBounds(
+      width,
+      height,
+      this.#state?.phase ?? "hidden"
+    ));
   }
 
   show(state: VoicePresentationState): void {
@@ -222,17 +246,48 @@ export class ProviderVoiceOverlay {
     if (view === null || state === null || !this.#ready || view.webContents.isDestroyed()) return;
     const version = ++this.#renderVersion;
     const copy = overlayCopy(state);
-    const payload = JSON.stringify({ ...copy, phase: state.phase });
+    const choices = state.phase === "clarification"
+      ? state.choices?.slice(0, 3).map((choice) => ({
+        ordinal: choice.ordinal,
+        primaryLabel: choice.primaryLabel,
+        secondaryLabel: choice.secondaryLabel
+      })) ?? []
+      : [];
+    const payload = JSON.stringify({ ...copy, choices, phase: state.phase });
     try {
       await view.webContents.executeJavaScript(`(() => {
         const state = ${payload};
         const root = document.querySelector("#voice");
         const label = document.querySelector("#label");
         const detail = document.querySelector("#detail");
-        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(detail instanceof HTMLElement)) return;
+        const choices = document.querySelector("#choices");
+        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(detail instanceof HTMLElement) || !(choices instanceof HTMLOListElement)) return;
         root.dataset.phase = state.phase;
         label.textContent = state.label;
         detail.textContent = state.copy;
+        choices.replaceChildren();
+        for (const choice of state.phase === "clarification" ? state.choices : []) {
+          const item = document.createElement("li");
+          item.value = choice.ordinal;
+          const ordinal = document.createElement("span");
+          ordinal.className = "ordinal";
+          ordinal.textContent = String(choice.ordinal);
+          const labels = document.createElement("span");
+          labels.className = "labels";
+          const primary = document.createElement("span");
+          primary.className = "primary";
+          primary.textContent = choice.primaryLabel;
+          labels.append(primary);
+          if (typeof choice.secondaryLabel === "string") {
+            const secondary = document.createElement("span");
+            secondary.className = "secondary";
+            secondary.textContent = choice.secondaryLabel;
+            labels.append(secondary);
+          }
+          item.append(ordinal, labels);
+          choices.append(item);
+        }
+        choices.hidden = state.phase !== "clarification" || state.choices.length === 0;
       })()`);
     } catch {
       if (version === this.#renderVersion && this.#view === view) this.hide();

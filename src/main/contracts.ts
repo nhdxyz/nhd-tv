@@ -233,6 +233,7 @@ export interface OpenAiCredentialStatus {
 }
 
 export type VoicePresentationPhase =
+  | "clarification"
   | "confirmation"
   | "error"
   | "hidden"
@@ -241,8 +242,19 @@ export type VoicePresentationPhase =
   | "transcript"
   | "understanding";
 
+export type VoicePresentationChoiceOrdinal = 1 | 2 | 3;
+
+/** A display-only clarification option. IDs are opaque and must never be rendered. */
+export interface VoicePresentationChoice {
+  id: string;
+  ordinal: VoicePresentationChoiceOrdinal;
+  primaryLabel: string;
+  secondaryLabel?: string;
+}
+
 /** Ephemeral UI state. It must never be written to profile or device storage. */
 export interface VoicePresentationState {
+  choices?: readonly VoicePresentationChoice[];
   detail: string | null;
   phase: VoicePresentationPhase;
   transcript: string | null;

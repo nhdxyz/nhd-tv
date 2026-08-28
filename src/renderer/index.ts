@@ -540,7 +540,8 @@ async function saveProfilePreferences(): Promise<void> {
   applyLocalAppState(await window.nhd.updateProfilePreferences({
     enabledServiceIds: [...enabledServiceIds],
     favoriteServiceIds: [...favoriteServiceIds],
-    serviceOrder
+    serviceOrder,
+    voicePlaybackMode: localAppState?.preferences.voicePlaybackMode ?? "confirm"
   }));
 }
 

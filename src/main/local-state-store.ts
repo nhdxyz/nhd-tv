@@ -8,10 +8,12 @@ import {
   type CustomServiceManifest,
   type LocalAppState,
   type LocalProfile,
-  type ProfilePreferences
+  type ProfilePreferences,
+  type VoicePlaybackMode,
+  VOICE_PLAYBACK_MODES
 } from "./contracts";
 
-const STORE_VERSION = 6;
+const STORE_VERSION = 7;
 const DEFAULT_PROFILE_ID = "default";
 const MAX_PROFILES = 8;
 const MAX_PROFILE_NAME_LENGTH = 32;
@@ -19,6 +21,10 @@ const MAX_RECENT_SERVICES = 12;
 
 function isAmbientClockStyle(value: unknown): value is AmbientClockStyle {
   return AMBIENT_CLOCK_STYLES.some((style) => style === value);
+}
+
+function isVoicePlaybackMode(value: unknown): value is VoicePlaybackMode {
+  return VOICE_PLAYBACK_MODES.some((mode) => mode === value);
 }
 
 interface StoredProfile extends LocalProfile {
@@ -89,11 +95,22 @@ function devicePreferences(value: unknown): DevicePreferences {
     selectedDisplayId: typeof candidate.selectedDisplayId === "string"
       ? candidate.selectedDisplayId
       : null,
+    voiceControlEnabled: candidate.voiceControlEnabled === true,
+    voiceRegion: normalizedVoiceRegion(candidate.voiceRegion),
     youtubeTvModeEnabled: candidate.youtubeTvModeEnabled !== false,
     youtubeTvScale: candidate.youtubeTvScale === "compact" || candidate.youtubeTvScale === "large"
       ? candidate.youtubeTvScale
       : "standard"
   };
+}
+
+function normalizedVoiceRegion(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
 }
 
 function normalizedProfileName(value: unknown): string | null {
@@ -124,7 +141,8 @@ function profilePreferences(
     return {
       enabledServiceIds: [...defaultEnabledServiceIds],
       favoriteServiceIds: [],
-      serviceOrder: [...defaultEnabledServiceIds]
+      serviceOrder: [...defaultEnabledServiceIds],
+      voicePlaybackMode: "confirm"
     };
   }
 
@@ -138,7 +156,10 @@ function profilePreferences(
   return {
     enabledServiceIds,
     favoriteServiceIds,
-    serviceOrder: [...ordered, ...enabledServiceIds.filter((id) => !ordered.includes(id))]
+    serviceOrder: [...ordered, ...enabledServiceIds.filter((id) => !ordered.includes(id))],
+    voicePlaybackMode: isVoicePlaybackMode(candidate.voicePlaybackMode)
+      ? candidate.voicePlaybackMode
+      : "confirm"
   };
 }
 
@@ -175,7 +196,7 @@ export class LocalStateStore {
 
       const document = parsed as Partial<StoredLocalState>;
       if (
-        ![1, 2, 3, 4, 5, STORE_VERSION].includes(document.version ?? -1) ||
+        ![1, 2, 3, 4, 5, 6, STORE_VERSION].includes(document.version ?? -1) ||
         !Array.isArray(document.profiles)
       ) {
         return;
@@ -270,7 +291,8 @@ export class LocalStateStore {
       preferences: {
         enabledServiceIds: [...preferences.enabledServiceIds],
         favoriteServiceIds: [...preferences.favoriteServiceIds],
-        serviceOrder: [...preferences.serviceOrder]
+        serviceOrder: [...preferences.serviceOrder],
+        voicePlaybackMode: preferences.voicePlaybackMode
       },
       profiles: this.#state.profiles.map(publicProfile),
       recentServiceIds: [

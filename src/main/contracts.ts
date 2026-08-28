@@ -169,7 +169,12 @@ export interface ProfilePreferences {
   enabledServiceIds: string[];
   favoriteServiceIds: string[];
   serviceOrder: string[];
+  voicePlaybackMode: VoicePlaybackMode;
 }
+
+export const VOICE_PLAYBACK_MODES = ["confirm", "automatic"] as const;
+
+export type VoicePlaybackMode = (typeof VOICE_PLAYBACK_MODES)[number];
 
 export const AMBIENT_CLOCK_STYLES = [
   "digital",
@@ -191,6 +196,8 @@ export interface DevicePreferences {
   reducedMotion: boolean;
   safeArea: "compact" | "standard" | "wide";
   selectedDisplayId: string | null;
+  voiceControlEnabled: boolean;
+  voiceRegion: string | null;
   youtubeTvModeEnabled: boolean;
   youtubeTvScale: "compact" | "standard" | "large";
 }

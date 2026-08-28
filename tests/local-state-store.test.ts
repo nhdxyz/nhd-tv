@@ -40,13 +40,16 @@ describe("local profile state", () => {
         reducedMotion: false,
         safeArea: "standard",
         selectedDisplayId: null,
+        voiceControlEnabled: false,
+        voiceRegion: null,
         youtubeTvModeEnabled: true,
         youtubeTvScale: "standard"
       },
       preferences: {
         enabledServiceIds: ["netflix", "youtube", "disney-plus"],
         favoriteServiceIds: [],
-        serviceOrder: ["netflix", "youtube", "disney-plus"]
+        serviceOrder: ["netflix", "youtube", "disney-plus"],
+        voicePlaybackMode: "confirm"
       },
       profiles: [{ id: "default", name: "Local profile" }],
       recentServiceIds: []
@@ -60,7 +63,8 @@ describe("local profile state", () => {
     await store.updatePreferences({
       enabledServiceIds: ["youtube", "unknown", "netflix"],
       favoriteServiceIds: ["youtube", "disney-plus"],
-      serviceOrder: ["netflix", "youtube"]
+      serviceOrder: ["netflix", "youtube"],
+      voicePlaybackMode: "automatic"
     });
     await store.selectProfile("default");
 
@@ -76,11 +80,12 @@ describe("local profile state", () => {
       preferences: {
         enabledServiceIds: ["youtube", "netflix"],
         favoriteServiceIds: ["youtube"],
-        serviceOrder: ["netflix", "youtube"]
+        serviceOrder: ["netflix", "youtube"],
+        voicePlaybackMode: "automatic"
       },
       profiles: expect.arrayContaining([{ id: childId, name: "Kids Room" }])
     });
-    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(6);
+    expect(JSON.parse(await readFile(filePath, "utf8")).version).toBe(7);
   });
 
   it("persists a profile-scoped recent-app list independently of viewing history", async () => {
@@ -117,6 +122,8 @@ describe("local profile state", () => {
       reducedMotion: true,
       safeArea: "compact",
       selectedDisplayId: "42",
+      voiceControlEnabled: true,
+      voiceRegion: "us",
       youtubeTvModeEnabled: false,
       youtubeTvScale: "large"
     });
@@ -133,6 +140,8 @@ describe("local profile state", () => {
       reducedMotion: true,
       safeArea: "compact",
       selectedDisplayId: "42",
+      voiceControlEnabled: true,
+      voiceRegion: "US",
       youtubeTvModeEnabled: false,
       youtubeTvScale: "large"
     });
@@ -172,8 +181,11 @@ describe("local profile state", () => {
       activeProfileId: "valid",
       devicePreferences: {
         ambientClockStyle: "digital",
-        autoApproveFirstRemote: true
+        autoApproveFirstRemote: true,
+        voiceControlEnabled: false,
+        voiceRegion: null
       },
+      preferences: { voicePlaybackMode: "confirm" },
       profiles: [{ id: "valid", name: "Guest" }]
     });
     await expect(restored.selectProfile("missing")).rejects.toThrow("does not exist");

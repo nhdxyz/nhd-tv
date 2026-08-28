@@ -28,6 +28,55 @@ describe("voice stage deadline", () => {
     expect(onTimeout).toHaveBeenCalledOnce();
   });
 
+  it("aborts the stage before running timeout supersession cleanup", async () => {
+    vi.useFakeTimers();
+    const events: string[] = [];
+    const pending = runVoiceStageWithDeadline(
+      (signal) => new Promise<string>(() => {
+        signal.addEventListener("abort", () => events.push("abort"), { once: true });
+      }),
+      {
+        onTimeout: () => events.push("supersede"),
+        timeoutMs: 100
+      }
+    );
+    const rejection = expect(pending).rejects.toBeInstanceOf(VoiceStageTimeoutError);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await rejection;
+    expect(events).toEqual(["abort", "supersede"]);
+  });
+
+  it("keeps nested media work inside one cumulative deadline", async () => {
+    vi.useFakeTimers();
+    const pending = runVoiceStageWithDeadline(
+      async (mediaSignal) => {
+        await runVoiceStageWithDeadline(
+          async () => new Promise<string>(() => undefined),
+          { signal: mediaSignal, timeoutMs: 8_000 }
+        ).catch((error) => {
+          if (!(error instanceof VoiceStageTimeoutError)) throw error;
+        });
+        return runVoiceStageWithDeadline(
+          async () => new Promise<string>(() => undefined),
+          { signal: mediaSignal, timeoutMs: 14_000 }
+        );
+      },
+      { timeoutMs: 20_000 }
+    );
+    const rejection = expect(pending).rejects.toBeInstanceOf(VoiceStageTimeoutError);
+
+    await vi.advanceTimersByTimeAsync(19_999);
+    let settled = false;
+    void pending.finally(() => {
+      settled = true;
+    }).catch(() => undefined);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+  });
+
   it("forwards parent cancellation without reporting a stage timeout", async () => {
     const parent = new AbortController();
     const onTimeout = vi.fn();

@@ -181,6 +181,7 @@ const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
 const VOICE_COMMAND_SOFT_TIMEOUT_MS = 50_000;
 const VOICE_CONFIRMATION_SOFT_TIMEOUT_MS = 32_000;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 52_000;
+const VOICE_MEDIA_EXECUTION_TIMEOUT_MS = 20_000;
 const VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 8_000;
 const VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS = 15_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
@@ -2069,7 +2070,21 @@ async function executeVoiceCommandPlan(
       if (profileState === null) return voiceExecutionProfileChangedResult();
       executionScope = captureVoiceExecutionScope(profileState);
     }
-    const result = await executeVoiceCommandPlanCore(plan, signal, executionScope);
+    const result = plan.kind === "resolve-media"
+      ? await runVoiceStageWithDeadline(
+          (mediaSignal) => executeVoiceCommandPlanCore(
+            plan,
+            mediaSignal,
+            executionScope
+          ),
+          {
+            onTimeout: cancelTimedOutVoiceWork,
+            signal,
+            timeoutMessage: "Finding or starting that title took too long. Try again.",
+            timeoutMs: VOICE_MEDIA_EXECUTION_TIMEOUT_MS
+          }
+        )
+      : await executeVoiceCommandPlanCore(plan, signal, executionScope);
     signal?.throwIfAborted();
     if (
       plan.kind === "resolve-media" &&
@@ -2084,6 +2099,11 @@ async function executeVoiceCommandPlan(
   } finally {
     signal?.removeEventListener("abort", cancelNavigation);
   }
+}
+
+function cancelTimedOutVoiceWork(): void {
+  googleWatchResolver?.cancelActive();
+  serviceHost?.beginOperation();
 }
 
 function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
@@ -2122,7 +2142,7 @@ async function handleRemoteVoice(
         confirmationId
       ),
       {
-        onTimeout: () => googleWatchResolver?.cancelActive(),
+        onTimeout: cancelTimedOutVoiceWork,
         signal,
         timeoutMessage: "Voice control took too long. Try that command again.",
         timeoutMs: VOICE_COMMAND_SOFT_TIMEOUT_MS
@@ -2168,7 +2188,7 @@ async function confirmRemoteVoice(
     const result = await runVoiceStageWithDeadline(
       (stageSignal) => session.confirm(confirmationId, stageSignal),
       {
-        onTimeout: () => googleWatchResolver?.cancelActive(),
+        onTimeout: cancelTimedOutVoiceWork,
         signal,
         timeoutMessage: "Starting that choice took too long. Try the command again.",
         timeoutMs: VOICE_CONFIRMATION_SOFT_TIMEOUT_MS

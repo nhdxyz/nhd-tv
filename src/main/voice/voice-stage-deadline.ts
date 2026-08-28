@@ -49,12 +49,15 @@ export async function runVoiceStageWithDeadline<T>(
     options.signal?.addEventListener("abort", handleParentAbort, { once: true });
     timeout = setTimeout(() => {
       const error = new VoiceStageTimeoutError(options.timeoutMessage);
+      // Abort first so synchronous cleanup listeners can stop or close work
+      // while they still own it. The timeout hook may then supersede tokens to
+      // fence off any underlying promise that ignores cancellation.
+      controller.abort(error);
       try {
         options.onTimeout?.();
       } catch {
         // Cleanup hooks cannot be allowed to defeat the caller-visible bound.
       }
-      controller.abort(error);
       rejectBoundary(error);
     }, options.timeoutMs);
     timeout.unref?.();

@@ -72,6 +72,13 @@ const VOICE_MEDIA_PROVIDER_NAMES = new Set([
   "youtube"
 ]);
 
+const UNDERSPECIFIED_MEDIA_PHRASES = new Set([
+  "on netflix instead",
+  "play it",
+  "put that on",
+  "the first one"
+]);
+
 function normalizedPhrase(value: string): string {
   return value
     .normalize("NFKD")
@@ -111,6 +118,7 @@ function namesUnsupportedMediaProvider(phrase: string): boolean {
 export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   const phrase = normalizedPhrase(value);
   if (phrase.length === 0) return null;
+  if (UNDERSPECIFIED_MEDIA_PHRASES.has(phrase)) return { kind: "unknown" };
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
   const control = CONTROL_PHRASES[phrase];
   if (control !== undefined) return { action: control, kind: "control" };

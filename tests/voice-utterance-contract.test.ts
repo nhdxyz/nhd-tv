@@ -49,6 +49,26 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
+    "Play it",
+    "put that on",
+    "the first one",
+    "on Netflix instead"
+  ])("safely rejects the underspecified media phrase %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({ kind: "unknown" });
+  });
+
+  it("does not broaden underspecified guards into titled media or controls", () => {
+    expect(voiceTranscriptShortcut("Play It 2017")).toBeNull();
+    expect(voiceTranscriptShortcut("Play That Thing You Do")).toBeNull();
+    expect(voiceTranscriptShortcut("Play The First Omen")).toBeNull();
+    expect(voiceTranscriptShortcut("On Netflix instead of YouTube")).toBeNull();
+    expect(voiceTranscriptShortcut("Pause it")).toEqual({
+      action: "pause",
+      kind: "control"
+    });
+  });
+
+  it.each([
     "Play Dune on Max",
     "Open Dune on Hulu",
     "Search Prime Video for Dune",

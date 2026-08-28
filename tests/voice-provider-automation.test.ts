@@ -5,7 +5,9 @@ import {
   buildSpotifyVoiceAutomationScript,
   buildYouTubeVoiceAutomationScript,
   netflixContentIdFromUrl,
+  parseVoiceProviderAutomationResult,
   voiceProviderCommandHandled,
+  youtubeContentIdFromUrl,
   type VoiceProviderAutomationResult
 } from "../src/main/voice/voice-provider-automation";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
@@ -90,11 +92,12 @@ function executeProviderScript(
     "location",
     `return ${script};`
   );
+  const location = new URL(pathname, "https://www.youtube.com");
   return run(
     documentValue,
     FakeElement,
     () => ({ display: "block", opacity: "1", visibility: "visible" }),
-    { pathname }
+    location
   ) as VoiceProviderAutomationResult;
 }
 
@@ -118,7 +121,7 @@ function executeYouTubeScript(
     },
     FakeElement,
     () => ({ display: "block", opacity: "1", visibility: "visible" }),
-    { pathname: "/results" }
+    new URL("https://www.youtube.com/results")
   ) as VoiceProviderAutomationResult;
 }
 
@@ -185,16 +188,16 @@ describe("voice provider automation", () => {
     const fanCard = new FakeElement({ byline: fanByline, text: "Outdoor Boys newest upload" });
     const creatorCard = new FakeElement({ byline: creatorByline, text: "A remote island camp" });
     const fanVideo = new FakeElement({
-      attributes: { href: "/watch?v=fan", title: "Outdoor Boys latest news" },
+      attributes: { href: "/watch?v=fan00000001", title: "Outdoor Boys latest news" },
       card: fanCard
     });
     const creatorVideo = new FakeElement({
-      attributes: { href: "/watch?v=official", title: "A remote island camp" },
+      attributes: { href: "/watch?v=official001", title: "A remote island camp" },
       card: creatorCard
     });
 
     expect(executeYouTubeScript(intent({ recency: "latest" }), [fanVideo, creatorVideo]))
-      .toBe("navigated");
+      .toEqual({ state: "navigated", youtubeContentId: "official001" });
     expect(fanVideo.clicked).toBe(false);
     expect(creatorVideo.clicked).toBe(true);
   });
@@ -205,7 +208,7 @@ describe("voice provider automation", () => {
       text: "Outdoor Boys reaction"
     });
     const unrelatedVideo = new FakeElement({
-      attributes: { href: "/watch?v=unrelated", title: "Outdoor Boys reaction" },
+      attributes: { href: "/watch?v=unrelated01", title: "Outdoor Boys reaction" },
       card: unrelatedCard
     });
 
@@ -216,7 +219,7 @@ describe("voice provider automation", () => {
   it("does not trust result-card text when a named creator byline is absent", () => {
     const fanCard = new FakeElement({ text: "Outdoor Boys reaction and latest news" });
     const fanVideo = new FakeElement({
-      attributes: { href: "/watch?v=fan", title: "Outdoor Boys newest upload" },
+      attributes: { href: "/watch?v=fan00000001", title: "Outdoor Boys newest upload" },
       card: fanCard
     });
 
@@ -230,7 +233,7 @@ describe("voice provider automation", () => {
       text: "A new Cody Ko upload"
     });
     const video = new FakeElement({
-      attributes: { href: "/watch?v=cody", title: "The Button" },
+      attributes: { href: "/watch?v=codyvideo01", title: "The Button" },
       card: creatorCard
     });
 
@@ -238,7 +241,7 @@ describe("voice provider automation", () => {
       creator: "Cody Co",
       recency: "latest",
       title: "latest video"
-    }), [video])).toBe("navigated");
+    }), [video])).toEqual({ state: "navigated", youtubeContentId: "codyvideo01" });
     expect(video.clicked).toBe(true);
   });
 
@@ -248,7 +251,7 @@ describe("voice provider automation", () => {
       text: "A Cody upload"
     });
     const video = new FakeElement({
-      attributes: { href: "/watch?v=short", title: "Latest video" },
+      attributes: { href: "/watch?v=shorter0001", title: "Latest video" },
       card: shorterCard
     });
 
@@ -271,17 +274,63 @@ describe("voice provider automation", () => {
         ? [fullscreen]
         : []
     };
-    const script = buildYouTubeVoiceAutomationScript(intent());
+    const script = buildYouTubeVoiceAutomationScript(intent(), false, "targetvid01");
 
-    expect(executeProviderScript(script, documentValue, "/watch"))
+    expect(executeProviderScript(script, documentValue, "/watch?v=unrelated01"))
+      .toBe("idle");
+    expect(fullscreen.clicked).toBe(false);
+
+    expect(executeProviderScript(script, documentValue, "/watch?v=targetvid01"))
       .toBe("fullscreen-requested");
     expect(fullscreen.clicked).toBe(true);
 
-    const fallbackScript = buildYouTubeVoiceAutomationScript(intent(), true);
-    expect(executeProviderScript(fallbackScript, documentValue, "/watch")).toBe("playing");
+    const fallbackScript = buildYouTubeVoiceAutomationScript(intent(), true, "targetvid01");
+    expect(executeProviderScript(fallbackScript, documentValue, "/watch?v=targetvid01"))
+      .toBe("playing");
 
     documentValue.fullscreenElement = { contains: () => true };
-    expect(executeProviderScript(fallbackScript, documentValue, "/watch")).toBe("complete");
+    expect(executeProviderScript(fallbackScript, documentValue, "/watch?v=targetvid01"))
+      .toBe("complete");
+  });
+
+  it("binds YouTube navigation and direct destinations to validated content ids", () => {
+    expect(youtubeContentIdFromUrl("https://www.youtube.com/watch?v=targetvid01"))
+      .toBe("targetvid01");
+    expect(youtubeContentIdFromUrl("https://www.youtube.com/shorts/shortsvid01"))
+      .toBe("shortsvid01");
+    expect(youtubeContentIdFromUrl("https://www.youtube.com/watch?v=short"))
+      .toBeNull();
+    expect(youtubeContentIdFromUrl("https://youtube.com.evil.test/watch?v=targetvid01"))
+      .toBeNull();
+    expect(parseVoiceProviderAutomationResult({
+      state: "navigated",
+      youtubeContentId: "targetvid01"
+    })).toEqual({ state: "navigated", youtubeContentId: "targetvid01" });
+    expect(parseVoiceProviderAutomationResult({
+      state: "navigated",
+      youtubeContentId: "short"
+    })).toBe("idle");
+
+    const byline = new FakeElement({ text: "Outdoor Boys" });
+    const short = new FakeElement({
+      attributes: { href: "/shorts/shortsvid01", title: "Camping" },
+      card: new FakeElement({ byline, text: "Camping" })
+    });
+    expect(executeYouTubeScript(intent(), [short]))
+      .toEqual({ state: "navigated", youtubeContentId: "shortsvid01" });
+
+    const playbackDocument = {
+      fullscreenElement: { contains: () => true },
+      querySelector: (selector: string) => selector === "video"
+        ? { ended: false, paused: false, readyState: 4 }
+        : null,
+      querySelectorAll: () => []
+    };
+    expect(executeProviderScript(
+      buildYouTubeVoiceAutomationScript(intent(), true, "shortsvid01"),
+      playbackDocument,
+      "/shorts/shortsvid01"
+    )).toBe("complete");
   });
 
   it("selects the hinted Netflix profile and falls back to the first normal profile", () => {
@@ -807,6 +856,10 @@ describe("voice provider automation", () => {
     expect(source).toContain("fullscreenRequested = true");
     expect(source).toContain("playbackRevealAttempts = Math.max(1, playbackRevealAttempts)");
     expect(source).toContain("trustedNetflixContentId");
+    expect(source).toContain("trustedYouTubeContentId");
+    expect(source).toContain("youtubeContentIdFromUrl(safeSuppliedDestination)");
+    expect(source).toContain("trustedYouTubeContentId = parsedResult.youtubeContentId");
+    expect(source).toContain("parseVoiceProviderAutomationResult(rawResult)");
     expect(source).toContain('keyCode: "F"');
     expect(source).toContain('result === "complete"');
   });

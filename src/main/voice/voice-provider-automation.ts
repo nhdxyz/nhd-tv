@@ -1,6 +1,6 @@
 import type { VoiceMediaIntent } from "./voice-intent";
 
-export type VoiceProviderAutomationResult =
+export type VoiceProviderAutomationState =
   | "complete"
   | "fullscreen-requested"
   | "idle"
@@ -8,6 +8,51 @@ export type VoiceProviderAutomationResult =
   | "play-clicked"
   | "playing"
   | "profile-selected";
+
+export interface YouTubeVoiceNavigationResult {
+  state: "navigated";
+  youtubeContentId: string;
+}
+
+export type VoiceProviderAutomationResult =
+  | VoiceProviderAutomationState
+  | YouTubeVoiceNavigationResult;
+
+const VOICE_PROVIDER_AUTOMATION_STATES: readonly VoiceProviderAutomationState[] = [
+  "complete",
+  "fullscreen-requested",
+  "idle",
+  "navigated",
+  "play-clicked",
+  "playing",
+  "profile-selected"
+];
+const YOUTUBE_CONTENT_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
+export function parseVoiceProviderAutomationResult(
+  value: unknown
+): VoiceProviderAutomationResult {
+  if (
+    typeof value === "string" &&
+    VOICE_PROVIDER_AUTOMATION_STATES.includes(value as VoiceProviderAutomationState)
+  ) {
+    return value as VoiceProviderAutomationState;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "idle";
+  const candidate = value as Record<string, unknown>;
+  if (
+    Object.keys(candidate).length === 2 &&
+    candidate.state === "navigated" &&
+    typeof candidate.youtubeContentId === "string" &&
+    YOUTUBE_CONTENT_ID_PATTERN.test(candidate.youtubeContentId)
+  ) {
+    return {
+      state: "navigated",
+      youtubeContentId: candidate.youtubeContentId
+    };
+  }
+  return "idle";
+}
 
 export function voiceProviderCommandHandled(
   intent: VoiceMediaIntent,
@@ -40,12 +85,36 @@ function serializedNetflixContentId(contentId: string | null): string {
   );
 }
 
+function serializedYouTubeContentId(contentId: string | null): string {
+  return JSON.stringify(
+    typeof contentId === "string" && YOUTUBE_CONTENT_ID_PATTERN.test(contentId)
+      ? contentId
+      : null
+  );
+}
+
 export function netflixContentIdFromUrl(urlValue: string | null): string | null {
   if (urlValue === null) return null;
   try {
     const url = new URL(urlValue);
     if (url.protocol !== "https:" || !/(?:^|\.)netflix\.com$/i.test(url.hostname)) return null;
     return /^\/(?:title|watch)\/([A-Za-z0-9_-]{1,64})(?:\/|$)/.exec(url.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function youtubeContentIdFromUrl(urlValue: string | null): string | null {
+  if (urlValue === null) return null;
+  try {
+    const url = new URL(urlValue);
+    if (url.protocol !== "https:" || !/(?:^|\.)youtube\.com$/i.test(url.hostname)) return null;
+    const contentId = /^\/watch\/?$/.test(url.pathname)
+      ? url.searchParams.get("v")
+      : /^\/shorts\/([A-Za-z0-9_-]{11})(?:\/|$)/.exec(url.pathname)?.[1] ?? null;
+    return contentId !== null && YOUTUBE_CONTENT_ID_PATTERN.test(contentId)
+      ? contentId
+      : null;
   } catch {
     return null;
   }
@@ -187,13 +256,27 @@ export function buildSpotifyVoiceAutomationScript(
 
 export function buildYouTubeVoiceAutomationScript(
   intent: VoiceMediaIntent,
-  fullscreenRequested = false
+  fullscreenRequested = false,
+  expectedContentId: string | null = null
 ): string {
   return `(() => {
     const intent = ${serializedIntent(intent)};
     const fullscreenRequested = ${JSON.stringify(fullscreenRequested)};
+    const expectedContentId = ${serializedYouTubeContentId(expectedContentId)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
+    const contentIdFromUrl = (value) => {
+      try {
+        const url = new URL(value, location.href);
+        if (url.origin !== location.origin) return null;
+        const contentId = /^\\/watch\\/?$/.test(url.pathname)
+          ? url.searchParams.get("v")
+          : /^\\/shorts\\/([A-Za-z0-9_-]{11})(?:\\/|$)/.exec(url.pathname)?.[1] ?? null;
+        return typeof contentId === "string" && /^[A-Za-z0-9_-]{11}$/.test(contentId)
+          ? contentId
+          : null;
+      } catch { return null; }
+    };
     const nearIdentity = (left, right) => {
       if (!left || !right || left.length !== right.length) return false;
       let differences = 0;
@@ -209,7 +292,12 @@ export function buildYouTubeVoiceAutomationScript(
       return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
         style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
     };
-    if (intent.action === "play" && location.pathname === "/watch") {
+    if (
+      intent.action === "play" &&
+      (location.pathname === "/watch" || location.pathname.startsWith("/shorts/"))
+    ) {
+      const currentContentId = contentIdFromUrl(location.href);
+      if (expectedContentId === null || currentContentId !== expectedContentId) return "idle";
       const video = document.querySelector("video");
       if (video && !video.paused && !video.ended && video.readyState >= 2) {
         const fullscreenElement = document.fullscreenElement;
@@ -259,10 +347,12 @@ export function buildYouTubeVoiceAutomationScript(
     } else {
       const genericTitles = new Set(["video", "a video", "something", "latest video"]);
       const anchors = [...document.querySelectorAll(
-        'ytd-video-renderer a#video-title,ytd-rich-item-renderer a#video-title,yt-lockup-view-model a[href^="/watch?"]'
+        'ytd-video-renderer a#video-title,ytd-rich-item-renderer a#video-title,'
+        + 'yt-lockup-view-model a[href^="/watch?"],yt-lockup-view-model a[href^="/shorts/"]'
       )];
       for (const anchor of anchors) {
-        if (!visible(anchor) || !anchor.getAttribute("href")?.startsWith("/watch?")) continue;
+        const href = anchor.getAttribute("href") ?? "";
+        if (!visible(anchor) || (!href.startsWith("/watch?") && !href.startsWith("/shorts/"))) continue;
         const card = anchor.closest('ytd-video-renderer,ytd-rich-item-renderer,yt-lockup-view-model') ?? anchor;
         const videoTitle = normalize(anchor.getAttribute("title") ?? anchor.textContent);
         const byline = normalize(card.querySelector(
@@ -286,9 +376,15 @@ export function buildYouTubeVoiceAutomationScript(
     candidates.sort((left, right) => right.score - left.score);
     const anchor = candidates[0]?.anchor;
     if (anchor instanceof HTMLElement) {
+      const targetContentId = contentIdFromUrl(anchor.getAttribute("href"));
+      if (
+        intent.action === "play" &&
+        intent.mediaType !== "channel" &&
+        targetContentId === null
+      ) return "idle";
       anchor.click();
       return intent.action === "play" && intent.mediaType !== "channel"
-        ? "navigated"
+        ? { state: "navigated", youtubeContentId: targetContentId }
         : "complete";
     }
     return "idle";

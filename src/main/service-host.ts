@@ -83,6 +83,8 @@ import {
   buildSpotifyVoiceAutomationScript,
   buildYouTubeVoiceAutomationScript,
   netflixContentIdFromUrl,
+  parseVoiceProviderAutomationResult,
+  youtubeContentIdFromUrl,
   type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
 
@@ -1590,6 +1592,9 @@ export class ServiceHost {
       let trustedNetflixContentId = definition.id === "netflix"
         ? netflixContentIdFromUrl(safeSuppliedDestination)
         : null;
+      let trustedYouTubeContentId = definition.id === "youtube"
+        ? youtubeContentIdFromUrl(safeSuppliedDestination)
+        : null;
       let trustNextNetflixNavigation = false;
       const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
       while (
@@ -1617,11 +1622,25 @@ export class ServiceHost {
             )
             : definition.id === "spotify"
               ? buildSpotifyVoiceAutomationScript(intent, playbackRequested)
-              : buildYouTubeVoiceAutomationScript(intent, fullscreenRequested);
-          const result = await view.webContents.executeJavaScript(
+              : buildYouTubeVoiceAutomationScript(
+                intent,
+                fullscreenRequested,
+                trustedYouTubeContentId
+              );
+          const rawResult = await view.webContents.executeJavaScript(
             script,
             true
-          ) as VoiceProviderAutomationResult;
+          ) as unknown;
+          const parsedResult = parseVoiceProviderAutomationResult(rawResult);
+          let result: Exclude<VoiceProviderAutomationResult, { state: "navigated" }>;
+          if (typeof parsedResult === "string") {
+            result = parsedResult;
+          } else if (definition.id === "youtube") {
+            trustedYouTubeContentId = parsedResult.youtubeContentId;
+            result = parsedResult.state;
+          } else {
+            result = "idle";
+          }
           this.#operationOwner.throwIfSuperseded(operation);
           signal?.throwIfAborted();
           if (this.#view !== view || view.webContents.isDestroyed()) return false;

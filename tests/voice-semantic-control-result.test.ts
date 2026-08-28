@@ -9,14 +9,14 @@ describe("semantic voice control outcomes", () => {
     expect(voiceSemanticControlOutcome({
       action: "seek-relative",
       offsetSeconds: 30
-    }, "acted", "YouTube")).toEqual({
+    }, "verified", "YouTube")).toEqual({
       detail: "Skipped forward 30 seconds.",
       handled: true
     });
     expect(voiceSemanticControlOutcome({
       action: "seek-relative",
       offsetSeconds: -120
-    }, "acted", "Netflix").detail).toBe("Went back 2 minutes.");
+    }, "verified", "Netflix").detail).toBe("Went back 2 minutes.");
     expect(voiceSemanticControlOutcome({
       action: "seek-absolute",
       positionSeconds: 3_600
@@ -26,8 +26,16 @@ describe("semantic voice control outcomes", () => {
   it("distinguishes verified idempotence from a newly applied state", () => {
     expect(voiceSemanticControlOutcome({ action: "captions-on" }, "complete", "YouTube"))
       .toMatchObject({ detail: "Captions are already on.", handled: true });
-    expect(voiceSemanticControlOutcome({ action: "fullscreen-enter" }, "acted", "Netflix"))
+    expect(voiceSemanticControlOutcome({ action: "fullscreen-enter" }, "verified", "Netflix"))
       .toMatchObject({ detail: "Entered full screen.", handled: true });
+  });
+
+  it("does not claim an unverified provider click completed", () => {
+    expect(voiceSemanticControlOutcome({ action: "skip-intro" }, "acted", "Netflix"))
+      .toEqual({
+        detail: "Sent a request to skip the intro in Netflix.",
+        handled: true
+      });
   });
 
   it("reports unsupported and unavailable controls honestly", () => {

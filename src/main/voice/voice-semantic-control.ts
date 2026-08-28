@@ -17,6 +17,7 @@ export type VoiceSemanticControlRequest =
 
 export type VoiceSemanticControlResult =
   | "complete"
+  | "verified"
   | "acted"
   | "needs-follow-up"
   | "unavailable"
@@ -38,6 +39,7 @@ const SIMPLE_ACTIONS = new Set<VoiceSemanticControlRequest["action"]>([
 ]);
 const RESULT_VALUES: readonly VoiceSemanticControlResult[] = [
   "complete",
+  "verified",
   "acted",
   "needs-follow-up",
   "unavailable",
@@ -183,7 +185,7 @@ export function buildVoiceSemanticControlScript(
       if (Math.abs(video.currentTime - target) <= 0.5) return "complete";
       try {
         video.currentTime = target;
-        return "acted";
+        return Math.abs(video.currentTime - target) <= 0.5 ? "verified" : "acted";
       } catch {
         return "unavailable";
       }
@@ -268,7 +270,9 @@ export function buildVoiceSemanticControlScript(
         if (current === null) return "unavailable";
         if (current === desired) return "complete";
         button.click();
-        return "acted";
+        return button.getAttribute("aria-pressed") === String(desired)
+          ? "verified"
+          : "acted";
       }
       const options = [...document.querySelectorAll(providerControls.captionOptions)].filter(enabled);
       const optionState = (option) => option.getAttribute("aria-checked") === "true" ||
@@ -281,7 +285,7 @@ export function buildVoiceSemanticControlScript(
       const target = desired ? onOptions[0] ?? null : offOption ?? null;
       if (target !== null) {
         target.click();
-        return "acted";
+        return optionState(target) ? "verified" : "acted";
       }
       const menu = firstControl(providerControls.captionsMenu);
       if (menu === null || menu.getAttribute("aria-expanded") === "true") return "unavailable";
@@ -294,7 +298,7 @@ export function buildVoiceSemanticControlScript(
       const control = firstControl(providerControls.fullscreenEnter);
       if (control !== null) {
         control.click();
-        return "acted";
+        return activeVideoIsFullscreen() ? "verified" : "acted";
       }
       const video = activeVideo();
       if (video === null || typeof video.requestFullscreen !== "function") return "unavailable";
@@ -312,7 +316,7 @@ export function buildVoiceSemanticControlScript(
       const control = firstControl(providerControls.fullscreenExit);
       if (control !== null) {
         control.click();
-        return "acted";
+        return !activeVideoIsFullscreen() ? "verified" : "acted";
       }
       if (typeof document.exitFullscreen !== "function") return "unavailable";
       try {

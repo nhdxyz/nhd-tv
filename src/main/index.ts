@@ -1575,7 +1575,10 @@ async function executeVoiceCommandPlanCore(
     );
     signal?.throwIfAborted();
     const outcome = voiceSemanticControlOutcome(plan.request, result, definition.name);
-    if (outcome.handled && voiceContextStore !== null) {
+    if (
+      (result === "complete" || result === "verified") &&
+      voiceContextStore !== null
+    ) {
       syncVoiceContextFromServiceHost();
       const snapshot = voiceContextStore.snapshot();
       voiceContextStore.recordVerifiedAction({

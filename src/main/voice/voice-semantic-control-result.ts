@@ -71,10 +71,16 @@ export function voiceSemanticControlOutcome(
   result: VoiceSemanticControlResult,
   serviceName: string
 ): VoiceSemanticControlOutcome {
-  if (result === "complete" || result === "acted") {
+  if (result === "complete" || result === "verified") {
     return { detail: successDetail(request, result === "complete"), handled: true };
   }
   const description = actionDescription(request);
+  if (result === "acted") {
+    return {
+      detail: `Sent a request to ${description} in ${serviceName}.`,
+      handled: true
+    };
+  }
   return result === "unsupported"
     ? {
       detail: `${serviceName} does not support the command to ${description}.`,

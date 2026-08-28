@@ -37,6 +37,7 @@ describe("semantic voice control host wiring", () => {
     expect(google).toBeGreaterThan(semantic);
     expect(execution).toContain("serviceHost.executeVoiceSemanticControl(");
     expect(execution).toContain("voiceSemanticControlOutcome(plan.request, result");
+    expect(execution).toContain('result === "complete" || result === "verified"');
     expect(execution).toContain("voiceContextStore.recordVerifiedAction({");
     expect(execution).toContain("verifiedActionForSemanticControl(plan.request)");
   });

@@ -215,12 +215,12 @@ describe("voice semantic controls", () => {
     const video = new FakeVideo({ currentTime: 30, duration: 100 });
     expect(execute("youtube", { action: "seek-relative", offsetSeconds: 90 }, {
       videos: [video]
-    })).toBe("acted");
+    })).toBe("verified");
     expect(video.currentTime).toBe(99.75);
 
     expect(execute("youtube", { action: "seek-absolute", positionSeconds: 50 }, {
       videos: [video]
-    })).toBe("acted");
+    })).toBe("verified");
     expect(video.currentTime).toBe(50);
     expect(execute("youtube", { action: "seek-absolute", positionSeconds: 50 }, {
       videos: [video]
@@ -323,6 +323,7 @@ describe("voice semantic controls", () => {
     expect(execute("youtube", { action: "skip-recap" })).toBe("unsupported");
     expect(execute("custom-service", { action: "next" })).toBe("unsupported");
     expect(parseVoiceSemanticControlResult("acted")).toBe("acted");
+    expect(parseVoiceSemanticControlResult("verified")).toBe("verified");
     expect(parseVoiceSemanticControlResult({ state: "acted" })).toBe("unavailable");
     expect(parseVoiceSemanticControlResult("anything-else")).toBe("unavailable");
   });

@@ -36,6 +36,22 @@ describe("Google watch resolver boundary", () => {
     expect(cancelActive).not.toContain("webContents.stop()");
   });
 
+  it("bounds automatic playback discovery and cancels hidden state on timeout", async () => {
+    const source = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../src/main/index.ts", import.meta.url), "utf8")
+    );
+    const execution = source.slice(
+      source.indexOf("async function executeGoogleWatchPlan"),
+      source.indexOf("async function executeVoiceCommandPlanCore")
+    );
+
+    expect(source).toContain("VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000");
+    expect(execution).toContain('plan.intent.action === "play"');
+    expect(execution).toContain("AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)");
+    expect(execution).toContain("signal?.aborted !== true");
+    expect(execution).toContain("resolver.cancelActive()");
+  });
+
   it("builds a regional, non-personalized Google query", () => {
     const url = new URL(googleWatchSearchUrl("Apollo 13 movie", "US"));
     expect(url.origin + url.pathname).toBe("https://www.google.com/search");

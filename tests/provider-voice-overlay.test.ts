@@ -52,4 +52,26 @@ describe("provider voice overlay", () => {
     expect(overlaySource).toContain("font-size: clamp(24px, 3.4vw, 34px)");
     expect(overlaySource).not.toContain("innerHTML");
   });
+
+  it("replaces a finalized transcript with truthful execution progress", () => {
+    const indexSource = readFileSync(
+      new URL("../src/main/index.ts", import.meta.url),
+      "utf8"
+    );
+    const progress = indexSource.slice(
+      indexSource.indexOf("function presentPhoneVoiceProgress"),
+      indexSource.indexOf("function presentPhoneVoiceResult")
+    );
+
+    expect(indexSource).toContain(
+      'presentPhoneVoiceProgress("Understanding your request…", commandId)'
+    );
+    expect(progress).toContain("remainingVoiceTranscriptDisplayMilliseconds(");
+    expect(progress).toContain("activeVoiceProcessingCommandId !== commandId");
+    expect(indexSource).toContain('presentPhoneVoiceProgress("Checking your services…")');
+    expect(indexSource).toContain('presentPhoneVoiceProgress(`Opening ${definition.name}…`)');
+    expect(indexSource).toContain(
+      'presentPhoneVoiceProgress(`Starting ${result.resolvedTitle ?? plan.intent.title}…`)'
+    );
+  });
 });

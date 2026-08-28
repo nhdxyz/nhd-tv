@@ -139,6 +139,7 @@ const VOICE_CONFIRMATION_DISPLAY_MS = 30_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
 const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 130_000;
+const VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
   "#store-search"
@@ -614,6 +615,44 @@ function presentPhoneVoiceTranscript(transcript: string): void {
     VOICE_UNDERSTANDING_TIMEOUT_MS,
     commandId
   );
+  presentPhoneVoiceProgress("Understanding your request…", commandId);
+}
+
+function presentPhoneVoiceProgress(
+  detail: string,
+  commandId = activeVoiceProcessingCommandId
+): void {
+  if (commandId === null) return;
+  const showProgress = () => {
+    if (activeVoiceProcessingCommandId !== commandId) return;
+    showVoicePresentation(
+      "understanding",
+      { detail },
+      VOICE_UNDERSTANDING_TIMEOUT_MS,
+      commandId
+    );
+  };
+  const remainingTranscriptMs = remainingVoiceTranscriptDisplayMilliseconds(
+    currentVoiceCommandId === commandId ? currentVoicePresentation.phase : "hidden",
+    voiceTranscriptPresentedAt,
+    Date.now(),
+    VOICE_TRANSCRIPT_MIN_DISPLAY_MS
+  );
+  if (remainingTranscriptMs <= 0) {
+    showProgress();
+    return;
+  }
+
+  clearVoicePresentationTimer();
+  const version = voicePresentationVersion;
+  voicePresentationTimer = setTimeout(() => {
+    if (
+      version !== voicePresentationVersion ||
+      activeVoiceProcessingCommandId !== commandId
+    ) return;
+    voicePresentationTimer = null;
+    showProgress();
+  }, remainingTranscriptMs);
 }
 
 function presentPhoneVoiceResult(
@@ -1251,11 +1290,32 @@ async function executeGoogleWatchPlan(
   if (resolver === null || !usesGoogleWatchDiscovery(plan)) return null;
 
   const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
+  const discoverySignal = plan.intent.action === "play"
+    ? signal === undefined
+      ? AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)
+      : AbortSignal.any([
+        signal,
+        AbortSignal.timeout(VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS)
+      ])
+    : signal;
+  const resolveOffers = async (completeOffers: boolean) => {
+    try {
+      return await resolver.resolve(lookup, {
+        completeOffers,
+        signal: discoverySignal
+      });
+    } catch (error) {
+      if (discoverySignal?.aborted === true && signal?.aborted !== true) {
+        resolver.cancelActive();
+      }
+      throw error;
+    }
+  };
   signal?.throwIfAborted();
-  let result = await resolver.resolve(lookup, {
-    completeOffers: watchOffersShouldBeComplete(plan.intent, plan.candidateServiceIds),
-    signal
-  });
+  presentPhoneVoiceProgress("Checking your services…");
+  let result = await resolveOffers(
+    watchOffersShouldBeComplete(plan.intent, plan.candidateServiceIds)
+  );
   signal?.throwIfAborted();
   if (!googleWatchResultMatchesIntent(result, plan.intent)) {
     throw new Error("Google watch discovery returned a different title or episode.");
@@ -1270,7 +1330,8 @@ async function executeGoogleWatchPlan(
 
   let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
   if (watchOffersShouldExpand(result, selected, plan.candidateServiceIds)) {
-    result = await resolver.resolve(lookup, { completeOffers: true, signal });
+    presentPhoneVoiceProgress("Checking all of your services…");
+    result = await resolveOffers(true);
     signal?.throwIfAborted();
     if (!googleWatchResultMatchesIntent(result, plan.intent)) {
       throw new Error("Google watch discovery changed title or episode while expanding offers.");
@@ -1290,7 +1351,9 @@ async function executeGoogleWatchPlan(
   const playbackUrl = sanitizePlaybackUrl(selected.offer.watchUrl, definition);
   if (playbackUrl === null) return null;
 
+  presentPhoneVoiceProgress(`Opening ${definition.name}…`);
   await openTrackedService(definition, playbackUrl, signal, operationToken);
+  presentPhoneVoiceProgress(`Starting ${result.resolvedTitle ?? plan.intent.title}…`);
   const automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
     intendedUrl: playbackUrl,
     profileNameHint: activeVoiceProfileName()
@@ -1316,12 +1379,14 @@ async function executeVoiceCommandPlanCore(
     return { detail: plan.detail, handled: plan.handled ?? true };
   }
   if (plan.kind === "set-system-muted") {
+    presentPhoneVoiceProgress(plan.muted ? "Muting the TV…" : "Restoring the sound…");
     const result = await systemVolumeController.setMuted(plan.muted);
     signal?.throwIfAborted();
     return result;
   }
   const operation = serviceHost?.beginOperation();
   if (plan.kind === "remote-action") {
+    presentPhoneVoiceProgress("Sending that control…");
     const result = await handleRemoteAction(plan.action, signal, operation);
     signal?.throwIfAborted();
     return {
@@ -1333,6 +1398,7 @@ async function executeVoiceCommandPlanCore(
     if (serviceHost === null || serviceHost.activeServiceId === null) {
       return { detail: "Nothing is currently open.", handled: true };
     }
+    presentPhoneVoiceProgress("Closing the current app…");
     await serviceHost.closeWithCheckpoint(signal, operation);
     signal?.throwIfAborted();
     if (mainWindow !== null && !mainWindow.isDestroyed()) {
@@ -1352,6 +1418,7 @@ async function executeVoiceCommandPlanCore(
     if (serviceHost?.activeServiceId === definition.id && !serviceHost.isBackgrounded) {
       return { detail: `${definition.name} is already open.`, handled: true };
     }
+    presentPhoneVoiceProgress(`Opening ${definition.name}…`);
     await openTrackedService(definition, definition.startUrl, signal, operation);
     signal?.throwIfAborted();
     return { detail: `Opened ${definition.name}.`, handled: true };
@@ -1406,13 +1473,20 @@ async function executeVoiceCommandPlanCore(
   const searchUrl = destination.serviceId === "youtube"
     ? applyYouTubeLatestSort(baseSearchUrl, plan.intent)
     : baseSearchUrl;
+  presentPhoneVoiceProgress(
+    plan.intent.action === "search" || isVoiceDiscoveryIntent(plan.intent)
+      ? `Searching ${definition.name}…`
+      : `Opening ${definition.name}…`
+  );
   await openTrackedService(definition, searchUrl, signal, operation);
-  const automated = isVoiceDiscoveryIntent(plan.intent) || plan.intent.action === "search"
-    ? false
-    : await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+  let automated = false;
+  if (!isVoiceDiscoveryIntent(plan.intent) && plan.intent.action !== "search") {
+    presentPhoneVoiceProgress(`Starting ${plan.intent.title}…`);
+    automated = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
       intendedUrl: searchUrl,
       profileNameHint: activeVoiceProfileName()
     }, signal, operation) ?? false;
+  }
   signal?.throwIfAborted();
   const exactEpisode = plan.intent.mediaType === "episode"
     ? ` season ${plan.intent.season}, episode ${plan.intent.episode}`
@@ -1508,6 +1582,7 @@ async function confirmRemoteVoice(
     presentPhoneVoiceResult(result, commandId);
     return result;
   }
+  activeVoiceProcessingCommandId = commandId;
   showVoicePresentation(
     "understanding",
     { detail: "Starting your choice…" },
@@ -1524,6 +1599,10 @@ async function confirmRemoteVoice(
     if (signal.aborted) return result;
     presentPhoneVoiceResult(result, commandId);
     return result;
+  } finally {
+    if (activeVoiceProcessingCommandId === commandId) {
+      activeVoiceProcessingCommandId = null;
+    }
   }
 }
 

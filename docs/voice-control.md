@@ -40,6 +40,30 @@ The current intent model default is [`gpt-5.6-luna`](https://developers.openai.c
 
 ## Provider behavior
 
+### Ambiguity and multiple services
+
+NHD-TV never lets the model choose a URL or silently treat every enabled app as a subscription offer. For an exact movie, show, or episode available from several providers, selection follows this order:
+
+1. an explicitly named provider such as Netflix or Disney+;
+2. the active profile's visible TV-lineup order;
+3. Google's offer order within the selected provider.
+
+Only subscription and free offers may launch. Price-bearing rent/buy offers are reported but never opened automatically. A sparse, price-free Google label is treated as subscribed only for subscription-only Netflix and Disney+ destinations; an unlabeled YouTube movie is not. The provider list and order are recalculated when a 30-second phone confirmation is tapped, so switching profiles or disabling a service cannot use stale permissions.
+
+Before a direct provider URL opens, the normalized Google panel title must equal the requested title after harmless labels such as “movie” or “series” are removed. An exact episode also requires visible matching season and episode coordinates. A mismatch falls back to the provider's own search rather than claiming playback succeeded.
+
+Underspecified commands such as “play it” or “put that on” return a retry message and perform no navigation. Spoken release years, editions, languages, countries, and remake qualifiers remain part of the search title.
+
+### Open-ended recommendations
+
+Voice discovery recognizes genre, mood, era, actor, theme, and natural-language descriptions, plus requests for titles similar to a named movie or show. Examples include:
+
+- “Show me a tense action movie with a clever lead.”
+- “I want a funny family movie from the 1990s.”
+- “Find movies similar to Inception.”
+
+These requests open Netflix's own discovery results using a bounded search phrase. They never guess one title and auto-play it, even when automatic playback is enabled. “Similar to” searches preserve only the named seed title so Netflix can present its own related catalog results. If Netflix is not enabled in the profile, the phone explains that recommendation discovery is unavailable instead of rerouting the request to YouTube.
+
 ### Netflix and where-to-watch discovery
 
 Movies, shows, titles, and exact episodes use a private-project Google Where to watch adapter:
@@ -60,7 +84,7 @@ Songs, artists, albums, and playlists route to Spotify's provider-owned search. 
 
 ### YouTube
 
-Videos and channels route to YouTube's provider-owned search. Channel commands select a visible channel result. Video commands select a visible video result. “Latest video” adds NHD-TV's fixed upload-date search token, keeps the creator constraint, and opens the first matching visible result. YouTube still owns playback, authentication, ads, and availability.
+Videos and channels route to YouTube's provider-owned search. A YouTuber/profile request prioritizes dedicated channel result cards and normalized channel names or handles. Video requests rank exact titles and require the named creator's byline; a fan upload that merely mentions the creator in its title is skipped. “Latest video” searches only for the creator, adds NHD-TV's fixed upload-date token, and opens the first visible result whose channel byline matches. If no safe match appears within eight seconds, YouTube results remain open and the phone reports the fallback. YouTube still owns playback, authentication, ads, and availability.
 
 ## Local discovery cache
 
@@ -95,5 +119,11 @@ After adding a key, qualify these commands on a paired iPhone in both confirmati
 - “Open Kanye West on Spotify”
 - “Play the Outdoor Boys latest video”
 - “Go to the Outdoor Boys channel”
+- “Show me a tense action movie with a clever lead”
+- “Find movies similar to Inception”
+- “Play Moana on Disney Plus”
+- “Play Dune 2021”
+
+Also verify that “play it” performs no navigation, a YouTube fan upload is not selected for a named creator, a rent/buy offer is not launched, and changing profiles while a confirmation is visible causes the current profile's provider lineup to be re-evaluated.
 
 Check that a normal exit removes only the NHD-TV `8443` Serve route, that an unrelated `443` route remains unchanged, and that restarting creates a new short-lived pairing URL.

@@ -49,7 +49,7 @@ describe("Google watch resolver boundary", () => {
       source.indexOf("async function executeVoiceCommandPlanCore")
     );
 
-    expect(source).toContain("VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000");
+    expect(source).toContain("VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 8_000");
     expect(source).toContain("VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS = 15_000");
     expect(execution).toContain('plan.intent.action === "play"');
     expect(execution).toContain("runVoiceStageWithDeadline(");

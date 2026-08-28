@@ -165,9 +165,9 @@ export class OpenAiVoiceClient {
     this.#getApiKey = options.getApiKey;
     this.#intentModel = options.intentModel ?? "gpt-5.6-luna";
     this.#intentRequestTimeoutMs = options.intentRequestTimeoutMs ??
-      options.requestTimeoutMs ?? 12_000;
+      options.requestTimeoutMs ?? 8_000;
     this.#transcriptionRequestTimeoutMs = options.transcriptionRequestTimeoutMs ??
-      options.requestTimeoutMs ?? 20_000;
+      options.requestTimeoutMs ?? 12_000;
     this.#transcriptionModel = options.transcriptionModel ?? "gpt-transcribe";
   }
 

@@ -150,7 +150,10 @@ import {
   createVoicePresentationState,
   remainingVoiceTranscriptDisplayMilliseconds
 } from "./voice/voice-presentation";
-import { runVoiceStageWithDeadline } from "./voice/voice-stage-deadline";
+import {
+  runVoiceStageWithDeadline,
+  VoiceStageTimeoutError
+} from "./voice/voice-stage-deadline";
 import { ProviderVoiceOverlay } from "./voice/provider-voice-overlay";
 
 const SHELL_HOST = "shell";
@@ -164,8 +167,10 @@ const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
 const VOICE_CONFIRMATION_DISPLAY_MS = 30_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
 const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
-const VOICE_UNDERSTANDING_TIMEOUT_MS = 130_000;
-const VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 10_000;
+const VOICE_COMMAND_SOFT_TIMEOUT_MS = 50_000;
+const VOICE_CONFIRMATION_SOFT_TIMEOUT_MS = 32_000;
+const VOICE_UNDERSTANDING_TIMEOUT_MS = 52_000;
+const VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS = 8_000;
 const VOICE_AVAILABILITY_DISCOVERY_TIMEOUT_MS = 15_000;
 const SHELL_REMOTE_TEXT_ENTRY_SELECTORS = [
   "#search-input",
@@ -1737,7 +1742,9 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
   return {
     detail: error instanceof OpenAiVoiceError
       ? error.message
-      : "Voice control could not process that request.",
+      : error instanceof VoiceStageTimeoutError
+        ? error.message
+        : "Voice control could not process that request.",
     outcome: "failed"
   };
 }
@@ -1748,7 +1755,8 @@ async function handleRemoteVoice(
   signal: AbortSignal,
   confirmationId: string | null
 ): Promise<PhoneRemoteVoiceResult> {
-  if (!remoteVoiceStatus().available || voiceCommandSession === null) {
+  const session = voiceCommandSession;
+  if (!remoteVoiceStatus().available || session === null) {
     const result: PhoneRemoteVoiceResult = {
       detail: remoteVoiceStatus().detail,
       outcome: "failed"
@@ -1759,7 +1767,19 @@ async function handleRemoteVoice(
   presentPhoneVoiceActivity({ commandId, phase: "understanding" });
   activeVoiceProcessingCommandId = commandId;
   try {
-    const result = await voiceCommandSession.process(clip, signal, confirmationId);
+    const result = await runVoiceStageWithDeadline(
+      (stageSignal) => session.process(
+        clip,
+        stageSignal,
+        confirmationId
+      ),
+      {
+        onTimeout: () => googleWatchResolver?.cancelActive(),
+        signal,
+        timeoutMessage: "Voice control took too long. Try that command again.",
+        timeoutMs: VOICE_COMMAND_SOFT_TIMEOUT_MS
+      }
+    );
     if (signal.aborted) return voiceFailure(signal.reason);
     presentPhoneVoiceResult(result, commandId);
     return result;
@@ -1780,7 +1800,8 @@ async function confirmRemoteVoice(
   commandId: string,
   signal: AbortSignal
 ): Promise<PhoneRemoteVoiceResult> {
-  if (voiceCommandSession === null) {
+  const session = voiceCommandSession;
+  if (session === null) {
     const result: PhoneRemoteVoiceResult = {
       detail: "Voice control is still starting.",
       outcome: "failed"
@@ -1796,7 +1817,15 @@ async function confirmRemoteVoice(
     commandId
   );
   try {
-    const result = await voiceCommandSession.confirm(confirmationId, signal);
+    const result = await runVoiceStageWithDeadline(
+      (stageSignal) => session.confirm(confirmationId, stageSignal),
+      {
+        onTimeout: () => googleWatchResolver?.cancelActive(),
+        signal,
+        timeoutMessage: "Starting that choice took too long. Try the command again.",
+        timeoutMs: VOICE_CONFIRMATION_SOFT_TIMEOUT_MS
+      }
+    );
     if (signal.aborted) return voiceFailure(signal.reason);
     presentPhoneVoiceResult(result, commandId);
     return result;

@@ -4,7 +4,7 @@ const MAX_CANDIDATES = 10;
 
 export const DEFAULT_VOICE_CONTEXT_TTL_MS = Object.freeze({
   candidates: 2 * 60_000,
-  clarification: 90_000,
+  clarification: 30_000,
   conversation: 5 * 60_000,
   liveMedia: 30 * 60_000
 });
@@ -557,7 +557,7 @@ export class VoiceContextStore {
     this.#activeService = normalized;
     this.#liveMedia = null;
     this.#liveMediaKey = null;
-    this.#clearConversation();
+    this.#clearTransientConversation();
     this.#revisions.serviceRevision += 1;
     this.#revisions.mediaRevision += 1;
     return revisionCopy(this.#revisions);
@@ -585,7 +585,7 @@ export class VoiceContextStore {
     const key = mediaIdentityKey(reference);
     const sameMedia = key === this.#liveMediaKey && this.#liveMedia !== null;
     if (!sameMedia) {
-      this.#clearConversation();
+      this.#clearTransientConversation();
       this.#revisions.mediaRevision += 1;
     }
 
@@ -661,7 +661,7 @@ export class VoiceContextStore {
     if (!this.#matches(expected) || this.#liveMedia === null) return false;
     this.#liveMedia = null;
     this.#liveMediaKey = null;
-    this.#clearConversation();
+    this.#clearTransientConversation();
     this.#revisions.mediaRevision += 1;
     return true;
   }
@@ -806,9 +806,13 @@ export class VoiceContextStore {
   }
 
   #clearConversation(): void {
-    this.#candidates = null;
+    this.#clearTransientConversation();
     this.#lastMediaTarget = null;
     this.#lastProvider = null;
+  }
+
+  #clearTransientConversation(): void {
+    this.#candidates = null;
     this.#lastVerifiedAction = null;
     this.#pendingClarification = null;
   }

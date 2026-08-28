@@ -127,8 +127,16 @@ function referenceSource(
 
   if (intent.ordinal === null) return null;
   const candidateSet = snapshot.conversation.candidates;
+  const clarification = snapshot.conversation.pendingClarification;
+  if (
+    candidateSet === null ||
+    clarification === null ||
+    clarification.candidateSetRevision !== candidateSet.revision
+  ) {
+    return null;
+  }
   const candidate: VoiceContextCandidate | undefined =
-    candidateSet?.candidates[intent.ordinal - 1];
+    candidateSet.candidates[intent.ordinal - 1];
   return candidate === undefined
     ? null
     : { media: candidate, provider: candidate.provider };

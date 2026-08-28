@@ -136,7 +136,7 @@ describe("shared voice context store", () => {
     });
   });
 
-  it("clears conversation on service and media boundaries", () => {
+  it("preserves the explicit target while clearing transient service and media context", () => {
     const store = new VoiceContextStore({ now: () => 20_000 });
     let scope = activateNetflix(store);
     expect(store.recordMediaTarget({
@@ -145,7 +145,9 @@ describe("shared voice context store", () => {
     }, scope)).toBe(true);
 
     scope = store.setActiveService({ id: "youtube", name: "YouTube" });
-    expect(store.snapshot().conversation.lastMediaTarget).toBeNull();
+    expect(store.snapshot().conversation.lastMediaTarget).toMatchObject({
+      identity: { title: "Apollo 13" }
+    });
     expect(store.recordProvider({ id: "youtube", name: "YouTube" }, scope)).toBe(true);
 
     scope = store.observeMedia({
@@ -161,10 +163,10 @@ describe("shared voice context store", () => {
       playbackStatus: "playing"
     }, scope);
     expect(nextScope?.mediaRevision).toBeGreaterThan(scope.mediaRevision);
-    expect(store.snapshot().conversation).toEqual({
+    expect(store.snapshot().conversation).toMatchObject({
       candidates: null,
-      lastMediaTarget: null,
-      lastProvider: null,
+      lastMediaTarget: { identity: { title: "Apollo 13" } },
+      lastProvider: { id: "youtube" },
       lastVerifiedAction: null,
       pendingClarification: null
     });

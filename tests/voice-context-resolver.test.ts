@@ -121,10 +121,14 @@ describe("shared voice context resolver", () => {
       playbackStatus: "playing"
     }, scope) ?? scope;
     expect(recordVoiceMediaIntentContext(store, mediaIntent())).toBe(true);
-    store.setCandidates([{
+    const candidates = store.setCandidates([{
       identity: { title: "Dune" },
       mediaType: "movie"
     }], scope);
+    expect(store.setPendingClarification({
+      candidateSetRevision: candidates?.revision,
+      kind: "provider-selection"
+    }, scope)).toBe(true);
 
     now += 10;
     expect(resolveVoiceMediaReferenceIntent(referenceIntent(), store.snapshot())).toEqual({
@@ -165,7 +169,7 @@ describe("shared voice context resolver", () => {
   it("selects candidates strictly by their stored one-based order", () => {
     const store = new VoiceContextStore({ now: () => 5_000 });
     const scope = store.revisions();
-    store.setCandidates([{
+    const candidates = store.setCandidates([{
       id: "z-last-alphabetically",
       identity: { title: "First stored choice", year: 2020 },
       mediaType: "movie",
@@ -176,6 +180,10 @@ describe("shared voice context resolver", () => {
       mediaType: "movie",
       provider: { id: "disney-plus", name: "Disney+" }
     }], scope);
+    expect(store.setPendingClarification({
+      candidateSetRevision: candidates?.revision,
+      kind: "provider-selection"
+    }, scope)).toBe(true);
 
     expect(resolveVoiceMediaReferenceIntent(referenceIntent({
       ordinal: 2,
@@ -200,7 +208,7 @@ describe("shared voice context resolver", () => {
   it("requires both coordinates before resolving an exact episode", () => {
     const store = new VoiceContextStore({ now: () => 6_000 });
     const scope = store.revisions();
-    store.setCandidates([{
+    const candidates = store.setCandidates([{
       identity: { seriesTitle: "Breaking Bad", title: "Breaking Bad" },
       mediaType: "episode",
       provider: { id: "netflix" }
@@ -215,6 +223,10 @@ describe("shared voice context resolver", () => {
       mediaType: "episode",
       provider: { id: "netflix" }
     }], scope);
+    expect(store.setPendingClarification({
+      candidateSetRevision: candidates?.revision,
+      kind: "candidate-selection"
+    }, scope)).toBe(true);
 
     expect(resolveVoiceMediaReferenceIntent(referenceIntent({
       ordinal: 1,
@@ -228,6 +240,39 @@ describe("shared voice context resolver", () => {
       mediaType: "episode",
       season: 1,
       title: "Breaking Bad"
+    });
+  });
+
+  it("rejects a numbered choice when its displayed clarification is absent or expired", () => {
+    let now = 6_500;
+    const store = new VoiceContextStore({
+      now: () => now,
+      ttlMs: { candidates: 200, clarification: 100 }
+    });
+    const scope = store.revisions();
+    const candidates = store.setCandidates([{
+      identity: { title: "Apollo 13" },
+      mediaType: "movie",
+      provider: { id: "netflix", name: "Netflix" }
+    }], scope);
+    const ordinal = referenceIntent({ ordinal: 1, reference: "candidate" });
+
+    expect(resolveVoiceMediaReferenceIntent(ordinal, store.snapshot())).toEqual({
+      kind: "unknown"
+    });
+    expect(store.setPendingClarification({
+      candidateSetRevision: candidates?.revision,
+      kind: "provider-selection"
+    }, scope)).toBe(true);
+    expect(resolveVoiceMediaReferenceIntent(ordinal, store.snapshot())).toMatchObject({
+      providerHint: "netflix",
+      title: "Apollo 13"
+    });
+
+    now += 100;
+    expect(store.snapshot().conversation.candidates).not.toBeNull();
+    expect(resolveVoiceMediaReferenceIntent(ordinal, store.snapshot())).toEqual({
+      kind: "unknown"
     });
   });
 

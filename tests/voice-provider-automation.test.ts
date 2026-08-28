@@ -90,6 +90,8 @@ describe("voice provider automation", () => {
     expect(() => new Function(script)).not.toThrow();
     expect(script).toContain('Stronger\\"; location=\\"https://evil.test');
     expect(script).toContain('[data-testid="play-button"]');
+    expect(script).toContain("exactTitle");
+    expect(script).not.toContain('[data-testid="card-container"],section');
     expect(script).not.toContain("eval(");
     expect(script).not.toContain("innerHTML");
   });

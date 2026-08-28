@@ -14,6 +14,7 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
   return `(() => {
     const intent = ${serializedIntent(intent)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
+    const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
     const visible = (element) => {
       if (!(element instanceof HTMLElement)) return false;
       const rect = element.getBoundingClientRect();
@@ -22,16 +23,27 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
     };
     const title = normalize(intent.title);
     const creator = normalize(intent.creator);
-    const matches = (element) => {
+    const titleIdentity = identity(title);
+    const creatorIdentity = identity(creator);
+    const matches = (element, hrefPrefix) => {
       const text = normalize(element.textContent);
-      return text.includes(title) && (!creator || text.includes(creator));
+      const textIdentity = identity(text);
+      const titleLinks = [...element.querySelectorAll('a[href]')]
+        .filter((anchor) => anchor.getAttribute("href")?.startsWith(hrefPrefix));
+      const exactTitle = titleLinks.some((anchor) => identity(anchor.textContent) === titleIdentity);
+      const titleMatches = exactTitle || titleLinks.length === 0 && textIdentity.includes(titleIdentity);
+      return titleMatches && (!creatorIdentity || textIdentity.includes(creatorIdentity));
     };
     const playButton = (root) => [...root.querySelectorAll(
       '[data-testid="play-button"],button[aria-label^="Play "],button[aria-label="Play"]'
     )].find(visible);
+    const hrefPrefix = intent.mediaType === "artist" ? "/artist/"
+      : intent.mediaType === "album" ? "/album/"
+        : intent.mediaType === "playlist" ? "/playlist/"
+          : intent.mediaType === "song" ? "/track/" : "/";
     const rows = [...document.querySelectorAll(
-      '[data-testid="tracklist-row"],[role="row"],[data-testid="card-container"],section'
-    )].filter((element) => visible(element) && matches(element));
+      '[data-testid="tracklist-row"],[role="row"],[data-testid="card-container"]'
+    )].filter((element) => visible(element) && matches(element, hrefPrefix));
     for (const row of rows) {
       const button = playButton(row);
       if (button instanceof HTMLElement && intent.action === "play") {
@@ -39,14 +51,11 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
         return true;
       }
     }
-    const hrefPrefix = intent.mediaType === "artist" ? "/artist/"
-      : intent.mediaType === "album" ? "/album/"
-        : intent.mediaType === "playlist" ? "/playlist/"
-          : intent.mediaType === "song" ? "/track/" : "/";
     const anchor = [...document.querySelectorAll('a[href]')]
       .find((candidate) => visible(candidate) &&
         candidate.getAttribute("href")?.startsWith(hrefPrefix) &&
-        matches(candidate.closest('[data-testid="card-container"],[role="row"],section') ?? candidate));
+        identity(candidate.textContent) === titleIdentity &&
+        matches(candidate.closest('[data-testid="card-container"],[role="row"]') ?? candidate, hrefPrefix));
     if (intent.action !== "play" && anchor instanceof HTMLElement) {
       anchor.click();
       return true;

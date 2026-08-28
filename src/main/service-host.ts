@@ -93,7 +93,11 @@ import {
   type VoiceProviderAutomationResult
 } from "./voice/voice-provider-automation";
 import {
+  buildSpotifyRepeatControlStateScript,
+  buildSpotifyRepeatTransitionScript,
   buildVoiceSemanticControlScript,
+  executeSpotifyRepeatStateChange,
+  parseVoiceSpotifyRepeatControlState,
   parseVoiceSemanticControlResult,
   type VoiceSemanticControlRequest,
   type VoiceSemanticControlResult
@@ -2091,6 +2095,59 @@ export class ServiceHost {
       !isPlaybackUrl(view.webContents.getURL(), definition)
     ) {
       return "unavailable";
+    }
+
+    if (
+      definition.id === "spotify" &&
+      (request.action === "repeat-off" ||
+        request.action === "repeat-all" ||
+        request.action === "repeat-one")
+    ) {
+      const stateScript = buildSpotifyRepeatControlStateScript();
+      try {
+        return await executeSpotifyRepeatStateChange(request, {
+          clickTransition: async (expectedState) => {
+            this.#operationOwner.throwIfSuperseded(operation);
+            signal?.throwIfAborted();
+            if (this.#view !== view || view.webContents.isDestroyed()) return false;
+            const transitionScript = buildSpotifyRepeatTransitionScript(expectedState);
+            if (transitionScript === null) return false;
+            // Electron cannot recall executeJavaScript after dispatch. Treat this
+            // immediate ownership check as the atomic boundary and keep the page
+            // script synchronous with exactly one compare-before-click action.
+            // Cancellation after this boundary may finish that owned click, but
+            // the host driver will never authorize a later transition.
+            this.#operationOwner.throwIfSuperseded(operation);
+            signal?.throwIfAborted();
+            const clicked = await waitWithSignal(
+              view.webContents.executeJavaScript(transitionScript, true),
+              signal
+            );
+            this.#operationOwner.throwIfSuperseded(operation);
+            signal?.throwIfAborted();
+            return this.#view === view && !view.webContents.isDestroyed() && clicked === true;
+          },
+          pause: (milliseconds, pauseSignal) => delay(milliseconds, pauseSignal),
+          readState: async () => {
+            this.#operationOwner.throwIfSuperseded(operation);
+            signal?.throwIfAborted();
+            if (this.#view !== view || view.webContents.isDestroyed()) return null;
+            const state = await waitWithSignal(
+              view.webContents.executeJavaScript(stateScript, true),
+              signal
+            );
+            this.#operationOwner.throwIfSuperseded(operation);
+            signal?.throwIfAborted();
+            if (this.#view !== view || view.webContents.isDestroyed()) return null;
+            return parseVoiceSpotifyRepeatControlState(state);
+          },
+          signal
+        });
+      } catch {
+        signal?.throwIfAborted();
+        this.#operationOwner.throwIfSuperseded(operation);
+        return "unavailable";
+      }
     }
 
     const script = buildVoiceSemanticControlScript(definition.id, request);

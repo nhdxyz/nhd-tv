@@ -34,16 +34,39 @@ describe("semantic voice control host wiring", () => {
     expect(method).not.toContain("#closeVoiceOperationView");
   });
 
+  it("authorizes each Spotify repeat transition in the host with one synchronous click", () => {
+    expect(method).toContain("buildSpotifyRepeatControlStateScript()");
+    expect(method).toContain("executeSpotifyRepeatStateChange(request, {");
+    expect(method).toContain("buildSpotifyRepeatTransitionScript(expectedState)");
+    expect(method).toContain("parseVoiceSpotifyRepeatControlState(state)");
+    const transition = method.indexOf("view.webContents.executeJavaScript(transitionScript, true)");
+    expect(transition).toBeGreaterThan(-1);
+    const authorization = method.lastIndexOf(
+      "this.#operationOwner.throwIfSuperseded(operation)",
+      transition
+    );
+    const abortCheck = method.lastIndexOf("signal?.throwIfAborted()", transition);
+    expect(authorization).toBeGreaterThan(-1);
+    expect(abortCheck).toBeGreaterThan(authorization);
+    expect(abortCheck).toBeLessThan(transition);
+    expect(method).toContain("the host driver will never authorize a later transition");
+    expect(method).not.toContain("restoreFromHome");
+    expect(method).not.toContain("navigate(");
+  });
+
   it("rejects video controls on provider preview pages before page execution", () => {
     const gate = method.indexOf('definition.id !== "spotify"');
     const build = method.indexOf("buildVoiceSemanticControlScript(definition.id, request)");
+    const repeatBranch = method.indexOf('definition.id === "spotify"', gate);
     const execute = method.indexOf("view.webContents.executeJavaScript(script, true)");
     expect(gate).toBeGreaterThan(-1);
+    expect(repeatBranch).toBeGreaterThan(gate);
     expect(gate).toBeLessThan(build);
     expect(gate).toBeLessThan(execute);
-    expect(method.slice(gate, build)).toContain("isPlaybackUrl(view.webContents.getURL(), definition)");
-    expect(method.slice(gate, build)).toContain('return "unavailable"');
-    expect(method.slice(gate, build)).not.toContain("request.action");
+    const gateBlock = method.slice(gate, repeatBranch);
+    expect(gateBlock).toContain("isPlaybackUrl(view.webContents.getURL(), definition)");
+    expect(gateBlock).toContain('return "unavailable"');
+    expect(gateBlock).not.toContain("request.action");
 
     const netflix = getServiceDefinition("netflix");
     const youtube = getServiceDefinition("youtube");

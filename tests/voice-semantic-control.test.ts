@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_VOICE_ABSOLUTE_SEEK_SECONDS,
   MAX_VOICE_RELATIVE_SEEK_SECONDS,
+  buildSpotifyRepeatControlStateScript,
+  buildSpotifyRepeatTransitionScript,
   buildVoiceSemanticControlScript,
+  executeSpotifyRepeatStateChange,
   normalizeVoiceSemanticControlRequest,
+  parseVoiceSpotifyRepeatControlState,
   parseVoiceSemanticControlResult,
   type VoiceSemanticControlRequest,
-  type VoiceSemanticControlResult
+  type VoiceSemanticControlResult,
+  type VoiceSpotifyRepeatControlState,
+  type VoiceSpotifyRepeatDriverOptions,
+  type VoiceSpotifyRepeatState
 } from "../src/main/voice/voice-semantic-control";
 
 class FakeElement {
@@ -125,13 +132,10 @@ interface FakeDocumentOptions {
   videos?: readonly FakeVideo[];
 }
 
-function execute(
-  provider: unknown,
-  request: VoiceSemanticControlRequest,
+function executeScript(
+  script: string,
   options: FakeDocumentOptions = {}
-): VoiceSemanticControlResult | Promise<VoiceSemanticControlResult> {
-  const script = buildVoiceSemanticControlScript(provider, request);
-  if (script === null) throw new Error("Expected a script");
+): unknown {
   const exitState = { called: false };
   const documentValue = {
     exitFullscreen: () => {
@@ -178,7 +182,36 @@ function execute(
     FakeElement,
     FakeVideo,
     () => ({ display: "block", opacity: "1", visibility: "visible" })
-  ) as VoiceSemanticControlResult | Promise<VoiceSemanticControlResult>;
+  ) as unknown;
+}
+
+function execute(
+  provider: unknown,
+  request: VoiceSemanticControlRequest,
+  options: FakeDocumentOptions = {}
+): VoiceSemanticControlResult | Promise<VoiceSemanticControlResult> {
+  const script = buildVoiceSemanticControlScript(provider, request);
+  if (script === null) throw new Error("Expected a script");
+  return executeScript(script, options) as VoiceSemanticControlResult |
+    Promise<VoiceSemanticControlResult>;
+}
+
+function spotifyRepeatDomDriver(
+  documentOptions: FakeDocumentOptions,
+  options: Pick<VoiceSpotifyRepeatDriverOptions, "pause" | "signal"> = {}
+): VoiceSpotifyRepeatDriverOptions {
+  const stateScript = buildSpotifyRepeatControlStateScript();
+  return {
+    clickTransition: (expectedState) => {
+      const script = buildSpotifyRepeatTransitionScript(expectedState);
+      return script !== null && executeScript(script, documentOptions) === true;
+    },
+    pause: options.pause ?? (() => undefined),
+    readState: () => parseVoiceSpotifyRepeatControlState(
+      executeScript(stateScript, documentOptions)
+    ),
+    signal: options.signal
+  };
 }
 
 describe("voice semantic controls", () => {
@@ -318,16 +351,27 @@ describe("voice semantic controls", () => {
   });
 
   it("uses only Spotify's exact qualified shuffle and repeat state controls", () => {
-    const script = buildVoiceSemanticControlScript("spotify", { action: "shuffle-on" }) ?? "";
-    expect(script).toContain(
+    const shuffleScript = buildVoiceSemanticControlScript(
+      "spotify",
+      { action: "shuffle-on" }
+    ) ?? "";
+    const repeatStateScript = buildSpotifyRepeatControlStateScript();
+    const repeatTransitionScript = buildSpotifyRepeatTransitionScript("all") ?? "";
+    expect(shuffleScript).toContain(
       '[data-testid="control-button-shuffle"][role="switch"]'
     );
-    expect(script).toContain(
+    expect(repeatStateScript).toContain(
       '[data-testid="control-button-repeat"][role="checkbox"]'
     );
-    expect(script).toContain('getAttribute("aria-checked")');
-    expect(script).not.toContain('button[aria-label^="Shuffle');
-    expect(script).not.toContain('button[aria-label^="Repeat');
+    expect(repeatTransitionScript).toContain(
+      '[data-testid="control-button-repeat"][role="checkbox"]'
+    );
+    expect(repeatStateScript).toContain('getAttribute("aria-checked")');
+    expect(shuffleScript).not.toContain('button[aria-label^="Shuffle');
+    expect(repeatStateScript).not.toContain('button[aria-label^="Repeat');
+    expect(repeatTransitionScript).not.toContain("setTimeout");
+    expect(buildSpotifyRepeatTransitionScript("unexpected")).toBeNull();
+    expect(execute("spotify", { action: "repeat-one" })).toBe("needs-follow-up");
   });
 
   it("makes Spotify shuffle state idempotent and verifies a settled transition", async () => {
@@ -454,48 +498,97 @@ describe("voice semantic controls", () => {
     expect(shuffle.clickCount).toBe(1);
   });
 
-  it.each([
-    ["false", "repeat-off"],
-    ["true", "repeat-all"],
-    ["mixed", "repeat-one"]
-  ] as const)("does not click when Spotify repeat state %s already matches %s", async (
-    ariaChecked,
-    action
-  ) => {
+  it("strictly parses and reads one qualified Spotify repeat control", () => {
+    expect(parseVoiceSpotifyRepeatControlState({ enabled: true, state: "off" }))
+      .toEqual({ enabled: true, state: "off" });
+    expect(parseVoiceSpotifyRepeatControlState({ enabled: true, state: ["off"] }))
+      .toBeNull();
+    expect(parseVoiceSpotifyRepeatControlState({
+      enabled: true,
+      state: "off",
+      selector: "button"
+    })).toBeNull();
+
     const repeat = new FakeElement({ attributes: {
-      "aria-checked": ariaChecked,
+      "aria-checked": "mixed",
       "data-testid": "control-button-repeat",
       role: "checkbox"
     } });
-    expect(await execute("spotify", { action }, {
-      controls: { "control-button-repeat": [repeat] }
-    })).toBe("complete");
-    expect(repeat.clickCount).toBe(0);
-  });
-
-  it("cycles repeat through at most three observed states and verifies only the target", async () => {
-    const cycle: Record<string, string> = { false: "true", true: "mixed", mixed: "false" };
-    const repeat = new FakeElement({
-      attributes: {
-        "aria-checked": "false",
-        "data-testid": "control-button-repeat",
-        role: "checkbox"
-      },
-      onClick: (element) => {
-        const current = element.getAttribute("aria-checked") ?? "";
-        element.setAttribute("aria-checked", cycle[current] ?? "invalid");
-      }
-    });
     const options = { controls: { "control-button-repeat": [repeat] } };
+    expect(executeScript(buildSpotifyRepeatControlStateScript(), options))
+      .toEqual({ enabled: true, state: "one" });
 
-    expect(await execute("spotify", { action: "repeat-one" }, options)).toBe("verified");
-    expect(repeat.clickCount).toBe(2);
-    expect(repeat.getAttribute("aria-checked")).toBe("mixed");
-    expect(await execute("spotify", { action: "repeat-off" }, options)).toBe("verified");
-    expect(repeat.clickCount).toBe(3);
+    repeat.disabled = true;
+    expect(executeScript(buildSpotifyRepeatControlStateScript(), options))
+      .toEqual({ enabled: false, state: "one" });
+    repeat.setAttribute("aria-checked", "invalid");
+    expect(executeScript(buildSpotifyRepeatControlStateScript(), options)).toBeNull();
+
+    const duplicate = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    expect(executeScript(buildSpotifyRepeatControlStateScript(), {
+      controls: { "control-button-repeat": [repeat, duplicate] }
+    })).toBeNull();
   });
 
-  it("follows React replacements across repeat transitions", async () => {
+  it("allows one synchronous repeat click only after exact state and DOM validation", () => {
+    const repeat = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    const options = { controls: { "control-button-repeat": [repeat] } };
+    const offTransition = buildSpotifyRepeatTransitionScript("off") ?? "";
+    const allTransition = buildSpotifyRepeatTransitionScript("all") ?? "";
+    expect(executeScript(offTransition, options)).toBe(true);
+    expect(repeat.clickCount).toBe(1);
+    expect(executeScript(allTransition, options)).toBe(false);
+    expect(repeat.clickCount).toBe(1);
+
+    repeat.disabled = true;
+    expect(executeScript(offTransition, options)).toBe(false);
+    repeat.disabled = false;
+    repeat.isConnected = false;
+    expect(executeScript(offTransition, options)).toBe(false);
+    expect(repeat.clickCount).toBe(1);
+
+    const duplicate = new FakeElement({ attributes: {
+      "aria-checked": "false",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    repeat.isConnected = true;
+    expect(executeScript(offTransition, {
+      controls: { "control-button-repeat": [repeat, duplicate] }
+    })).toBe(false);
+    expect(repeat.clickCount).toBe(1);
+    expect(duplicate.clickCount).toBe(0);
+  });
+
+  it.each([
+    ["off", "repeat-off"],
+    ["all", "repeat-all"],
+    ["one", "repeat-one"]
+  ] as const)("does not click when Spotify repeat state %s already matches %s", async (
+    state,
+    action
+  ) => {
+    let clickCount = 0;
+    expect(await executeSpotifyRepeatStateChange({ action }, {
+      clickTransition: () => {
+        clickCount += 1;
+        return true;
+      },
+      pause: () => undefined,
+      readState: () => ({ enabled: true, state })
+    })).toBe("complete");
+    expect(clickCount).toBe(0);
+  });
+
+  it("cycles with one host round trip per click and re-queries React replacements", async () => {
     const controls: FakeElement[] = [];
     const repeatOne = new FakeElement({ attributes: {
       "aria-checked": "mixed",
@@ -526,15 +619,139 @@ describe("voice semantic controls", () => {
     });
     controls.push(repeatOff);
 
-    expect(await execute("spotify", { action: "repeat-one" }, {
-      controls: { "control-button-repeat": controls }
-    })).toBe("verified");
+    expect(await executeSpotifyRepeatStateChange(
+      { action: "repeat-one" },
+      spotifyRepeatDomDriver({ controls: { "control-button-repeat": controls } })
+    )).toBe("verified");
     expect(repeatOff.clickCount).toBe(1);
     expect(repeatAll.clickCount).toBe(1);
     expect(repeatOne.clickCount).toBe(0);
   });
 
-  it("fails Spotify modes closed on missing, disabled, unknown, or non-transitioning state", async () => {
+  it("waits for a temporarily disabled replacement before a second transition", async () => {
+    const controls: FakeElement[] = [];
+    let pauses = 0;
+    const repeatOne = new FakeElement({ attributes: {
+      "aria-checked": "mixed",
+      "data-testid": "control-button-repeat",
+      role: "checkbox"
+    } });
+    const repeatAll = new FakeElement({
+      attributes: {
+        "aria-checked": "true",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1, repeatOne);
+      }
+    });
+    repeatAll.disabled = true;
+    const repeatOff = new FakeElement({
+      attributes: {
+        "aria-checked": "false",
+        "data-testid": "control-button-repeat",
+        role: "checkbox"
+      },
+      onClick: (element) => {
+        element.isConnected = false;
+        controls.splice(0, 1, repeatAll);
+      }
+    });
+    controls.push(repeatOff);
+
+    const result = await executeSpotifyRepeatStateChange(
+      { action: "repeat-one" },
+      spotifyRepeatDomDriver(
+        { controls: { "control-button-repeat": controls } },
+        { pause: () => {
+          pauses += 1;
+          if (pauses >= 4) repeatAll.disabled = false;
+        } }
+      )
+    );
+    expect(result).toBe("verified");
+    expect(repeatOff.clickCount).toBe(1);
+    expect(repeatAll.clickCount).toBe(1);
+  });
+
+  it("never dispatches a second repeat click after cancellation", async () => {
+    const controller = new AbortController();
+    let state: VoiceSpotifyRepeatState = "off";
+    let clickCount = 0;
+    const result = executeSpotifyRepeatStateChange({ action: "repeat-one" }, {
+      clickTransition: (expectedState) => {
+        expect(expectedState).toBe(state);
+        clickCount += 1;
+        state = "all";
+        controller.abort(new DOMException("cancelled", "AbortError"));
+        return true;
+      },
+      pause: () => undefined,
+      readState: (): VoiceSpotifyRepeatControlState => ({ enabled: true, state }),
+      signal: controller.signal
+    });
+    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+    expect(clickCount).toBe(1);
+  });
+
+  it("restores the original verified state when a provider cycle skips the target", async () => {
+    let state: VoiceSpotifyRepeatState = "off";
+    let clickCount = 0;
+    const result = await executeSpotifyRepeatStateChange({ action: "repeat-one" }, {
+      clickTransition: (expectedState) => {
+        if (expectedState !== state) return false;
+        clickCount += 1;
+        state = state === "off" ? "all" : "off";
+        return true;
+      },
+      pause: () => undefined,
+      readState: () => ({ enabled: true, state })
+    });
+    expect(result).toBe("recovered");
+    expect(state).toBe("off");
+    expect(clickCount).toBe(2);
+  });
+
+  it("reports a partial mutation when an intermediate state cannot be safely restored", async () => {
+    let state: VoiceSpotifyRepeatState = "off";
+    let enabled = true;
+    let clickCount = 0;
+    const result = await executeSpotifyRepeatStateChange({ action: "repeat-one" }, {
+      clickTransition: (expectedState) => {
+        if (!enabled || expectedState !== state) return false;
+        clickCount += 1;
+        state = "all";
+        enabled = false;
+        return true;
+      },
+      pause: () => undefined,
+      readState: () => ({ enabled, state })
+    });
+    expect(result).toBe("partial-mutation");
+    expect(state).toBe("all");
+    expect(clickCount).toBe(1);
+  });
+
+  it("does not claim recovery when an acknowledged click may still mutate later", async () => {
+    let state: VoiceSpotifyRepeatState = "off";
+    const result = await executeSpotifyRepeatStateChange({ action: "repeat-one" }, {
+      clickTransition: () => {
+        setTimeout(() => {
+          state = "all";
+        }, 0);
+        return true;
+      },
+      pause: () => undefined,
+      readState: () => ({ enabled: true, state })
+    });
+    expect(result).toBe("partial-mutation");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(state).toBe("all");
+  });
+
+  it("fails Spotify shuffle closed on missing, disabled, hidden, or unknown state", async () => {
     expect(await execute("spotify", { action: "shuffle-on" })).toBe("unavailable");
 
     const disabled = new FakeElement({ attributes: {
@@ -579,35 +796,6 @@ describe("voice semantic controls", () => {
       controls: { "control-button-shuffle": [unknown] }
     })).toBe("unavailable");
     expect(unknown.clickCount).toBe(0);
-
-    const stuck = new FakeElement({ attributes: {
-      "aria-checked": "false",
-      "data-testid": "control-button-repeat",
-      role: "checkbox"
-    } });
-    expect(await execute("spotify", { action: "repeat-one" }, {
-      controls: { "control-button-repeat": [stuck] }
-    })).toBe("unavailable");
-    expect(stuck.clickCount).toBe(1);
-  });
-
-  it("stops a repeat cycle when state repeats and leaves it where it began", async () => {
-    const repeat = new FakeElement({
-      attributes: {
-        "aria-checked": "false",
-        "data-testid": "control-button-repeat",
-        role: "checkbox"
-      },
-      onClick: (element) => element.setAttribute(
-        "aria-checked",
-        element.getAttribute("aria-checked") === "false" ? "true" : "false"
-      )
-    });
-    expect(await execute("spotify", { action: "repeat-one" }, {
-      controls: { "control-button-repeat": [repeat] }
-    })).toBe("unavailable");
-    expect(repeat.clickCount).toBe(2);
-    expect(repeat.getAttribute("aria-checked")).toBe("false");
   });
 
   it("never touches Spotify mode controls on another provider", async () => {
@@ -838,6 +1026,8 @@ describe("voice semantic controls", () => {
     expect(execute("custom-service", { action: "next" })).toBe("unsupported");
     expect(parseVoiceSemanticControlResult("acted")).toBe("acted");
     expect(parseVoiceSemanticControlResult("verified")).toBe("verified");
+    expect(parseVoiceSemanticControlResult("recovered")).toBe("recovered");
+    expect(parseVoiceSemanticControlResult("partial-mutation")).toBe("partial-mutation");
     expect(parseVoiceSemanticControlResult({ state: "acted" })).toBe("unavailable");
     expect(parseVoiceSemanticControlResult("anything-else")).toBe("unavailable");
   });

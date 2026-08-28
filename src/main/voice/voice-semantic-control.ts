@@ -9,6 +9,26 @@ const PLAYBACK_RATE_SETTLE_MS = 200;
 const SPOTIFY_STATE_POLL_INTERVAL_MS = 25;
 const SPOTIFY_STATE_POLL_LIMIT = 8;
 const SPOTIFY_STATE_SETTLE_MS = 100;
+const SPOTIFY_REPEAT_HOST_POLL_INTERVAL_MS = 50;
+const SPOTIFY_REPEAT_HOST_POLL_LIMIT = 12;
+const SPOTIFY_REPEAT_MAX_TRANSITIONS = 3;
+
+export type VoiceSpotifyRepeatState = "off" | "all" | "one";
+
+export interface VoiceSpotifyRepeatControlState {
+  enabled: boolean;
+  state: VoiceSpotifyRepeatState;
+}
+
+export interface VoiceSpotifyRepeatDriverOptions {
+  clickTransition: (expectedState: VoiceSpotifyRepeatState) => boolean | Promise<boolean>;
+  pause?: (milliseconds: number, signal?: AbortSignal) => void | Promise<void>;
+  readState: () =>
+    | VoiceSpotifyRepeatControlState
+    | null
+    | Promise<VoiceSpotifyRepeatControlState | null>;
+  signal?: AbortSignal;
+}
 
 export type VoiceSemanticControlRequest =
   | { action: "seek-relative"; offsetSeconds: number }
@@ -35,6 +55,8 @@ export type VoiceSemanticControlResult =
   | "verified"
   | "acted"
   | "needs-follow-up"
+  | "partial-mutation"
+  | "recovered"
   | "unavailable"
   | "unsupported";
 
@@ -62,6 +84,8 @@ const RESULT_VALUES: readonly VoiceSemanticControlResult[] = [
   "verified",
   "acted",
   "needs-follow-up",
+  "partial-mutation",
+  "recovered",
   "unavailable",
   "unsupported"
 ];
@@ -155,6 +179,238 @@ export function parseVoiceSemanticControlResult(
     : "unavailable";
 }
 
+function spotifyRepeatTargetState(
+  request: VoiceSemanticControlRequest
+): VoiceSpotifyRepeatState | null {
+  if (request.action === "repeat-off") return "off";
+  if (request.action === "repeat-all") return "all";
+  if (request.action === "repeat-one") return "one";
+  return null;
+}
+
+export function parseVoiceSpotifyRepeatControlState(
+  value: unknown
+): VoiceSpotifyRepeatControlState | null {
+  const state = plainRecord(value);
+  if (
+    state === null ||
+    !hasExactKeys(state, ["enabled", "state"]) ||
+    typeof state.enabled !== "boolean" ||
+    typeof state.state !== "string" ||
+    !["off", "all", "one"].includes(state.state)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    enabled: state.enabled,
+    state: state.state as VoiceSpotifyRepeatState
+  });
+}
+
+/** Reads only Spotify's qualified repeat checkbox and never mutates the page. */
+export function buildSpotifyRepeatControlStateScript(): string {
+  return `(() => {
+    const selector = '[data-testid="control-button-repeat"][role="checkbox"]';
+    const visible = (element) => {
+      if (!(element instanceof HTMLElement) || element.hidden === true ||
+        element.isConnected === false) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
+    };
+    const enabled = (element) => visible(element) && element.disabled !== true &&
+      element.getAttribute("disabled") === null &&
+      element.getAttribute("aria-disabled") !== "true";
+    const controls = [...document.querySelectorAll(selector)].filter(visible);
+    if (controls.length !== 1) return null;
+    const control = controls[0];
+    const checked = control.getAttribute("aria-checked");
+    const state = checked === "false" ? "off"
+      : checked === "true" ? "all" : checked === "mixed" ? "one" : null;
+    return state === null ? null : { enabled: enabled(control), state };
+  })()`;
+}
+
+/**
+ * Builds one synchronous, compare-before-click Spotify repeat transition. The
+ * host must probe and settle state between calls, so no delayed page task can
+ * issue another click after cancellation or operation supersession.
+ */
+export function buildSpotifyRepeatTransitionScript(
+  expectedState: unknown
+): string | null {
+  const checked = expectedState === "off" ? "false"
+    : expectedState === "all" ? "true"
+      : expectedState === "one" ? "mixed" : null;
+  if (checked === null) return null;
+  return `(() => {
+    const selector = '[data-testid="control-button-repeat"][role="checkbox"]';
+    const visible = (element) => {
+      if (!(element instanceof HTMLElement) || element.hidden === true ||
+        element.isConnected === false) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && Number(style.opacity || 1) > 0.05;
+    };
+    const enabled = (element) => visible(element) && element.disabled !== true &&
+      element.getAttribute("disabled") === null &&
+      element.getAttribute("aria-disabled") !== "true";
+    const controls = [...document.querySelectorAll(selector)].filter(visible);
+    if (controls.length !== 1) return false;
+    const control = controls[0];
+    if (!enabled(control) || control.getAttribute("aria-checked") !== ${JSON.stringify(checked)}) {
+      return false;
+    }
+    control.click();
+    return true;
+  })()`;
+}
+
+async function defaultSpotifyRepeatPause(
+  milliseconds: number,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+      action();
+    };
+    const abort = () => finish(() => reject(signal?.reason));
+    const timeout = setTimeout(() => finish(resolve), milliseconds);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+  signal?.throwIfAborted();
+}
+
+async function pauseSpotifyRepeatDriver(
+  options: VoiceSpotifyRepeatDriverOptions
+): Promise<void> {
+  options.signal?.throwIfAborted();
+  await (options.pause ?? defaultSpotifyRepeatPause)(
+    SPOTIFY_REPEAT_HOST_POLL_INTERVAL_MS,
+    options.signal
+  );
+  options.signal?.throwIfAborted();
+}
+
+async function settledSpotifyRepeatState(
+  options: VoiceSpotifyRepeatDriverOptions,
+  accepts: (state: VoiceSpotifyRepeatControlState) => boolean
+): Promise<VoiceSpotifyRepeatControlState | null> {
+  let previousState: VoiceSpotifyRepeatState | null = null;
+  let consecutive = 0;
+  for (let attempt = 0; attempt < SPOTIFY_REPEAT_HOST_POLL_LIMIT; attempt += 1) {
+    options.signal?.throwIfAborted();
+    const observed = await options.readState();
+    options.signal?.throwIfAborted();
+    if (observed !== null && accepts(observed)) {
+      consecutive = previousState === observed.state ? consecutive + 1 : 1;
+      previousState = observed.state;
+      if (consecutive >= 2) return observed;
+    } else {
+      previousState = null;
+      consecutive = 0;
+    }
+    if (attempt + 1 < SPOTIFY_REPEAT_HOST_POLL_LIMIT) {
+      await pauseSpotifyRepeatDriver(options);
+    }
+  }
+  return null;
+}
+
+async function clickAndObserveSpotifyRepeatTransition(
+  currentState: VoiceSpotifyRepeatState,
+  options: VoiceSpotifyRepeatDriverOptions
+): Promise<{ clicked: boolean; state: VoiceSpotifyRepeatState | null }> {
+  const ready = await settledSpotifyRepeatState(
+    options,
+    (observed) => observed.enabled && observed.state === currentState
+  );
+  if (ready === null) return { clicked: false, state: null };
+
+  options.signal?.throwIfAborted();
+  const clicked = await options.clickTransition(currentState);
+  options.signal?.throwIfAborted();
+  if (!clicked) return { clicked: false, state: null };
+
+  const changed = await settledSpotifyRepeatState(
+    options,
+    (observed) => observed.state !== currentState
+  );
+  return { clicked: true, state: changed?.state ?? null };
+}
+
+async function recoverSpotifyRepeatState(
+  originalState: VoiceSpotifyRepeatState,
+  targetState: VoiceSpotifyRepeatState,
+  options: VoiceSpotifyRepeatDriverOptions
+): Promise<VoiceSemanticControlResult> {
+  const seen = new Set<VoiceSpotifyRepeatState>();
+  for (let transition = 0; transition < SPOTIFY_REPEAT_MAX_TRANSITIONS; transition += 1) {
+    const current = await settledSpotifyRepeatState(options, () => true);
+    if (current === null) return "partial-mutation";
+    if (current.state === targetState) return "verified";
+    if (current.state === originalState) return "recovered";
+    if (seen.has(current.state)) return "partial-mutation";
+    seen.add(current.state);
+
+    const advanced = await clickAndObserveSpotifyRepeatTransition(current.state, options);
+    if (!advanced.clicked || advanced.state === null) return "partial-mutation";
+    if (advanced.state === targetState) return "verified";
+    if (advanced.state === originalState) return "recovered";
+  }
+  return "partial-mutation";
+}
+
+/**
+ * Drives Spotify's three-state repeat cycle with one host-authorized click per
+ * round trip. Any failure after the first owned click is either recovered to
+ * the original verified state or surfaced as an honest partial mutation.
+ */
+export async function executeSpotifyRepeatStateChange(
+  request: VoiceSemanticControlRequest,
+  options: VoiceSpotifyRepeatDriverOptions
+): Promise<VoiceSemanticControlResult> {
+  const targetState = spotifyRepeatTargetState(request);
+  if (targetState === null) return "unsupported";
+  const initial = await settledSpotifyRepeatState(options, () => true);
+  if (initial === null) return "unavailable";
+  if (initial.state === targetState) return "complete";
+
+  const originalState = initial.state;
+  const seen = new Set<VoiceSpotifyRepeatState>([originalState]);
+  let currentState = originalState;
+  for (let transition = 0; transition < SPOTIFY_REPEAT_MAX_TRANSITIONS; transition += 1) {
+    const advanced = await clickAndObserveSpotifyRepeatTransition(currentState, options);
+    if (!advanced.clicked) {
+      return transition === 0
+        ? "unavailable"
+        : recoverSpotifyRepeatState(originalState, targetState, options);
+    }
+    if (advanced.state === null) {
+      // A dispatched click may still apply asynchronously after polling ends.
+      // Without an observed state transition there is no safe basis for a
+      // recovery click or a claim that the original state was restored.
+      return "partial-mutation";
+    }
+    currentState = advanced.state;
+    if (currentState === targetState) return "verified";
+    if (currentState === originalState) return "recovered";
+    if (seen.has(currentState)) {
+      return recoverSpotifyRepeatState(originalState, targetState, options);
+    }
+    seen.add(currentState);
+  }
+  return recoverSpotifyRepeatState(originalState, targetState, options);
+}
+
 function serviceId(value: unknown): VoiceSemanticServiceId | null {
   return value === "netflix" || value === "spotify" || value === "youtube"
     ? value
@@ -174,6 +430,11 @@ export function buildVoiceSemanticControlScript(
   if (request === null) return null;
   const provider = serviceId(rawServiceId);
   if (provider === null) return `(() => "unsupported")()`;
+  if (spotifyRepeatTargetState(request) !== null) {
+    return provider === "spotify"
+      ? `(() => "needs-follow-up")()`
+      : `(() => "unsupported")()`;
+  }
 
   return `(() => {
     const provider = ${JSON.stringify(provider)};
@@ -249,7 +510,6 @@ export function buildVoiceSemanticControlScript(
       spotify: {
         next: '[data-testid="control-button-skip-forward"],button[aria-label^="Next" i],button[title^="Next" i]',
         previous: '[data-testid="control-button-skip-back"],button[aria-label^="Previous" i],button[title^="Previous" i]',
-        repeat: '[data-testid="control-button-repeat"][role="checkbox"]',
         shuffle: '[data-testid="control-button-shuffle"][role="switch"]'
       },
       youtube: {
@@ -315,48 +575,6 @@ export function buildVoiceSemanticControlScript(
           ? "verified"
           : "unavailable");
     };
-    const applySpotifyRepeatState = () => {
-      if (provider !== "spotify") return "unsupported";
-      const control = firstControl(providerControls.repeat);
-      if (control === null) return "unavailable";
-      const readState = (element) => {
-        const state = element.getAttribute("aria-checked");
-        return state === "false" || state === "true" || state === "mixed" ? state : null;
-      };
-      const targetState = request.action === "repeat-off"
-        ? "false"
-        : request.action === "repeat-all" ? "true" : "mixed";
-      const currentState = readState(control);
-      if (currentState === null) return "unavailable";
-      if (currentState === targetState) return "complete";
-      return (async () => {
-        let activeControl = control;
-        let state = currentState;
-        const seenStates = new Set([currentState]);
-        for (let transitions = 0; transitions < 3; transitions += 1) {
-          activeControl.click();
-          const observed = await waitForSpotifyStateChange(
-            providerControls.repeat,
-            readState,
-            state
-          );
-          if (observed === null) return "unavailable";
-          if (observed.state === targetState) {
-            return await spotifyTargetSettled(
-              providerControls.repeat,
-              readState,
-              targetState
-            ) ? "verified" : "unavailable";
-          }
-          if (seenStates.has(observed.state)) return "unavailable";
-          seenStates.add(observed.state);
-          activeControl = observed.control;
-          state = observed.state;
-        }
-        return "unavailable";
-      })();
-    };
-
     if (request.action === "set-playback-rate") {
       if (provider !== "netflix" && provider !== "youtube") return "unsupported";
       const video = activeVideo();
@@ -389,13 +607,6 @@ export function buildVoiceSemanticControlScript(
     }
     if (request.action === "shuffle-on" || request.action === "shuffle-off") {
       return applySpotifyShuffleState();
-    }
-    if (
-      request.action === "repeat-off" ||
-      request.action === "repeat-all" ||
-      request.action === "repeat-one"
-    ) {
-      return applySpotifyRepeatState();
     }
     if (request.action === "seek-relative") {
       if (provider === "spotify") return "unsupported";

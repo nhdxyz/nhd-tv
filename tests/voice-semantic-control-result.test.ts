@@ -92,6 +92,22 @@ describe("semantic voice control outcomes", () => {
       });
   });
 
+  it("distinguishes a restored repeat setting from an unresolved partial mutation", () => {
+    expect(voiceSemanticControlOutcome({ action: "repeat-one" }, "recovered", "Spotify"))
+      .toEqual({
+        detail: "I couldn't repeat one in Spotify, so I restored the previous repeat setting.",
+        handled: false
+      });
+    expect(voiceSemanticControlOutcome(
+      { action: "repeat-one" },
+      "partial-mutation",
+      "Spotify"
+    )).toEqual({
+      detail: "Spotify changed the repeat setting, but I couldn't finish trying to repeat one or safely restore the previous setting. Check repeat in Spotify.",
+      handled: false
+    });
+  });
+
   it("maps every request to the context store's verified action vocabulary", () => {
     expect(verifiedActionForSemanticControl({
       action: "seek-relative",

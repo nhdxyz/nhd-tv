@@ -96,6 +96,18 @@ export function voiceSemanticControlOutcome(
     return { detail: successDetail(request, result === "complete"), handled: true };
   }
   const description = actionDescription(request);
+  if (result === "recovered") {
+    return {
+      detail: `I couldn't ${description} in ${serviceName}, so I restored the previous repeat setting.`,
+      handled: false
+    };
+  }
+  if (result === "partial-mutation") {
+    return {
+      detail: `${serviceName} changed the repeat setting, but I couldn't finish trying to ${description} or safely restore the previous setting. Check repeat in ${serviceName}.`,
+      handled: false
+    };
+  }
   if (result === "acted") {
     return {
       detail: `Sent a request to ${description} in ${serviceName}.`,

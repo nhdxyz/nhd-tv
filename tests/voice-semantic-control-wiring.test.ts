@@ -32,8 +32,8 @@ describe("semantic voice control host wiring", () => {
     expect(method).not.toContain("#closeVoiceOperationView");
   });
 
-  it("rejects playback-rate commands on provider preview pages before page execution", () => {
-    const gate = method.indexOf('request.action === "set-playback-rate"');
+  it("rejects video controls on provider preview pages before page execution", () => {
+    const gate = method.indexOf('definition.id !== "spotify"');
     const build = method.indexOf("buildVoiceSemanticControlScript(definition.id, request)");
     const execute = method.indexOf("view.webContents.executeJavaScript(script, true)");
     expect(gate).toBeGreaterThan(-1);
@@ -41,6 +41,7 @@ describe("semantic voice control host wiring", () => {
     expect(gate).toBeLessThan(execute);
     expect(method.slice(gate, build)).toContain("isPlaybackUrl(view.webContents.getURL(), definition)");
     expect(method.slice(gate, build)).toContain('return "unavailable"');
+    expect(method.slice(gate, build)).not.toContain("request.action");
 
     const netflix = getServiceDefinition("netflix");
     const youtube = getServiceDefinition("youtube");

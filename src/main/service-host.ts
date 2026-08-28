@@ -2080,7 +2080,7 @@ export class ServiceHost {
       return "unavailable";
     }
     if (
-      request.action === "set-playback-rate" &&
+      definition.id !== "spotify" &&
       !isPlaybackUrl(view.webContents.getURL(), definition)
     ) {
       return "unavailable";

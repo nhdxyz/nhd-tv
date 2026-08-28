@@ -95,6 +95,15 @@ import type {
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
 import { resolveVoiceMediaDestination } from "./voice/voice-media-destination";
+import { GoogleWatchCache } from "./voice/google-watch-cache";
+import {
+  GoogleWatchResolver,
+  googleWatchLookupFromIntent
+} from "./voice/google-watch-resolver";
+import {
+  selectEnabledWatchOffer,
+  watchAvailabilityDetail
+} from "./voice/google-watch-selection";
 
 const SHELL_HOST = "shell";
 const WIDEVINE_TIMEOUT_MS = 30_000;
@@ -129,6 +138,8 @@ if (!ownsSingleInstanceLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let continueWatchingStore: ContinueWatchingStore | null = null;
+let googleWatchCache: GoogleWatchCache | null = null;
+let googleWatchResolver: GoogleWatchResolver | null = null;
 let localStateStore: LocalStateStore | null = null;
 let openAiCredentialStore: OpenAiCredentialStore | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
@@ -995,6 +1006,64 @@ function voiceCommandContext(): VoiceCommandContext {
   };
 }
 
+function activeVoiceRegion(): string {
+  const explicitRegion = localStateStore?.snapshot().devicePreferences.voiceRegion;
+  if (explicitRegion !== null && explicitRegion !== undefined) return explicitRegion;
+  try {
+    const detected = app.getLocaleCountryCode().toUpperCase();
+    return /^[A-Z]{2}$/.test(detected) ? detected : "US";
+  } catch {
+    return "US";
+  }
+}
+
+function usesGoogleWatchDiscovery(
+  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
+): boolean {
+  return ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
+}
+
+async function executeGoogleWatchPlan(
+  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
+): Promise<(RemoteActionOutcome & { detail: string }) | null> {
+  const resolver = googleWatchResolver;
+  if (resolver === null || !usesGoogleWatchDiscovery(plan)) return null;
+
+  const lookup = googleWatchLookupFromIntent(plan.intent, activeVoiceRegion());
+  let result = await resolver.resolve(lookup, {
+    completeOffers: plan.intent.action === "lookup"
+  });
+  if (plan.intent.action === "lookup") {
+    return {
+      detail: watchAvailabilityDetail(result, plan.candidateServiceIds),
+      handled: true
+    };
+  }
+
+  let selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
+  if (selected === null && !result.offersComplete) {
+    result = await resolver.resolve(lookup, { completeOffers: true });
+    selected = selectEnabledWatchOffer(result, plan.candidateServiceIds);
+  }
+  if (selected === null) {
+    return {
+      detail: watchAvailabilityDetail(result, plan.candidateServiceIds),
+      handled: false
+    };
+  }
+
+  const definition = getServiceDefinition(selected.serviceId);
+  if (definition === null) return null;
+  const playbackUrl = sanitizePlaybackUrl(selected.offer.watchUrl, definition);
+  if (playbackUrl === null) return null;
+
+  await openTrackedService(definition, playbackUrl);
+  return {
+    detail: `Opening ${result.resolvedTitle ?? plan.intent.title} on ${definition.name}.`,
+    handled: true
+  };
+}
+
 async function executeVoiceCommandPlan(
   plan: VoiceCommandPlan
 ): Promise<RemoteActionOutcome & { detail: string }> {
@@ -1017,6 +1086,14 @@ async function executeVoiceCommandPlan(
       mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
     }
     return { detail: "Closed the current app.", handled: true };
+  }
+
+  try {
+    const googleResult = await executeGoogleWatchPlan(plan);
+    if (googleResult !== null) return googleResult;
+  } catch {
+    // Google discovery is a best-effort private-project adapter. A provider's
+    // own search page remains available if its markup, network, or rate limit changes.
   }
 
   const destination = resolveVoiceMediaDestination(plan.intent, plan.candidateServiceIds);
@@ -1677,11 +1754,17 @@ async function createMainWindow(): Promise<void> {
 
   mainWindow.on("closed", () => {
     const remoteToStop = phoneRemote;
+    const watchCacheToClose = googleWatchCache;
+    const watchResolverToDestroy = googleWatchResolver;
 
     stopAmbientDisplayMonitor();
+    googleWatchCache = null;
+    googleWatchResolver = null;
     phoneRemote = null;
     serviceHost = null;
     mainWindow = null;
+    watchResolverToDestroy?.destroy();
+    watchCacheToClose?.close();
     void remoteToStop?.stop();
   });
 
@@ -1718,6 +1801,10 @@ app.whenReady().then(async () => {
       .map((service) => service.id)
   );
   await localStateStore.initialize();
+  googleWatchCache = new GoogleWatchCache(
+    path.join(app.getPath("userData"), "voice-watch-results.sqlite")
+  );
+  googleWatchResolver = new GoogleWatchResolver({ cache: googleWatchCache });
   tailscaleSecureRemote = new TailscaleSecureRemote(
     path.join(app.getPath("userData"), "tailscale-serve.json")
   );
@@ -1752,6 +1839,7 @@ app.whenReady().then(async () => {
   // after the component updater later reports ready.
   await initializeWidevine();
   await createMainWindow();
+  void googleWatchResolver.warm().catch(() => undefined);
   powerMonitor.on("suspend", () => {
     markAmbientActivity();
     void serviceHost?.prepareForSuspend();

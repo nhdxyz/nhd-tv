@@ -734,6 +734,62 @@ describe("voice provider automation", () => {
     )).toBe("playing");
   });
 
+  it("does not use an unrelated global Spotify Pause control to verify an entity page", () => {
+    const heading = new FakeElement({ text: "Kanye West" });
+    const entityPlay = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
+    const entityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="play-button"')
+        ? [entityPlay]
+        : []
+    });
+    const unrelatedPause = new FakeElement({ attributes: { "aria-label": "Pause" } });
+    const documentValue = {
+      querySelector: (selector: string) => {
+        if (selector.startsWith("h1,")) return heading;
+        if (selector.includes('data-testid="artist-page"')) return entityRoot;
+        return null;
+      },
+      querySelectorAll: (selector: string) => selector.includes("control-button-playpause")
+        ? [unrelatedPause]
+        : []
+    };
+    const artistIntent = intent({
+      creator: "Kanye West",
+      mediaType: "artist",
+      providerHint: "spotify",
+      title: "Kanye West"
+    });
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, true),
+      documentValue,
+      "/artist/kanye"
+    )).toBe("play-clicked");
+    expect(entityPlay.clicked).toBe(true);
+
+    const entityPause = new FakeElement({
+      attributes: { "aria-label": "Pause Kanye West" }
+    });
+    const playingEntityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="play-button"')
+        ? [entityPause]
+        : []
+    });
+    const verifiedDocument = {
+      ...documentValue,
+      querySelector: (selector: string) => {
+        if (selector.startsWith("h1,")) return heading;
+        if (selector.includes('data-testid="artist-page"')) return playingEntityRoot;
+        return null;
+      }
+    };
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, true),
+      verifiedDocument,
+      "/artist/kanye"
+    )).toBe("playing");
+  });
+
   it("bounds provider retries and revalidates a Netflix destination before profile recovery", async () => {
     const source = await import("node:fs/promises").then(({ readFile }) =>
       readFile(new URL("../src/main/service-host.ts", import.meta.url), "utf8")

@@ -142,17 +142,25 @@ export function buildSpotifyVoiceAutomationScript(
         return intent.action === "play" ? "navigated" : "complete";
       }
     }
-    if (/^\\/(?:album|artist|playlist|track)\\//.test(location.pathname)) {
+    if (routePrefix !== "/" && location.pathname.startsWith(routePrefix)) {
       const headingIdentity = identity(document.querySelector(
         'h1,[data-testid="entityTitle"],[data-testid="context-item-info-title"]'
       )?.textContent);
+      const entityRoot = document.querySelector(
+        '[data-testid="album-page"],[data-testid="artist-page"],'
+        + '[data-testid="playlist-page"],[data-testid="track-page"],main,[role="main"]'
+      );
       const requestedIdentity = intent.mediaType === "artist"
         ? titleIdentity || creatorIdentity
         : titleIdentity;
-      if (headingIdentity === requestedIdentity) {
+      if (headingIdentity === requestedIdentity && entityRoot) {
         if (intent.action !== "play") return "complete";
-        if (playbackRequested && globalPauseButton() instanceof HTMLElement) return "playing";
-        const button = playButton(document);
+        if (
+          playbackRequested &&
+          pauseButton(entityRoot) instanceof HTMLElement &&
+          globalPauseButton() instanceof HTMLElement
+        ) return "playing";
+        const button = playButton(entityRoot);
         if (button instanceof HTMLElement) {
           button.click();
           return "play-clicked";

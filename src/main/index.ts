@@ -1091,6 +1091,13 @@ async function handleRemoteAction(
     return { handled: true };
   }
   markAmbientActivity();
+
+  if (isMediaAction(action) && isSystemVolumeAction(action)) {
+    const result = await systemVolumeController.apply(action);
+    signal?.throwIfAborted();
+    return result;
+  }
+
   const operation = serviceHost === null
     ? undefined
     : operationToken ?? serviceHost.beginOperation();
@@ -1106,12 +1113,6 @@ async function handleRemoteAction(
       mainWindow.webContents.send(IPC_CHANNELS.remoteAction, "home");
     }
     return { handled: true };
-  }
-
-  if (isMediaAction(action) && isSystemVolumeAction(action)) {
-    const result = await systemVolumeController.apply(action);
-    signal?.throwIfAborted();
-    return result;
   }
 
   if (serviceHost?.activeServiceId !== null && serviceHost !== null) {

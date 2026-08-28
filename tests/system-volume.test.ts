@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   SystemVolumeController,
@@ -26,6 +27,25 @@ class FakeVolumeBackend implements SystemVolumeBackend {
 }
 
 describe("system volume controller", () => {
+  it("handles volume before acquiring a provider operation token", () => {
+    const source = readFileSync(
+      new URL("../src/main/index.ts", import.meta.url),
+      "utf8"
+    );
+    const handlerStart = source.indexOf("async function handleRemoteAction(");
+    const handlerEnd = source.indexOf("function remoteVoiceStatus()", handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+    const volumeBranch = handler.indexOf(
+      "if (isMediaAction(action) && isSystemVolumeAction(action))"
+    );
+    const operationAcquisition = handler.indexOf("serviceHost.beginOperation()");
+
+    expect(handlerStart).toBeGreaterThan(-1);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(volumeBranch).toBeGreaterThan(-1);
+    expect(operationAcquisition).toBeGreaterThan(volumeBranch);
+  });
+
   it("changes system volume in bounded five-percent steps and unmutes", async () => {
     const backend = new FakeVolumeBackend();
     backend.muted = true;

@@ -99,6 +99,18 @@ describe("voice activity lease", () => {
     })).toBe("ignored");
   });
 
+  it("expires an abandoned default listening lease shortly after a maximum recording", () => {
+    let now = 1_000;
+    const lease = new VoiceActivityLease({ now: () => now });
+    lease.acceptActivity("phone-a", { commandId: COMMAND_A, phase: "listening" });
+
+    now += 25_001;
+    expect(lease.acceptActivity("phone-b", {
+      commandId: COMMAND_B,
+      phase: "listening"
+    })).toBe("accepted");
+  });
+
   it("releases ownership when its controller disconnects", () => {
     const lease = new VoiceActivityLease();
     lease.acceptActivity("phone-a", { commandId: COMMAND_A, phase: "listening" });

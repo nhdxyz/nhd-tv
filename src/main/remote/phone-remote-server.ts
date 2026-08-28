@@ -41,9 +41,9 @@ const MAX_JSON_BYTES = 4_096;
 const MIN_COMMAND_INTERVAL_MS = 24;
 const MIN_POINTER_INTERVAL_MS = 16;
 const MIN_VOICE_INTERVAL_MS = 1_000;
-const MAX_PENDING_VOICE_CONFIRMATIONS = 4;
 const VOICE_CONFIRMATION_TTL_MS = 30_000;
 const VOICE_CONFIRMATION_ID_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+const VOICE_UPLOAD_BODY_TIMEOUT_MS = 15_000;
 const VOICE_AUDIO_TYPES = new Set([
   "audio/mp4",
   "audio/mpeg",
@@ -97,6 +97,7 @@ export type PhoneRemoteVoiceActivity = VoiceActivityEvent;
 
 export interface PhoneRemoteVoiceResult {
   confirmationId?: string;
+  confirmationExpiresAt?: number;
   detail: string;
   outcome: "completed" | "confirmation-required" | "failed";
   transcript?: string;
@@ -306,25 +307,51 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   }
 }
 
-async function readVoiceBody(request: IncomingMessage): Promise<Uint8Array | null> {
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-  let tooLarge = false;
+export async function readVoiceBody(
+  request: IncomingMessage,
+  timeoutMs = VOICE_UPLOAD_BODY_TIMEOUT_MS
+): Promise<Uint8Array | null> {
+  let timeout: NodeJS.Timeout | null = null;
+  const read = (async () => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let tooLarge = false;
 
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalBytes += buffer.length;
-    if (totalBytes > MAX_VOICE_AUDIO_BYTES) {
-      tooLarge = true;
-      chunks.length = 0;
-      continue;
+    for await (const chunk of request) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+      if (totalBytes > MAX_VOICE_AUDIO_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        continue;
+      }
+      if (!tooLarge) {
+        chunks.push(buffer);
+      }
     }
-    if (!tooLarge) {
-      chunks.push(buffer);
-    }
+
+    return tooLarge || totalBytes === 0 ? null : new Uint8Array(Buffer.concat(chunks));
+  })();
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      const error = new VoiceUploadBodyTimeoutError();
+      reject(error);
+      request.destroy(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([read, deadline]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
   }
+}
 
-  return tooLarge || totalBytes === 0 ? null : new Uint8Array(Buffer.concat(chunks));
+class VoiceUploadBodyTimeoutError extends Error {
+  constructor() {
+    super("Voice upload body timed out");
+    this.name = "VoiceUploadBodyTimeoutError";
+  }
 }
 
 export class PhoneRemoteServer {
@@ -346,6 +373,8 @@ export class PhoneRemoteServer {
   readonly #onVoiceActivity: PhoneRemoteServerOptions["onVoiceActivity"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
+  readonly #deferredVoiceDisconnects = new Set<string>();
+  #activeVoiceControllerId: string | null = null;
   #expiresAt: number | null = null;
   #lastCommandAt = 0;
   #lastPointerAt = 0;
@@ -513,6 +542,8 @@ export class PhoneRemoteServer {
     this.#manager.revokeAll();
     this.#voiceActivityLease.reset();
     this.#pendingVoiceConfirmations.clear();
+    this.#deferredVoiceDisconnects.clear();
+    this.#activeVoiceControllerId = null;
     this.#voiceInFlight = false;
     this.#expiresAt = null;
     this.#networkAddress = null;
@@ -540,6 +571,9 @@ export class PhoneRemoteServer {
     this.#networkAddress = lanIpv4Address();
     const server = createServer((request, response) => {
       void this.#handleRequest(request, response).catch(() => {
+        if (response.destroyed || response.writableEnded) {
+          return;
+        }
         if (!response.headersSent) {
           writeJson(response, 500, { error: "Remote server error" });
         } else {
@@ -938,9 +972,25 @@ export class PhoneRemoteServer {
 
       this.#lastVoiceAt = now;
       this.#voiceInFlight = true;
+      this.#activeVoiceControllerId = controllerId;
       try {
-        await this.#cancelVoiceConfirmationsForController(controllerId);
-        const bytes = await readVoiceBody(request);
+        await this.#cancelAllVoiceConfirmations();
+        let bytes: Uint8Array | null;
+        try {
+          bytes = await readVoiceBody(request);
+        } catch (error) {
+          await this.#onVoiceActivity?.({
+            commandId: metadata.commandId,
+            phase: "cancelled"
+          });
+          if (error instanceof VoiceUploadBodyTimeoutError) {
+            if (!response.destroyed && !response.writableEnded) {
+              writeJson(response, 408, { error: "The voice upload timed out" });
+            }
+            return;
+          }
+          throw error;
+        }
         if (bytes === null) {
           await this.#onVoiceActivity?.({
             commandId: metadata.commandId,
@@ -954,21 +1004,34 @@ export class PhoneRemoteServer {
           durationMs: metadata.durationMs,
           mimeType: metadata.mimeType
         }, metadata.commandId);
+        let responseResult = result;
         if (
           result.outcome === "confirmation-required" &&
           result.confirmationId !== undefined &&
           VOICE_CONFIRMATION_ID_PATTERN.test(result.confirmationId)
         ) {
-          await this.#bindVoiceConfirmation(
+          if (this.#authorizeController(token) !== controllerId) {
+            await this.#notifyVoiceConfirmationCancelled(
+              result.confirmationId,
+              metadata.commandId
+            );
+            if (!response.destroyed && !response.writableEnded) {
+              writeJson(response, 401, {
+                error: "Remote disconnected before voice confirmation was ready"
+              });
+            }
+            return;
+          }
+          const confirmationExpiresAt = this.#bindVoiceConfirmation(
             result.confirmationId,
             controllerId,
             metadata.commandId
           );
+          responseResult = { ...result, confirmationExpiresAt };
         }
-        writeJson(response, result.outcome === "failed" ? 422 : 200, result);
+        writeJson(response, responseResult.outcome === "failed" ? 422 : 200, responseResult);
       } finally {
-        this.#voiceInFlight = false;
-        this.#voiceActivityLease.finishUpload(controllerId, metadata.commandId);
+        await this.#finishVoiceOperation(controllerId, metadata.commandId);
       }
       return;
     }
@@ -1018,12 +1081,12 @@ export class PhoneRemoteServer {
 
       this.#pendingVoiceConfirmations.delete(confirmationId);
       this.#voiceInFlight = true;
+      this.#activeVoiceControllerId = controllerId;
       try {
         const result = await this.#onConfirmVoice(confirmationId, binding.commandId);
         writeJson(response, result.outcome === "failed" ? 422 : 200, result);
       } finally {
-        this.#voiceInFlight = false;
-        this.#voiceActivityLease.finishUpload(controllerId, binding.commandId);
+        await this.#finishVoiceOperation(controllerId, binding.commandId);
       }
       return;
     }
@@ -1081,48 +1144,73 @@ export class PhoneRemoteServer {
         ? authorization.slice("Bearer ".length)
         : null;
 
-      const controllerId = this.#manager.revokeController(token);
+      const controllerId = this.#authorizeController(token);
       if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session is already disconnected" });
         return;
       }
-      await this.#cancelVoiceConfirmationsForController(controllerId);
-      const releasedCommandId = this.#voiceActivityLease.releaseControllerCommand(controllerId);
-      if (releasedCommandId !== null) {
-        await this.#onVoiceActivity?.({
-          commandId: releasedCommandId,
-          phase: "cancelled"
-        });
+      if (this.#activeVoiceControllerId === controllerId) {
+        this.#deferredVoiceDisconnects.add(controllerId);
+        writeJson(response, 202, { deferred: true, ok: true });
+        return;
       }
 
-      this.#publishStatus();
+      await this.#completeControllerDisconnect(controllerId);
       writeJson(response, 200, { ok: true });
-      void this.ensurePairing().catch(() => undefined);
       return;
     }
 
     writeJson(response, 404, { error: "Not found" });
   }
 
-  async #bindVoiceConfirmation(
+  async #completeControllerDisconnect(controllerId: string): Promise<void> {
+    this.#manager.revokeControllerId(controllerId);
+    await this.#cancelVoiceConfirmationsForController(controllerId);
+    const releasedCommandId = this.#voiceActivityLease.releaseControllerCommand(controllerId);
+    if (releasedCommandId !== null) {
+      await this.#onVoiceActivity?.({
+        commandId: releasedCommandId,
+        phase: "cancelled"
+      });
+    }
+    this.#publishStatus();
+    void this.ensurePairing().catch(() => undefined);
+  }
+
+  async #finishVoiceOperation(controllerId: string, commandId: string): Promise<void> {
+    this.#voiceActivityLease.finishUpload(controllerId, commandId);
+    this.#voiceInFlight = false;
+    if (this.#activeVoiceControllerId === controllerId) {
+      this.#activeVoiceControllerId = null;
+    }
+    if (this.#deferredVoiceDisconnects.delete(controllerId)) {
+      await this.#completeControllerDisconnect(controllerId);
+    }
+  }
+
+  #bindVoiceConfirmation(
     confirmationId: string,
     controllerId: string,
     commandId: string
-  ): Promise<void> {
+  ): number {
     this.#cleanupVoiceConfirmations();
     this.#pendingVoiceConfirmations.delete(confirmationId);
-    while (this.#pendingVoiceConfirmations.size >= MAX_PENDING_VOICE_CONFIRMATIONS) {
-      const oldest = this.#pendingVoiceConfirmations.entries().next().value as
-        [string, PendingVoiceConfirmationBinding] | undefined;
-      if (oldest === undefined) break;
-      this.#pendingVoiceConfirmations.delete(oldest[0]);
-      await this.#notifyVoiceConfirmationCancelled(oldest[0], oldest[1].commandId);
-    }
+    const expiresAt = Date.now() + VOICE_CONFIRMATION_TTL_MS;
     this.#pendingVoiceConfirmations.set(confirmationId, {
       commandId,
       controllerId,
-      expiresAt: Date.now() + VOICE_CONFIRMATION_TTL_MS
+      expiresAt
     });
+    return expiresAt;
+  }
+
+  async #cancelAllVoiceConfirmations(): Promise<void> {
+    this.#cleanupVoiceConfirmations();
+    const pending = [...this.#pendingVoiceConfirmations.entries()];
+    this.#pendingVoiceConfirmations.clear();
+    for (const [confirmationId, binding] of pending) {
+      await this.#notifyVoiceConfirmationCancelled(confirmationId, binding.commandId);
+    }
   }
 
   async #cancelVoiceConfirmationsForController(controllerId: string): Promise<void> {

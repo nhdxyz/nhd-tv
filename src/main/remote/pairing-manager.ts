@@ -271,12 +271,16 @@ export class PairingManager {
 
     for (const [tokenId, session] of this.#controllerSessions) {
       if (tokensMatch(token, session.tokenHash)) {
-        this.#controllerSessions.delete(tokenId);
+        this.revokeControllerId(tokenId);
         return tokenId;
       }
     }
 
     return null;
+  }
+
+  revokeControllerId(controllerId: string): boolean {
+    return this.#controllerSessions.delete(controllerId);
   }
 
   revokeAll(): void {

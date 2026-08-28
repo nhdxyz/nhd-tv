@@ -35,8 +35,17 @@ describe("phone remote pairing", () => {
       expect(controllerId).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(manager.authorizeController(decision.token)).toBe(controllerId);
       expect(manager.authorize(decision.token)).toBe(true);
-      expect(manager.revokeController(decision.token)).toBe(controllerId);
+      expect(manager.revokeControllerId(controllerId ?? "missing")).toBe(true);
       expect(manager.authorize(decision.token)).toBe(false);
+
+      const nextOffer = manager.beginPairing();
+      const nextRequest = manager.requestPairing(nextOffer.token);
+      manager.approvePending();
+      const nextDecision = manager.pairingDecision(nextRequest?.requestId);
+      if (nextDecision.state === "approved") {
+        expect(manager.revokeController(nextDecision.token)).toMatch(/^[A-Za-z0-9_-]+$/);
+        expect(manager.authorize(nextDecision.token)).toBe(false);
+      }
     }
   });
 

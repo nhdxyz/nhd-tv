@@ -48,7 +48,7 @@ export class VoiceActivityLease {
   #active: ActiveVoiceLease | null = null;
 
   constructor(options: VoiceActivityLeaseOptions = {}) {
-    this.#leaseMs = options.leaseMs ?? 120_000;
+    this.#leaseMs = options.leaseMs ?? 25_000;
     this.#maximumTombstones = options.maximumTombstones ?? 64;
     this.#now = options.now ?? Date.now;
     this.#tombstoneMs = options.tombstoneMs ?? 120_000;

@@ -3,6 +3,7 @@
 
   const ROOT_CLASS = "nhdtv-spotify-tv";
   const NAV_ID = "nhdtv-spotify-tv-nav";
+  const LIBRARY_NAV_ID = "nhdtv-spotify-library-nav";
   const SIGNIN_ID = "nhdtv-spotify-tv-signin";
   const SEARCH_ID = "nhdtv-spotify-tv-search";
   const FOCUS_ATTRIBUTE = "data-nhdtv-spotify-focused";
@@ -138,6 +139,49 @@
     return navigation;
   };
 
+  const ensureLibraryNavigation = () => {
+    const existing = document.querySelector(`#${LIBRARY_NAV_ID}`);
+    if (routeKind() !== "library") {
+      existing?.remove();
+      return null;
+    }
+    if (existing instanceof HTMLElement) {
+      existing.querySelectorAll("a[href]").forEach((anchor) => {
+        const path = anchor.getAttribute("href") ?? "";
+        const active = location.pathname === path || location.pathname.startsWith(`${path}/`);
+        if (active) anchor.setAttribute("aria-current", "page");
+        else anchor.removeAttribute("aria-current");
+      });
+      return existing;
+    }
+
+    const main = document.querySelector("main");
+    if (!(main instanceof HTMLElement)) return null;
+    const navigation = document.createElement("nav");
+    navigation.id = LIBRARY_NAV_ID;
+    navigation.setAttribute("aria-label", "Your Library sections");
+    const sections = [
+      ["Liked Songs", "/collection/tracks"],
+      ["Playlists", "/collection/playlists"],
+      ["Podcasts", "/collection/podcasts"],
+      ["Artists", "/collection/artists"],
+      ["Albums", "/collection/albums"],
+      ["Audiobooks", "/collection/audiobooks"]
+    ];
+    for (const [label, href] of sections) {
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.textContent = label;
+      anchor.setAttribute(TARGET_ATTRIBUTE, "true");
+      if (location.pathname === href || location.pathname.startsWith(`${href}/`)) {
+        anchor.setAttribute("aria-current", "page");
+      }
+      navigation.append(anchor);
+    }
+    main.prepend(navigation);
+    return navigation;
+  };
+
   const ensureSignIn = () => {
     let signIn = document.querySelector(`#${SIGNIN_ID}`);
     if (signIn instanceof HTMLElement) return signIn;
@@ -205,7 +249,9 @@
     const cards = [];
     const quickCards = [];
     const tracks = [];
-    const targets = [...document.querySelectorAll(`#${NAV_ID} [${TARGET_ATTRIBUTE}="true"]`)]
+    const targets = [...document.querySelectorAll(
+      `#${NAV_ID} [${TARGET_ATTRIBUTE}="true"],#${LIBRARY_NAV_ID} [${TARGET_ATTRIBUTE}="true"]`
+    )]
       .filter((element) => element instanceof HTMLElement && isRendered(element));
 
     for (const card of document.querySelectorAll('[data-encore-id="card"]')) {
@@ -276,6 +322,7 @@
     if (signIn instanceof HTMLElement && signIn.hidden !== (auth !== "signed-out")) {
       signIn.hidden = auth !== "signed-out";
     }
+    ensureLibraryNavigation();
 
     navigation.querySelectorAll("[data-nhdtv-spotify-nav]").forEach((destination) => {
       const active = destination.getAttribute("data-nhdtv-spotify-nav") === route;

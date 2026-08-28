@@ -43,6 +43,9 @@ describe("Spotify TV Mode extension", () => {
     expect(content).toContain("`/search/${encodeURIComponent(query)}`");
     expect(content).toContain('data-nhdtv-spotify-route');
     expect(content).toContain('data-nhdtv-spotify-auth');
+    expect(content).toContain('LIBRARY_NAV_ID = "nhdtv-spotify-library-nav"');
+    expect(content).toContain('["Liked Songs", "/collection/tracks"]');
+    expect(content).toContain('["Albums", "/collection/albums"]');
   });
 
   it("turns signed-out Play into one in-view login instead of a native-app popup", async () => {
@@ -82,9 +85,12 @@ describe("Spotify TV Mode extension", () => {
     expect(css).toContain('[data-encore-id="listRowTitle"]');
     expect(css).toContain('[data-nhdtv-spotify-quick="true"]');
     expect(css).toContain('[data-encore-id="chip"]');
+    expect(css).toContain('[data-encore-id="chip"] > span');
+    expect(css).toContain("#nhdtv-spotify-library-nav");
     expect(css).toContain('[data-testid="playlist-page"] [data-testid="entityTitle"]');
     expect(css).toContain('[data-testid="tracklist-row"]');
     expect(css).toContain('[data-testid="now-playing-bar"]');
+    expect(css).toContain('[data-testid="control-button-playpause"] > span');
     expect(css).toContain('[data-nhdtv-spotify-focused="true"]');
     expect(css).toContain("@media (max-width: 1180px)");
   });

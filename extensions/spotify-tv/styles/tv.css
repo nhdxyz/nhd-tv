@@ -477,20 +477,67 @@ html.nhdtv-spotify-tv [data-nhdtv-spotify-quick="true"]:hover {
 }
 
 html.nhdtv-spotify-tv [data-encore-id="chip"] {
-  background: rgb(255 255 255 / 10%) !important;
-  border: 1px solid rgb(255 255 255 / 5%) !important;
+  background: transparent !important;
+  border: 0 !important;
   border-radius: 999px !important;
   color: #fff !important;
   font-size: clamp(16px, 1.1vw, 19px) !important;
   font-weight: 700 !important;
   min-height: 48px !important;
-  padding-inline: 20px !important;
+  padding: 0 !important;
 }
 
-html.nhdtv-spotify-tv [data-encore-id="chip"][aria-checked="true"],
-html.nhdtv-spotify-tv [data-encore-id="chip"][aria-selected="true"] {
+html.nhdtv-spotify-tv [data-encore-id="chip"] > span {
+  align-items: center !important;
+  background: rgb(255 255 255 / 10%) !important;
+  border: 1px solid rgb(255 255 255 / 5%) !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  min-height: 48px !important;
+  padding: 0 20px !important;
+}
+
+html.nhdtv-spotify-tv [data-encore-id="chip"][aria-checked="true"] > span,
+html.nhdtv-spotify-tv [data-encore-id="chip"][aria-selected="true"] > span {
   background: #fff !important;
   color: #000 !important;
+}
+
+html.nhdtv-spotify-tv #nhdtv-spotify-library-nav {
+  position: sticky;
+  z-index: 18;
+  top: 0;
+  display: flex;
+  gap: 10px;
+  padding: 22px var(--nhdtv-spotify-safe-x) 14px;
+  overflow-x: auto;
+  background: linear-gradient(180deg, rgb(12 14 13 / 98%) 76%, transparent);
+  scrollbar-width: none;
+}
+
+html.nhdtv-spotify-tv #nhdtv-spotify-library-nav::-webkit-scrollbar {
+  display: none;
+}
+
+html.nhdtv-spotify-tv #nhdtv-spotify-library-nav a {
+  align-items: center;
+  display: inline-flex;
+  min-height: 50px;
+  padding: 0 22px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: #ddd;
+  font-size: clamp(16px, 1.15vw, 20px);
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html.nhdtv-spotify-tv #nhdtv-spotify-library-nav a[aria-current="page"] {
+  border-color: transparent;
+  background: #fff;
+  color: #000;
 }
 
 html.nhdtv-spotify-tv [data-testid="playlist-page"] [data-testid="background-image"] {
@@ -518,6 +565,16 @@ html.nhdtv-spotify-tv [data-testid="playlist-tracklist"] {
   padding-inline: var(--nhdtv-spotify-safe-x) !important;
 }
 
+html.nhdtv-spotify-tv [data-testid="playlist-tracklist"] [role="row"] {
+  align-items: center !important;
+}
+
+html.nhdtv-spotify-tv [data-testid="playlist-tracklist"] [role="columnheader"] {
+  align-items: center !important;
+  min-height: 50px !important;
+  text-align: left !important;
+}
+
 html.nhdtv-spotify-tv [data-testid="tracklist-row"] {
   border-radius: 10px !important;
   font-size: clamp(16px, 1.15vw, 20px) !important;
@@ -543,10 +600,27 @@ html.nhdtv-spotify-tv [data-testid="now-playing-bar"] button {
 }
 
 html.nhdtv-spotify-tv [data-testid="control-button-playpause"] {
+  align-items: center !important;
   background: #fff !important;
   color: #000 !important;
+  display: grid !important;
   height: 60px !important;
+  justify-items: center !important;
+  padding: 0 !important;
   width: 60px !important;
+}
+
+html.nhdtv-spotify-tv [data-testid="control-button-playpause"] > span {
+  align-items: center !important;
+  background: transparent !important;
+  display: grid !important;
+  height: 100% !important;
+  justify-items: center !important;
+  width: 100% !important;
+}
+
+html.nhdtv-spotify-tv [data-testid="control-button-playpause"] svg {
+  margin: auto !important;
 }
 
 html.nhdtv-spotify-tv [data-testid="playback-progressbar"] {

@@ -19,7 +19,8 @@
     "[data-nhdtv-spotify-track]",
     "#nhdtv-spotify-tv-nav a",
     "#nhdtv-spotify-tv-nav button",
-    "#nhdtv-spotify-tv-nav input"
+    "#nhdtv-spotify-tv-nav input",
+    "#nhdtv-spotify-library-nav a"
   ].join(",")) ?? element;
 
   const center = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });

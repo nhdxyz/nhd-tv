@@ -217,6 +217,17 @@ export interface LocalAppState {
   recentServiceIds: string[];
 }
 
+export type OpenAiCredentialState =
+  | "configured"
+  | "invalid"
+  | "missing"
+  | "unavailable";
+
+export interface OpenAiCredentialStatus {
+  detail: string;
+  state: OpenAiCredentialState;
+}
+
 export interface CustomServiceManifest {
   id: string;
   name: string;

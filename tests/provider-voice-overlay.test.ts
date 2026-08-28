@@ -35,7 +35,9 @@ describe("provider voice overlay", () => {
     expect(indexSource).toContain("serviceHost.activeServiceId !== null");
     expect(indexSource).toContain("intendedUrl: playbackUrl");
     expect(indexSource).toContain("profileNameHint: activeVoiceProfileName()");
-    expect(indexSource).toContain('plan.intent.action !== "open"');
+    expect(indexSource).toContain(
+      'plan.intent.action === "lookup" || plan.intent.action === "play"'
+    );
     expect(indexSource).toContain("VOICE_TRANSCRIPT_MIN_DISPLAY_MS");
     expect(indexSource).toContain("VOICE_CONFIRMATION_DISPLAY_MS");
     expect(indexSource).toContain('result.outcome === "confirmation-required" ? "confirmation"');

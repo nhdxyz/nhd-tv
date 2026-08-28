@@ -66,6 +66,7 @@ export type VoiceVerifiedActionKind =
   | "audio-language"
   | "fullscreen-enter"
   | "fullscreen-exit"
+  | "playback-rate"
   | "launch-service"
   | "select-provider"
   | "select-media"
@@ -310,6 +311,7 @@ const VERIFIED_ACTION_KINDS = new Set<VoiceVerifiedActionKind>([
   "audio-language",
   "fullscreen-enter",
   "fullscreen-exit",
+  "playback-rate",
   "launch-service",
   "select-provider",
   "select-media",

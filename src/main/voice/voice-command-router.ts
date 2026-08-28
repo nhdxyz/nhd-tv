@@ -229,6 +229,12 @@ function mediaPlan(
 function semanticControlPlan(
   intent: VoiceSemanticControlIntent
 ): VoiceCommandPlan {
+  if (intent.action === "set-playback-rate") {
+    return {
+      kind: "semantic-control",
+      request: { action: intent.action, playbackRate: intent.playbackRate }
+    };
+  }
   if (intent.action === "seek-relative") {
     if (intent.offsetSeconds === null || intent.offsetSeconds === 0) {
       return { detail: "Please say how far to skip.", handled: false, kind: "no-op" };

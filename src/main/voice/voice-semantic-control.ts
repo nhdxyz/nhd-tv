@@ -1,9 +1,16 @@
+import {
+  VOICE_PLAYBACK_RATES,
+  type VoicePlaybackRate
+} from "./voice-intent";
+
 export const MAX_VOICE_RELATIVE_SEEK_SECONDS = 60 * 60;
 export const MAX_VOICE_ABSOLUTE_SEEK_SECONDS = 24 * 60 * 60;
+const PLAYBACK_RATE_SETTLE_MS = 200;
 
 export type VoiceSemanticControlRequest =
   | { action: "seek-relative"; offsetSeconds: number }
   | { action: "seek-absolute"; positionSeconds: number }
+  | { action: "set-playback-rate"; playbackRate: VoicePlaybackRate }
   | { action: "restart" }
   | { action: "next" }
   | { action: "previous" }
@@ -68,6 +75,12 @@ function boundedInteger(value: unknown, minimum: number, maximum: number): numbe
     : null;
 }
 
+function playbackRate(value: unknown): VoicePlaybackRate | null {
+  return VOICE_PLAYBACK_RATES.some((rate) => rate === value)
+    ? value as VoicePlaybackRate
+    : null;
+}
+
 /**
  * Qualifies the untrusted command payload before it can be serialized into a
  * provider page. Unknown fields, strings in numeric fields, and out-of-range
@@ -101,6 +114,14 @@ export function normalizeVoiceSemanticControlRequest(
     return positionSeconds === null
       ? null
       : Object.freeze({ action: "seek-absolute", positionSeconds });
+  }
+
+  if (request.action === "set-playback-rate") {
+    if (!hasExactKeys(request, ["action", "playbackRate"])) return null;
+    const rate = playbackRate(request.playbackRate);
+    return rate === null
+      ? null
+      : Object.freeze({ action: "set-playback-rate", playbackRate: rate });
   }
 
   if (
@@ -227,6 +248,36 @@ export function buildVoiceSemanticControlScript(
     };
     const providerControls = controls[provider];
 
+    if (request.action === "set-playback-rate") {
+      if (provider !== "netflix" && provider !== "youtube") return "unsupported";
+      const video = activeVideo();
+      if (
+        video === null ||
+        video.isConnected !== true ||
+        video.ended ||
+        video.readyState < 1 ||
+        !Number.isFinite(video.duration) ||
+        video.duration <= 0
+      ) {
+        return "unavailable";
+      }
+      const target = request.playbackRate;
+      if (Math.abs(video.playbackRate - target) <= 0.001) return "complete";
+      try {
+        video.playbackRate = target;
+      } catch {
+        return "unavailable";
+      }
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const unchangedVideo = video.isConnected === true && !video.ended &&
+            activeVideo() === video && Number.isFinite(video.duration) && video.duration > 0;
+          resolve(unchangedVideo && Math.abs(video.playbackRate - target) <= 0.001
+            ? "verified"
+            : "unavailable");
+        }, ${PLAYBACK_RATE_SETTLE_MS});
+      });
+    }
     if (request.action === "seek-relative") {
       if (provider === "spotify") return "unsupported";
       return seekVideo((video) => video.currentTime + request.offsetSeconds);

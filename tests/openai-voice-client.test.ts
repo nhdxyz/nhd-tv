@@ -26,6 +26,7 @@ function outputIntent(overrides: Record<string, unknown> = {}) {
     semanticControlAction: null,
     offsetSeconds: null,
     positionSeconds: null,
+    playbackRate: null,
     volumePercent: null,
     mediaAction: "play",
     reference: null,
@@ -90,6 +91,11 @@ describe("OpenAI voice client", () => {
         "Never reinterpret a media title, playback control, or longer request"
       );
       expect(body.instructions).toContain("Use kind=semantic-control");
+      expect(body.instructions).toContain("set-playback-rate");
+      expect(body.instructions).toContain("0.5, 0.75, 1, 1.25, or 1.5");
+      expect(body.instructions).toContain("Never round or clamp another rate");
+      expect(body.instructions).toContain("combine a named title launch with a rate");
+      expect(body.instructions).toContain("provider-named rate request");
       expect(body.instructions).toContain("controlAction=set-volume");
       expect(body.instructions).toContain("volumePercent set to an explicit whole-number percent");
       expect(body.instructions).toContain("Never guess, round, clamp, or infer");
@@ -251,11 +257,41 @@ describe("OpenAI voice client", () => {
         action,
         kind: "semantic-control",
         offsetSeconds,
+        playbackRate: null,
         positionSeconds
       });
       expect(fetchMock).not.toHaveBeenCalled();
     }
   );
+
+  it.each([
+    ["Half speed", 0.5],
+    ["Play this at three-quarter speed", 0.75],
+    ["Normal speed", 1],
+    ["Set playback speed to 1.25x", 1.25],
+    ["Play this at one-and-a-half speed", 1.5]
+  ] as const)("routes the explicit playback-rate request %s locally", async (phrase, playbackRate) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({
+      action: "set-playback-rate",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      playbackRate,
+      positionSeconds: null
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Faster",
+    "Set playback speed to 1.3x",
+    "Play this at 1.5x on Netflix",
+    "Play Breaking Bad at 1.5x"
+  ])("fails the unsafe local playback-rate request %s closed", async (phrase) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    await expect(client(fetchMock).interpret(phrase)).resolves.toEqual({ kind: "unknown" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["Play it", "play", "last-media", null, null],

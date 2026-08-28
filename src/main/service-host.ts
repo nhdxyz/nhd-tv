@@ -12,6 +12,7 @@ import {
   isAllowedArtworkUrl,
   isExpectedAllowedNavigationAbort,
   isAllowedServicePermission,
+  isPlaybackUrl,
   isServiceRootUrl,
   originForDiagnostics,
   sanitizePlaybackUrl,
@@ -2069,6 +2070,12 @@ export class ServiceHost {
     const view = this.#view;
     const definition = this.#activeDefinition;
     if (view === null || definition === null || view.webContents.isDestroyed()) {
+      return "unavailable";
+    }
+    if (
+      request.action === "set-playback-rate" &&
+      !isPlaybackUrl(view.webContents.getURL(), definition)
+    ) {
       return "unavailable";
     }
 

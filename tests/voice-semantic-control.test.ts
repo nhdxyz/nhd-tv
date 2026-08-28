@@ -46,22 +46,60 @@ class FakeElement {
 }
 
 class FakeVideo extends FakeElement {
+  readonly defaultPlaybackRate = 1;
   currentTime: number;
   duration: number;
-  ended = false;
+  ended: boolean;
   paused: boolean;
+  readonly playbackRateWrites: number[] = [];
+  readyState: number;
   requestedFullscreen = false;
+  readonly #clampPlaybackRateTo: number | null;
+  readonly #onPlaybackRateWrite: ((value: number) => void) | null;
+  readonly #rateResetDelayMs: number | null;
+  #playbackRate: number;
+  readonly #throwOnPlaybackRateWrite: boolean;
 
   constructor(options: {
+    clampPlaybackRateTo?: number | null;
     currentTime?: number;
     duration?: number;
+    ended?: boolean;
+    onPlaybackRateWrite?: ((value: number) => void) | null;
     paused?: boolean;
+    playbackRate?: number;
+    rateResetDelayMs?: number | null;
+    readyState?: number;
+    throwOnPlaybackRateWrite?: boolean;
     visible?: boolean;
   } = {}) {
     super({ visible: options.visible });
+    this.#clampPlaybackRateTo = options.clampPlaybackRateTo ?? null;
     this.currentTime = options.currentTime ?? 0;
     this.duration = options.duration ?? 600;
+    this.ended = options.ended ?? false;
+    this.#onPlaybackRateWrite = options.onPlaybackRateWrite ?? null;
     this.paused = options.paused ?? false;
+    this.#playbackRate = options.playbackRate ?? 1;
+    this.#rateResetDelayMs = options.rateResetDelayMs ?? null;
+    this.readyState = options.readyState ?? 4;
+    this.#throwOnPlaybackRateWrite = options.throwOnPlaybackRateWrite ?? false;
+  }
+
+  get playbackRate(): number {
+    return this.#playbackRate;
+  }
+
+  set playbackRate(value: number) {
+    this.playbackRateWrites.push(value);
+    if (this.#throwOnPlaybackRateWrite) throw new Error("playback rate rejected");
+    this.#playbackRate = this.#clampPlaybackRateTo ?? value;
+    this.#onPlaybackRateWrite?.(value);
+    if (this.#rateResetDelayMs !== null) {
+      setTimeout(() => {
+        this.#playbackRate = 1;
+      }, this.#rateResetDelayMs);
+    }
   }
 
   requestFullscreen(): Promise<void> {
@@ -81,7 +119,7 @@ function execute(
   provider: unknown,
   request: VoiceSemanticControlRequest,
   options: FakeDocumentOptions = {}
-): VoiceSemanticControlResult {
+): VoiceSemanticControlResult | Promise<VoiceSemanticControlResult> {
   const script = buildVoiceSemanticControlScript(provider, request);
   if (script === null) throw new Error("Expected a script");
   const exitState = { called: false };
@@ -118,7 +156,7 @@ function execute(
     FakeElement,
     FakeVideo,
     () => ({ display: "block", opacity: "1", visibility: "visible" })
-  ) as VoiceSemanticControlResult;
+  ) as VoiceSemanticControlResult | Promise<VoiceSemanticControlResult>;
 }
 
 describe("voice semantic controls", () => {
@@ -126,6 +164,7 @@ describe("voice semantic controls", () => {
     const requests: VoiceSemanticControlRequest[] = [
       { action: "seek-relative", offsetSeconds: -15 },
       { action: "seek-absolute", positionSeconds: 125 },
+      { action: "set-playback-rate", playbackRate: 1.5 },
       { action: "restart" },
       { action: "next" },
       { action: "previous" },
@@ -145,6 +184,27 @@ describe("voice semantic controls", () => {
     expect(normalizeVoiceSemanticControlRequest({ action: "next", selector: "body" })).toBeNull();
     expect(normalizeVoiceSemanticControlRequest(Object.assign(new Date(), { action: "next" })))
       .toBeNull();
+  });
+
+  it("accepts only exact allowlisted playback rates without coercion", () => {
+    for (const playbackRate of [0.5, 0.75, 1, 1.25, 1.5] as const) {
+      expect(normalizeVoiceSemanticControlRequest({
+        action: "set-playback-rate",
+        playbackRate
+      })).toEqual({ action: "set-playback-rate", playbackRate });
+    }
+    for (const playbackRate of [0, 0.8, 1.3, 2, "1.5", Number.NaN,
+      Number.POSITIVE_INFINITY]) {
+      expect(normalizeVoiceSemanticControlRequest({
+        action: "set-playback-rate",
+        playbackRate
+      })).toBeNull();
+    }
+    expect(normalizeVoiceSemanticControlRequest({
+      action: "set-playback-rate",
+      playbackRate: 1.5,
+      selector: "video"
+    })).toBeNull();
   });
 
   it("rejects non-integral, zero, and out-of-bounds seeks without coercion", () => {
@@ -194,6 +254,14 @@ describe("voice semantic controls", () => {
     expect(script).not.toContain("innerHTML");
     expect(script).not.toContain("location");
     expect(() => new Function(script ?? "")).not.toThrow();
+
+    const rateScript = buildVoiceSemanticControlScript("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }) ?? "";
+    expect(rateScript).toContain('"action":"set-playback-rate"');
+    expect(rateScript).toContain('"playbackRate":1.5');
+    expect(rateScript).not.toContain("defaultPlaybackRate =");
   });
 
   it("contains provider-owned Netflix and YouTube selectors and semantic labels", () => {
@@ -228,6 +296,109 @@ describe("voice semantic controls", () => {
 
     video.currentTime = 0.3;
     expect(execute("netflix", { action: "restart" }, { videos: [video] })).toBe("complete");
+  });
+
+  it("sets and settles playback rate only on Netflix and YouTube finite VOD", async () => {
+    for (const provider of ["netflix", "youtube"] as const) {
+      const video = new FakeVideo({ playbackRate: 1, paused: provider === "netflix" });
+      expect(await execute(provider, {
+        action: "set-playback-rate",
+        playbackRate: 1.5
+      }, { videos: [video] })).toBe("verified");
+      expect(video.playbackRate).toBe(1.5);
+      expect(video.playbackRateWrites).toEqual([1.5]);
+      expect(video.defaultPlaybackRate).toBe(1);
+
+      expect(await execute(provider, {
+        action: "set-playback-rate",
+        playbackRate: 1.5
+      }, { videos: [video] })).toBe("complete");
+      expect(video.playbackRateWrites).toEqual([1.5]);
+    }
+  });
+
+  it("does not claim playback-rate success when the provider rejects or resets it", async () => {
+    const rejected = new FakeVideo({ throwOnPlaybackRateWrite: true });
+    expect(await execute("netflix", {
+      action: "set-playback-rate",
+      playbackRate: 1.25
+    }, { videos: [rejected] })).toBe("unavailable");
+    expect(rejected.playbackRate).toBe(1);
+
+    const reset = new FakeVideo({ rateResetDelayMs: 20 });
+    expect(await execute("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }, { videos: [reset] })).toBe("unavailable");
+    expect(reset.playbackRate).toBe(1);
+
+    const clamped = new FakeVideo({ clampPlaybackRateTo: 1.25 });
+    expect(await execute("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }, { videos: [clamped] })).toBe("unavailable");
+    expect(clamped.playbackRate).toBe(1.25);
+  });
+
+  it("requires the same eligible video to survive the settled rate read-back", async () => {
+    const videos: FakeVideo[] = [];
+    const replaced = new FakeVideo({
+      onPlaybackRateWrite: () => {
+        setTimeout(() => videos.splice(0, 1, new FakeVideo({ playbackRate: 1.5 })), 20);
+      }
+    });
+    videos.push(replaced);
+    expect(await execute("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }, { videos })).toBe("unavailable");
+
+    const ending = new FakeVideo({
+      onPlaybackRateWrite: () => {
+        setTimeout(() => {
+          ending.ended = true;
+        }, 20);
+      }
+    });
+    expect(await execute("netflix", {
+      action: "set-playback-rate",
+      playbackRate: 1.25
+    }, { videos: [ending] })).toBe("unavailable");
+  });
+
+  it("does not mutate unsupported providers or ineligible video elements", async () => {
+    for (const provider of ["spotify", "disney-plus", "custom-service"] as const) {
+      const video = new FakeVideo();
+      expect(await execute(provider, {
+        action: "set-playback-rate",
+        playbackRate: 1.5
+      }, { videos: [video] })).toBe("unsupported");
+      expect(video.playbackRateWrites).toEqual([]);
+    }
+
+    for (const video of [
+      new FakeVideo({ duration: Number.POSITIVE_INFINITY }),
+      new FakeVideo({ duration: 0 }),
+      new FakeVideo({ ended: true }),
+      new FakeVideo({ readyState: 0 })
+    ]) {
+      expect(await execute("youtube", {
+        action: "set-playback-rate",
+        playbackRate: 1.5
+      }, { videos: [video] })).toBe("unavailable");
+      expect(video.playbackRateWrites).toEqual([]);
+    }
+    const disconnected = new FakeVideo();
+    disconnected.isConnected = false;
+    expect(await execute("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }, { videos: [disconnected] })).toBe("unavailable");
+    expect(disconnected.playbackRateWrites).toEqual([]);
+    expect(await execute("youtube", {
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    })).toBe("unavailable");
   });
 
   it("clicks only visible, enabled transport and skip controls", () => {

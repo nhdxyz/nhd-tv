@@ -22,6 +22,10 @@ function duration(seconds: number): string {
   return `${absolute} second${absolute === 1 ? "" : "s"}`;
 }
 
+function playbackRate(rate: number): string {
+  return rate === 1 ? "normal speed" : `${rate}\u00d7`;
+}
+
 function actionDescription(request: VoiceSemanticControlRequest): string {
   switch (request.action) {
     case "seek-relative":
@@ -30,6 +34,8 @@ function actionDescription(request: VoiceSemanticControlRequest): string {
         : `go back ${duration(request.offsetSeconds)}`;
     case "seek-absolute":
       return `go to ${duration(request.positionSeconds)}`;
+    case "set-playback-rate":
+      return `set playback speed to ${playbackRate(request.playbackRate)}`;
     case "restart": return "restart playback";
     case "next": return "go to the next item";
     case "previous": return "go to the previous item";
@@ -53,6 +59,11 @@ function successDetail(request: VoiceSemanticControlRequest, complete: boolean):
       return complete
         ? `Playback is already at ${duration(request.positionSeconds)}.`
         : `Moved playback to ${duration(request.positionSeconds)}.`;
+    case "set-playback-rate":
+      if (complete) return `Playback is already at ${playbackRate(request.playbackRate)}.`;
+      return request.playbackRate === 1
+        ? "Restored normal playback speed."
+        : `Set playback speed to ${playbackRate(request.playbackRate)}.`;
     case "restart": return complete ? "Playback is already at the beginning." : "Restarted playback.";
     case "next": return "Started the next item.";
     case "previous": return "Started the previous item.";
@@ -98,6 +109,7 @@ export function verifiedActionForSemanticControl(
   switch (request.action) {
     case "seek-relative":
     case "seek-absolute": return "seek";
+    case "set-playback-rate": return "playback-rate";
     case "restart": return "restart";
     case "next": return "next";
     case "previous": return "previous";

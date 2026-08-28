@@ -152,6 +152,7 @@ describe("common voice utterance contract", () => {
       action: "seek-absolute",
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: 750
     });
   });
@@ -166,6 +167,7 @@ describe("common voice utterance contract", () => {
       action: "seek-relative",
       kind: "semantic-control",
       offsetSeconds,
+      playbackRate: null,
       positionSeconds: null
     });
   });
@@ -180,6 +182,7 @@ describe("common voice utterance contract", () => {
       action: "seek-absolute",
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds
     });
   });
@@ -201,8 +204,52 @@ describe("common voice utterance contract", () => {
       action,
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: null
     });
+  });
+
+  it.each([
+    ["half speed", 0.5],
+    ["play this at half-speed", 0.5],
+    ["play it at 0.75x", 0.75],
+    ["three quarters speed", 0.75],
+    ["normal speed", 1],
+    ["back to regular speed", 1],
+    ["set the playback speed to one-and-a-quarter", 1.25],
+    ["change speed to 1.25 times", 1.25],
+    ["play at one-and-a-half speed", 1.5],
+    ["1.5x", 1.5]
+  ] as const)("normalizes the explicit playback rate %s", (phrase, playbackRate) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "set-playback-rate",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      playbackRate,
+      positionSeconds: null
+    });
+  });
+
+  it.each([
+    "faster",
+    "make it slower",
+    "speed this up",
+    "set playback speed to 1.3x",
+    "play this at 2x",
+    "play this at 1.5x on Netflix",
+    "play Breaking Bad at 1.5x"
+  ])("fails the unsafe playback-rate phrase %s closed", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({ kind: "unknown" });
+  });
+
+  it.each([
+    "normal",
+    "one and a half",
+    "play Need for Speed",
+    "play One and a Half Speed",
+    "play this at 1:30"
+  ])("does not steal the title, composite, or ambiguous phrase %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toBeNull();
   });
 
   it("preserves legacy controls and titles around semantic-control words", () => {

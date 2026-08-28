@@ -133,6 +133,7 @@ describe("voice command planning", () => {
       action: "seek-relative",
       kind: "semantic-control",
       offsetSeconds: -120,
+      playbackRate: null,
       positionSeconds: null
     }, context)).toEqual({
       kind: "semantic-control",
@@ -142,6 +143,7 @@ describe("voice command planning", () => {
       action: "seek-absolute",
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: 90
     }, context)).toEqual({
       kind: "semantic-control",
@@ -151,10 +153,21 @@ describe("voice command planning", () => {
       action: "skip-intro",
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: null
     }, context)).toEqual({
       kind: "semantic-control",
       request: { action: "skip-intro" }
+    });
+    expect(planVoiceCommand({
+      action: "set-playback-rate",
+      kind: "semantic-control",
+      offsetSeconds: null,
+      playbackRate: 1.5,
+      positionSeconds: null
+    }, context)).toEqual({
+      kind: "semantic-control",
+      request: { action: "set-playback-rate", playbackRate: 1.5 }
     });
   });
 

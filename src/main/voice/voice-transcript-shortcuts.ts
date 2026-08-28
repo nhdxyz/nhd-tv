@@ -5,6 +5,7 @@ import type {
   VoiceIntent,
   VoiceMediaAction,
   VoiceMediaReference,
+  VoicePlaybackRate,
   VoiceProviderDestination,
   VoiceProviderHint,
   VoiceSemanticControlAction
@@ -15,6 +16,10 @@ import {
 } from "./voice-app-matcher";
 
 type VoiceSimpleControlAction = Exclude<VoiceControlAction, "set-volume">;
+type VoiceSimpleSemanticControlAction = Exclude<
+  VoiceSemanticControlAction,
+  "set-playback-rate"
+>;
 
 const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = {
   cancel: "cancel",
@@ -191,7 +196,9 @@ function providerDestinationShortcut(phrase: string): VoiceIntent | null {
   };
 }
 
-const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<Record<string, VoiceSemanticControlAction>> = {
+const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<
+  Record<string, VoiceSimpleSemanticControlAction>
+> = {
   "captions off": "captions-off",
   "captions on": "captions-on",
   "enter full screen": "fullscreen-enter",
@@ -236,6 +243,116 @@ const SIMPLE_SEMANTIC_CONTROL_PHRASES: Readonly<Record<string, VoiceSemanticCont
   "turn subtitles off": "captions-off",
   "turn subtitles on": "captions-on"
 };
+
+const PLAYBACK_RATE_TOKENS: Readonly<Record<string, VoicePlaybackRate>> = {
+  "0 point 5": 0.5,
+  "0 point 75": 0.75,
+  "1": 1,
+  "1 point 25": 1.25,
+  "1 point 5": 1.5,
+  half: 0.5,
+  "one and a half": 1.5,
+  "one and a quarter": 1.25,
+  "one half": 0.5,
+  "one point five": 1.5,
+  "one point two five": 1.25,
+  normal: 1,
+  "point five": 0.5,
+  "point seven five": 0.75,
+  regular: 1,
+  "three quarter": 0.75,
+  "three quarters": 0.75,
+  "zero point five": 0.5,
+  "zero point seven five": 0.75
+};
+
+const RELATIVE_PLAYBACK_RATE_PHRASES = new Set([
+  "decrease playback speed",
+  "faster",
+  "increase playback speed",
+  "make it faster",
+  "make it slower",
+  "play faster",
+  "play slower",
+  "slow down",
+  "slow it down",
+  "slower",
+  "speed this up",
+  "speed it up"
+]);
+
+function playbackRateToken(value: string): VoicePlaybackRate | null {
+  const token = value
+    .replace(/ (?:times|x)$/, "")
+    .trim();
+  return PLAYBACK_RATE_TOKENS[token] ?? null;
+}
+
+function looksLikePlaybackRate(value: string): boolean {
+  return /^(?:(?:\d+)|a|and|eight|five|four|half|nine|normal|one|point|quarter|quarters|regular|seven|six|three|two|zero)(?: (?:(?:\d+)|a|and|eight|five|four|half|nine|normal|one|point|quarter|quarters|regular|seven|six|three|two|zero))*$/.test(
+    value
+  );
+}
+
+function playbackRateIntent(rate: VoicePlaybackRate): VoiceIntent {
+  return {
+    action: "set-playback-rate",
+    kind: "semantic-control",
+    offsetSeconds: null,
+    playbackRate: rate,
+    positionSeconds: null
+  };
+}
+
+function playbackRateShortcut(phrase: string): VoiceIntent | null {
+  if (RELATIVE_PLAYBACK_RATE_PHRASES.has(phrase)) return { kind: "unknown" };
+  if (
+    /^(?:play|watch) (?!it(?: |$)|this(?: |$)).+ at .+(?: speed| x)$/.test(phrase)
+  ) {
+    return { kind: "unknown" };
+  }
+  if (
+    /(?:^| )(?:disney|disney plus|netflix|spotify|youtube)(?: |$)/.test(phrase) &&
+    /(?:\d|half|normal|point|quarter|regular)(?: [\w]+)* (?:speed|x)(?: |$)/.test(phrase)
+  ) {
+    return { kind: "unknown" };
+  }
+
+  const explicit = /^(?:change|set) (?:the )?(?:playback )?speed (?:at|to) (.+)$/.exec(phrase) ??
+    /^set (?:it|this) to (.+) speed$/.exec(phrase);
+  if (explicit !== null) {
+    const rate = playbackRateToken(explicit[1] ?? "");
+    return rate === null ? { kind: "unknown" } : playbackRateIntent(rate);
+  }
+
+  const current = /^(?:play|watch)(?: (?:it|this))? at (.+)$/.exec(phrase);
+  if (current !== null) {
+    const value = current[1] ?? "";
+    if (!/(?: speed| x)$/.test(value)) return null;
+    const rate = playbackRateToken(value.replace(/ speed$/, ""));
+    return rate === null ? { kind: "unknown" } : playbackRateIntent(rate);
+  }
+
+  const backToNormal = /^back to (normal|regular) speed$/.exec(phrase);
+  if (backToNormal !== null) return playbackRateIntent(1);
+
+  const directSpeed = /^(.+) speed$/.exec(phrase);
+  if (directSpeed !== null) {
+    const value = directSpeed[1] ?? "";
+    const rate = playbackRateToken(value);
+    if (rate !== null) return playbackRateIntent(rate);
+    return looksLikePlaybackRate(value) ? { kind: "unknown" } : null;
+  }
+
+  const directMultiplier = /^(.+) x$/.exec(phrase);
+  if (directMultiplier !== null) {
+    const value = directMultiplier[1] ?? "";
+    const rate = playbackRateToken(value);
+    if (rate !== null) return playbackRateIntent(rate);
+    return looksLikePlaybackRate(value) ? { kind: "unknown" } : null;
+  }
+  return null;
+}
 
 const SMALL_NUMBER_WORDS: Readonly<Record<string, number>> = {
   a: 1,
@@ -393,12 +510,16 @@ function absolutePositionSeconds(value: string): number | null {
 }
 
 function semanticControlShortcut(phrase: string): VoiceIntent | null {
+  const playbackRate = playbackRateShortcut(phrase);
+  if (playbackRate !== null) return playbackRate;
+
   const simpleAction = SIMPLE_SEMANTIC_CONTROL_PHRASES[phrase];
   if (simpleAction !== undefined) {
     return {
       action: simpleAction,
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: null
     };
   }
@@ -417,6 +538,7 @@ function semanticControlShortcut(phrase: string): VoiceIntent | null {
         action: "seek-relative",
         kind: "semantic-control",
         offsetSeconds: forward === null ? -seconds : seconds,
+        playbackRate: null,
         positionSeconds: null
       };
     }
@@ -432,6 +554,7 @@ function semanticControlShortcut(phrase: string): VoiceIntent | null {
         action: "seek-absolute",
         kind: "semantic-control",
         offsetSeconds: null,
+        playbackRate: null,
         positionSeconds
       };
     }
@@ -445,6 +568,8 @@ function normalizedPhrase(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("en-US")
     .replace(/(^|[\s:(])[-\u2212]\s*(?=\d)/g, "$1minus ")
+    .replace(/(\d)\.(?=\d)/g, "$1 point ")
+    .replace(/(\d)x\b/g, "$1 x")
     .replace(/[^a-z0-9+:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

@@ -28,6 +28,27 @@ describe("semantic voice control outcomes", () => {
       .toMatchObject({ detail: "Captions are already on.", handled: true });
     expect(voiceSemanticControlOutcome({ action: "fullscreen-enter" }, "verified", "Netflix"))
       .toMatchObject({ detail: "Entered full screen.", handled: true });
+    expect(voiceSemanticControlOutcome({
+      action: "set-playback-rate",
+      playbackRate: 1.5
+    }, "verified", "YouTube")).toMatchObject({
+      detail: "Set playback speed to 1.5\u00d7.",
+      handled: true
+    });
+    expect(voiceSemanticControlOutcome({
+      action: "set-playback-rate",
+      playbackRate: 1
+    }, "verified", "Netflix")).toMatchObject({
+      detail: "Restored normal playback speed.",
+      handled: true
+    });
+    expect(voiceSemanticControlOutcome({
+      action: "set-playback-rate",
+      playbackRate: 1
+    }, "complete", "Netflix")).toMatchObject({
+      detail: "Playback is already at normal speed.",
+      handled: true
+    });
   });
 
   it("does not claim an unverified provider click completed", () => {
@@ -59,5 +80,9 @@ describe("semantic voice control outcomes", () => {
     expect(verifiedActionForSemanticControl({ action: "skip-recap" })).toBe("skip-recap");
     expect(verifiedActionForSemanticControl({ action: "fullscreen-exit" }))
       .toBe("fullscreen-exit");
+    expect(verifiedActionForSemanticControl({
+      action: "set-playback-rate",
+      playbackRate: 1.25
+    })).toBe("playback-rate");
   });
 });

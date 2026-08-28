@@ -13,6 +13,7 @@ function mediaIntent(overrides: Record<string, unknown> = {}) {
     semanticControlAction: null,
     offsetSeconds: null,
     positionSeconds: null,
+    playbackRate: null,
     volumePercent: null,
     mediaAction: "play",
     reference: null,
@@ -40,6 +41,7 @@ describe("voice intent boundary", () => {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "playbackRate",
       "volumePercent",
       "mediaAction",
       "reference",
@@ -158,6 +160,7 @@ describe("voice intent boundary", () => {
       action: "seek-relative",
       kind: "semantic-control",
       offsetSeconds: -30,
+      playbackRate: null,
       positionSeconds: null
     });
     expect(parseVoiceIntent(mediaIntent({
@@ -171,8 +174,72 @@ describe("voice intent boundary", () => {
       action: "seek-absolute",
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: 754
     });
+  });
+
+  it.each([0.5, 0.75, 1, 1.25, 1.5] as const)(
+    "parses the exact playback rate %s",
+    (playbackRate) => {
+      expect(parseVoiceIntent(mediaIntent({
+        kind: "semantic-control",
+        mediaAction: null,
+        mediaType: null,
+        playbackRate,
+        semanticControlAction: "set-playback-rate",
+        title: null
+      }))).toEqual({
+        action: "set-playback-rate",
+        kind: "semantic-control",
+        offsetSeconds: null,
+        playbackRate,
+        positionSeconds: null
+      });
+    }
+  );
+
+  it.each([0, 0.8, 1.3, 2, "1.5", Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects the unsupported playback rate %s",
+    (playbackRate) => {
+      expect(() => parseVoiceIntent(mediaIntent({
+        kind: "semantic-control",
+        mediaAction: null,
+        mediaType: null,
+        playbackRate,
+        semanticControlAction: "set-playback-rate",
+        title: null
+      }))).toThrow("unsupported playback rate");
+    }
+  );
+
+  it("strictly isolates the playback-rate parameter", () => {
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      semanticControlAction: "set-playback-rate",
+      title: null
+    }))).toThrow("require only an allowlisted rate");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      offsetSeconds: 10,
+      playbackRate: 1.5,
+      semanticControlAction: "set-playback-rate",
+      title: null
+    }))).toThrow("require only an allowlisted rate");
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "semantic-control",
+      mediaAction: null,
+      mediaType: null,
+      playbackRate: 1.5,
+      semanticControlAction: "restart",
+      title: null
+    }))).toThrow("cannot contain seek parameters");
+    expect(() => parseVoiceIntent(mediaIntent({ playbackRate: 1.5 })))
+      .toThrow("voice intent kind is invalid");
   });
 
   it.each([0, 20, 100])("parses the bounded absolute volume %s%%", (volumePercent) => {
@@ -244,6 +311,7 @@ describe("voice intent boundary", () => {
       action: semanticControlAction,
       kind: "semantic-control",
       offsetSeconds: null,
+      playbackRate: null,
       positionSeconds: null
     });
   });
@@ -458,6 +526,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      playbackRate: null,
       volumePercent: null,
       mediaAction: null,
       reference: null,
@@ -479,6 +548,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      playbackRate: null,
       volumePercent: null,
       mediaAction: null,
       reference: null,
@@ -500,6 +570,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      playbackRate: null,
       volumePercent: null,
       mediaAction: null,
       reference: null,
@@ -559,6 +630,7 @@ describe("voice intent boundary", () => {
       semanticControlAction: null,
       offsetSeconds: null,
       positionSeconds: null,
+      playbackRate: null,
       volumePercent: null,
       mediaAction: null,
       reference: null,

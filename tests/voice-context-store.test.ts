@@ -136,6 +136,18 @@ describe("shared voice context store", () => {
     });
   });
 
+  it("records a verified playback-rate action in the shared TV context", () => {
+    const store = new VoiceContextStore({ now: () => 12_000 });
+    let scope = activateNetflix(store);
+    scope = store.observeMedia(video(), scope) ?? scope;
+
+    expect(store.recordVerifiedAction({ kind: "playback-rate" }, scope)).toBe(true);
+    expect(store.snapshot().conversation.lastVerifiedAction).toMatchObject({
+      kind: "playback-rate",
+      serviceId: "netflix"
+    });
+  });
+
   it("preserves the explicit target while clearing transient service and media context", () => {
     const store = new VoiceContextStore({ now: () => 20_000 });
     let scope = activateNetflix(store);

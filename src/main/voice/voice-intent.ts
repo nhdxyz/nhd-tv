@@ -35,10 +35,12 @@ const VOICE_SEMANTIC_CONTROL_ACTIONS = [
   "restart",
   "seek-absolute",
   "seek-relative",
+  "set-playback-rate",
   "skip-ad",
   "skip-intro",
   "skip-recap"
 ] as const;
+export const VOICE_PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5] as const;
 const VOICE_CURRENT_MEDIA_ACTIONS = [
   "duration",
   "end-time",
@@ -73,6 +75,7 @@ const VOICE_INTENT_KEYS = [
   "semanticControlAction",
   "offsetSeconds",
   "positionSeconds",
+  "playbackRate",
   "volumePercent",
   "mediaAction",
   "reference",
@@ -93,6 +96,7 @@ export type VoiceCurrentMediaAction = (typeof VOICE_CURRENT_MEDIA_ACTIONS)[numbe
 export type VoiceMediaAction = (typeof VOICE_MEDIA_ACTIONS)[number];
 export type VoiceMediaReference = (typeof VOICE_MEDIA_REFERENCES)[number];
 export type VoiceMediaType = (typeof VOICE_MEDIA_TYPES)[number];
+export type VoicePlaybackRate = (typeof VOICE_PLAYBACK_RATES)[number];
 export type VoiceProviderHint = (typeof VOICE_PROVIDER_HINTS)[number];
 export type VoiceProviderDestination = (typeof VOICE_PROVIDER_DESTINATIONS)[number];
 export type VoiceRecency = (typeof VOICE_RECENCY_VALUES)[number];
@@ -180,12 +184,21 @@ export interface VoiceProviderDestinationIntent {
 }
 
 /** A provider-aware playback operation with explicit, bounded parameters. */
-export interface VoiceSemanticControlIntent {
-  action: VoiceSemanticControlAction;
-  kind: "semantic-control";
-  offsetSeconds: number | null;
-  positionSeconds: number | null;
-}
+export type VoiceSemanticControlIntent =
+  | {
+    action: "set-playback-rate";
+    kind: "semantic-control";
+    offsetSeconds: null;
+    playbackRate: VoicePlaybackRate;
+    positionSeconds: null;
+  }
+  | {
+    action: Exclude<VoiceSemanticControlAction, "set-playback-rate">;
+    kind: "semantic-control";
+    offsetSeconds: number | null;
+    playbackRate: null;
+    positionSeconds: number | null;
+  };
 
 export type VoiceIntent =
   | VoiceAppIntent
@@ -244,6 +257,9 @@ export const VOICE_INTENT_JSON_SCHEMA = {
     },
     positionSeconds: {
       anyOf: [{ maximum: 86_400, minimum: 0, type: "integer" }, { type: "null" }]
+    },
+    playbackRate: {
+      anyOf: [{ enum: VOICE_PLAYBACK_RATES, type: "number" }, { type: "null" }]
     },
     volumePercent: {
       anyOf: [{ maximum: 100, minimum: 0, type: "integer" }, { type: "null" }]
@@ -338,6 +354,14 @@ function boundedIntegerRange(value: unknown, minimum: number, maximum: number): 
   return value as number;
 }
 
+function optionalPlaybackRate(value: unknown): VoicePlaybackRate | null {
+  if (value === null) return null;
+  if (VOICE_PLAYBACK_RATES.some((rate) => rate === value)) {
+    return value as VoicePlaybackRate;
+  }
+  throw new TypeError("The voice intent contains an unsupported playback rate.");
+}
+
 function boundedText(value: unknown, maximum: number, nullable: false): string;
 function boundedText(value: unknown, maximum: number, nullable: true): string | null;
 function boundedText(value: unknown, maximum: number, nullable: boolean): string | null {
@@ -376,6 +400,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "playbackRate",
       "volumePercent",
       "mediaAction",
       "reference",
@@ -414,6 +439,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "semanticControlAction",
         "offsetSeconds",
         "positionSeconds",
+        "playbackRate",
         "mediaAction",
         "reference",
         "ordinal",
@@ -455,6 +481,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
         "semanticControlAction",
         "offsetSeconds",
         "positionSeconds",
+        "playbackRate",
         "volumePercent",
         "mediaAction",
         "reference",
@@ -489,6 +516,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       "semanticControlAction",
       "offsetSeconds",
       "positionSeconds",
+      "playbackRate",
       "volumePercent",
       "mediaType",
       "title",
@@ -567,21 +595,39 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     }
     const offsetSeconds = boundedIntegerRange(value.offsetSeconds, -3_600, 3_600);
     const positionSeconds = boundedIntegerRange(value.positionSeconds, 0, 86_400);
+    const playbackRate = optionalPlaybackRate(value.playbackRate);
     if (value.semanticControlAction === "seek-relative") {
-      if (offsetSeconds === null || offsetSeconds === 0 || positionSeconds !== null) {
+      if (
+        offsetSeconds === null ||
+        offsetSeconds === 0 ||
+        positionSeconds !== null ||
+        playbackRate !== null
+      ) {
         throw new TypeError("Relative seeks require only a nonzero offset.");
       }
     } else if (value.semanticControlAction === "seek-absolute") {
-      if (positionSeconds === null || offsetSeconds !== null) {
+      if (positionSeconds === null || offsetSeconds !== null || playbackRate !== null) {
         throw new TypeError("Absolute seeks require only a playback position.");
       }
-    } else if (offsetSeconds !== null || positionSeconds !== null) {
+    } else if (value.semanticControlAction === "set-playback-rate") {
+      if (playbackRate === null || offsetSeconds !== null || positionSeconds !== null) {
+        throw new TypeError("Playback-rate controls require only an allowlisted rate.");
+      }
+      return {
+        action: "set-playback-rate",
+        kind: "semantic-control",
+        offsetSeconds: null,
+        playbackRate,
+        positionSeconds: null
+      };
+    } else if (offsetSeconds !== null || positionSeconds !== null || playbackRate !== null) {
       throw new TypeError("Simple semantic controls cannot contain seek parameters.");
     }
     return {
       action: value.semanticControlAction,
       kind: "semantic-control",
       offsetSeconds,
+      playbackRate: null,
       positionSeconds
     };
   }
@@ -594,6 +640,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     value.semanticControlAction !== null ||
     value.offsetSeconds !== null ||
     value.positionSeconds !== null ||
+    value.playbackRate !== null ||
     value.volumePercent !== null ||
     value.reference !== null ||
     value.ordinal !== null ||

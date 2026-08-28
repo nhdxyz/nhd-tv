@@ -62,6 +62,10 @@ import {
   isSystemVolumeAction,
   type SystemVolumeAction
 } from "./system-volume";
+import {
+  serviceUserAgent,
+  serviceWindowDisposition
+} from "./service-browser-policy";
 
 export type ServiceStateListener = (activeServiceId: string | null) => void;
 export type ServiceQuitListener = (request: ServiceQuitRequest) => void;
@@ -749,12 +753,23 @@ export class ServiceHost {
     });
 
     view.setBackgroundColor("#05070d");
+    view.webContents.setUserAgent(
+      serviceUserAgent(definition, view.webContents.getUserAgent())
+    );
     view.webContents.setWindowOpenHandler(({ url }) => {
-      if (isAllowedServiceUrl(
-        url,
-        definition.allowedOrigins,
-        definition.allowedSubdomainHosts
-      )) {
+      const disposition = serviceWindowDisposition(definition, url);
+      if (disposition === "current-view") {
+        if (url !== view.webContents.getURL()) {
+          queueMicrotask(() => {
+            if (this.#view === view && !view.webContents.isDestroyed()) {
+              void view.webContents.loadURL(url).catch(() => undefined);
+            }
+          });
+        }
+        return { action: "deny" };
+      }
+
+      if (disposition === "popup") {
         return {
           action: "allow",
           overrideBrowserWindowOptions: {
@@ -923,6 +938,13 @@ export class ServiceHost {
           ).catch(() => undefined);
         }
         void this.#checkpointPlayback();
+      }
+    });
+
+    view.webContents.on("did-navigate", () => {
+      if (this.#view === view && definition.id === "spotify") {
+        serviceSession.flushStorageData();
+        void serviceSession.cookies.flushStore().catch(() => undefined);
       }
     });
 
@@ -1101,14 +1123,20 @@ export class ServiceHost {
   }
 
   async closeWithCheckpoint(): Promise<void> {
-    await this.#checkpointPlayback();
+    await Promise.all([
+      this.#checkpointPlayback(),
+      this.#flushActiveServiceStorage()
+    ]);
     this.close();
   }
 
   async forceReturnHome(): Promise<void> {
     this.#recoveryTarget = null;
     await Promise.race([
-      this.#checkpointPlayback(),
+      Promise.all([
+        this.#checkpointPlayback(),
+        this.#flushActiveServiceStorage()
+      ]),
       delay(350)
     ]).catch(() => undefined);
     this.close();
@@ -1116,9 +1144,21 @@ export class ServiceHost {
 
   async prepareForSuspend(): Promise<void> {
     await Promise.race([
-      this.#checkpointPlayback(),
+      Promise.all([
+        this.#checkpointPlayback(),
+        this.#flushActiveServiceStorage()
+      ]),
       delay(750)
     ]).catch(() => undefined);
+  }
+
+  async #flushActiveServiceStorage(): Promise<void> {
+    const definition = this.#activeDefinition;
+    if (definition === null) return;
+
+    const serviceSession = session.fromPartition(definition.partition, { cache: true });
+    serviceSession.flushStorageData();
+    await serviceSession.cookies.flushStore();
   }
 
   async recover(mode: ServiceRecoveryMode): Promise<boolean> {

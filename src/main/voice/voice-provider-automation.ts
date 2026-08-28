@@ -13,8 +13,10 @@ function serializedIntent(intent: VoiceMediaIntent): string {
   return JSON.stringify({
     action: intent.action,
     creator: intent.creator,
+    episode: intent.episode,
     mediaType: intent.mediaType,
     recency: intent.recency,
+    season: intent.season,
     title: intent.title
   });
 }
@@ -23,9 +25,13 @@ function serializedProfileHint(profileNameHint: string | null): string {
   return JSON.stringify(profileNameHint?.replace(/\s+/g, " ").trim().slice(0, 80) || null);
 }
 
-export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): string {
+export function buildSpotifyVoiceAutomationScript(
+  intent: VoiceMediaIntent,
+  playbackRequested = false
+): string {
   return `(() => {
     const intent = ${serializedIntent(intent)};
+    const playbackRequested = ${JSON.stringify(playbackRequested)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
     const visible = (element) => {
@@ -60,6 +66,11 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
     )].find((button) => visible(button) && !/^pause(?:\\s|$)/i.test(
       button.getAttribute("aria-label") ?? button.textContent ?? ""
     ));
+    const pauseButton = (root) => [...root.querySelectorAll(
+      '[data-testid="control-button-playpause"],button[aria-label^="Pause"]'
+    )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(
+      button.getAttribute("aria-label") ?? button.textContent ?? ""
+    ));
     const nowPlaying = document.querySelector(
       '[data-testid="now-playing-widget"],[data-testid="now-playing-bar"],[data-testid="now-playing-view"]'
     );
@@ -83,10 +94,11 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
     )].filter((root) => visible(root) && candidateMatches(root));
     for (const root of roots) {
       if (intent.action === "play") {
+        if (playbackRequested && pauseButton(root) instanceof HTMLElement) return "playing";
         const button = playButton(root);
         if (button instanceof HTMLElement) {
           button.click();
-          return intent.mediaType === "song" ? "play-clicked" : "complete";
+          return "play-clicked";
         }
       }
       const destination = exactLink(root, routePrefix,
@@ -105,10 +117,11 @@ export function buildSpotifyVoiceAutomationScript(intent: VoiceMediaIntent): str
         : titleIdentity;
       if (headingIdentity === requestedIdentity) {
         if (intent.action !== "play") return "complete";
+        if (playbackRequested && pauseButton(document) instanceof HTMLElement) return "playing";
         const button = playButton(document);
         if (button instanceof HTMLElement) {
           button.click();
-          return intent.mediaType === "song" ? "play-clicked" : "complete";
+          return "play-clicked";
         }
       }
     }
@@ -177,6 +190,7 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
     }
     const title = normalize(intent.title);
     const creatorIdentity = identity(intent.creator);
+    const channelIdentity = creatorIdentity || identity(intent.title);
     const candidates = [];
     if (intent.mediaType === "channel") {
       const anchors = [...document.querySelectorAll(
@@ -191,9 +205,9 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
         );
         const hrefIdentity = identity(anchor.getAttribute("href")?.replace(/^\\/@?/, "") ?? "");
         const nameIdentity = identity(name);
-        const exact = creatorIdentity && (nameIdentity === creatorIdentity || hrefIdentity === creatorIdentity);
-        const partial = creatorIdentity && (nameIdentity.includes(creatorIdentity) || creatorIdentity.includes(nameIdentity));
-        const near = creatorIdentity && nearIdentity(nameIdentity, creatorIdentity);
+        const exact = channelIdentity && (nameIdentity === channelIdentity || hrefIdentity === channelIdentity);
+        const partial = channelIdentity && (nameIdentity.includes(channelIdentity) || channelIdentity.includes(nameIdentity));
+        const near = channelIdentity && nearIdentity(nameIdentity, channelIdentity);
         if (exact || partial || near) candidates.push({ anchor, score: exact ? 200 : near ? 110 : 100 });
       }
     } else {
@@ -208,15 +222,12 @@ export function buildYouTubeVoiceAutomationScript(intent: VoiceMediaIntent): str
         const byline = normalize(card.querySelector(
           'ytd-channel-name a,#channel-name a,a.yt-simple-endpoint.yt-formatted-string[href^="/@"],a[href^="/channel/"]'
         )?.textContent);
-        const cardText = normalize(card.textContent);
         let score = 0;
         if (creatorIdentity) {
           const bylineIdentity = identity(byline);
           if (bylineIdentity === creatorIdentity) score += 200;
           else if (bylineIdentity && (bylineIdentity.includes(creatorIdentity) || creatorIdentity.includes(bylineIdentity))) score += 120;
           else if (nearIdentity(bylineIdentity, creatorIdentity)) score += 110;
-          else if (bylineIdentity) continue;
-          else if (identity(cardText).includes(creatorIdentity)) score += 40;
           else continue;
         }
         if (intent.recency === "latest" || genericTitles.has(title)) score += 30;
@@ -313,6 +324,98 @@ export function buildNetflixVoiceAutomationScript(
       ]).filter(Boolean);
       const detailMatches = /^\\/(?:title|watch)\\//.test(location.pathname) ||
         detailSignals.some((signal) => identity(signal) === identity(intent.title));
+      if (intent.mediaType === "episode" && detailRoot !== null) {
+        if (!detailMatches) return "idle";
+        const seasonNumber = Number(intent.season);
+        const episodeNumber = Number(intent.episode);
+        const matchesSeason = (value) => {
+          const label = normalize(value);
+          const named = label.match(/(?:^|\\b)season\\s*0*(\\d+)(?:\\b|$)/i);
+          if (named) return Number(named[1]) === seasonNumber;
+          return /^0*\\d+$/.test(label) && Number(label) === seasonNumber;
+        };
+        const seasonControls = [...document.querySelectorAll(
+          'select[data-uia*="season"],select[aria-label*="season" i],'
+          + '[data-uia*="season-selector"],button[aria-label*="season" i],'
+          + '[role="button"][aria-label*="season" i]'
+        )].filter(visible);
+        const selectedSeason = seasonControls.find((element) => {
+          const selectedOptions = [
+            ...element.querySelectorAll('option:checked,[aria-selected="true"]')
+          ];
+          if (selectedOptions.length > 0) {
+            return selectedOptions.some((option) => matchesSeason(controlLabel(option)));
+          }
+          return element.tagName !== 'SELECT' && matchesSeason(controlLabel(element));
+        });
+        let seasonConfirmed = selectedSeason !== undefined;
+        if (!seasonConfirmed) {
+          const seasonOptions = [...document.querySelectorAll(
+            '[role="option"],[role="menuitem"],[data-uia^="season-option-"]'
+          )].filter((element) => visible(element) && matchesSeason(controlLabel(element)));
+          const targetSeason = seasonOptions[0];
+          if (targetSeason instanceof HTMLElement) {
+            targetSeason.click();
+            return "navigated";
+          }
+          const seasonControl = seasonControls[0];
+          if (seasonControl instanceof HTMLElement) {
+            const options = [...seasonControl.querySelectorAll('option')];
+            const targetOption = options.find((option) => matchesSeason(controlLabel(option)));
+            if (targetOption instanceof HTMLOptionElement && seasonControl instanceof HTMLSelectElement) {
+              seasonControl.value = targetOption.value;
+              seasonControl.dispatchEvent(new Event('input', { bubbles: true }));
+              seasonControl.dispatchEvent(new Event('change', { bubbles: true }));
+              return "navigated";
+            }
+            seasonControl.click();
+            return "navigated";
+          }
+        }
+        const episodeRows = [...document.querySelectorAll(
+          '[data-uia^="episode-item-"],[data-uia="episode-item"],.episode-item'
+        )].filter(visible);
+        const exactEpisode = episodeRows.find((row) => {
+          const signals = [
+            row.getAttribute('aria-label'),
+            row.getAttribute('data-uia'),
+            ...[...row.querySelectorAll(
+              '[data-uia*="episode-number"],[aria-label],[title],h3,h4'
+            )].flatMap((element) => [
+              element.getAttribute('aria-label'),
+              element.getAttribute('title'),
+              element.textContent
+            ])
+          ].filter(Boolean).map(normalize);
+          const coordinateMatches = signals.some((signal) => {
+            const match = signal.match(
+              /(?:s|season)\\s*0*(\\d+)\\D+(?:e|episode)\\s*0*(\\d+)(?:\\b|$)/i
+            );
+            return match !== null && Number(match[1]) === seasonNumber &&
+              Number(match[2]) === episodeNumber;
+          });
+          if (coordinateMatches) {
+            seasonConfirmed = true;
+            return true;
+          }
+          return seasonConfirmed && signals.some((signal) => {
+            const match = signal.match(
+              /(?:^|\\b)(?:episode(?:\\s*item)?[-\\s]*)?0*(\\d+)(?:\\b|[.\\s:—-])/i
+            );
+            return match !== null && Number(match[1]) === episodeNumber;
+          });
+        });
+        if (exactEpisode instanceof HTMLElement && seasonConfirmed) {
+          const episodePlay = [...exactEpisode.querySelectorAll(
+            '[data-uia*="play"],button[aria-label*="play" i],a[href^="/watch/"]'
+          )].find((element) => visible(element) && !/(?:trailer|preview|teaser)/.test(controlLabel(element)));
+          if (episodePlay instanceof HTMLElement) {
+            episodePlay.click();
+            return "play-clicked";
+          }
+        }
+        return "idle";
+      }
       const controls = detailRoot === null || !detailMatches ? [] :
         [...detailRoot.querySelectorAll('button,a,[role="button"]')]
         .filter(visible)
@@ -350,8 +453,12 @@ export function buildNetflixVoiceAutomationScript(
       return signals.some((signal) => identity(signal) === titleIdentity);
     });
     if (exactCard instanceof HTMLElement) {
-      const destination = [...exactCard.querySelectorAll('a[href^="/title/"],a[href^="/watch/"]')]
-        .find(visible) ?? exactCard;
+      const destinations = [
+        ...exactCard.querySelectorAll('a[href^="/title/"],a[href^="/watch/"]')
+      ].filter(visible);
+      const destination = intent.mediaType === "episode" || intent.action === "open"
+        ? destinations.find((element) => element.getAttribute("href")?.startsWith("/title/"))
+        : destinations[0] ?? exactCard;
       if (destination instanceof HTMLElement) {
         destination.click();
         return intent.action === "play" ? "navigated" : "complete";

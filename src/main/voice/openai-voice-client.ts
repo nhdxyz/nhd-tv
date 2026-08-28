@@ -34,8 +34,10 @@ Preserve a spoken release year, edition, language, country, or remake qualifier 
 Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
 Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
 Use providerHint only when the user names Disney Plus, Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube. Use disney-plus for Disney Plus.
+A bare exact movie, show, or title name such as "Apollo 13" is a play request: use mediaAction=play. Do not reinterpret a bare named title as open or lookup.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
+For an unspecified song from a named artist, such as "play a song from Kanye West", use mediaType=artist, mediaAction=play, title=<artist name>, creator=<artist name>, and providerHint=spotify so Spotify can start that artist's own playback. Do not invent a song title.
 Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is unknown.
 Use null for every field that does not apply. Do not guess missing season or episode numbers.`;
 
@@ -211,9 +213,11 @@ export class OpenAiVoiceClient {
 
   async understand(
     clip: VoiceAudioClip,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onTranscript?: (transcript: string) => void
   ): Promise<{ intent: VoiceIntent; transcript: string }> {
     const transcript = await this.transcribe(clip, signal);
+    onTranscript?.(transcript);
     return { intent: await this.interpret(transcript, signal), transcript };
   }
 

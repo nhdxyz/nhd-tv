@@ -155,8 +155,26 @@ describe("voice provider automation", () => {
   it("requires a creator byline match before selecting a YouTube video", () => {
     const script = buildYouTubeVoiceAutomationScript(intent({ recency: "latest" }));
     expect(script).toContain("bylineIdentity === creatorIdentity");
-    expect(script).toContain("else if (bylineIdentity) continue");
+    expect(script).toContain("else continue");
     expect(script).toContain('intent.recency === "latest"');
+  });
+
+  it("opens a YouTube channel when the channel name is carried in the title", () => {
+    const channelName = new FakeElement({ text: "Outdoor Boys" });
+    const channelCard = new FakeElement({ byline: channelName, text: "Outdoor Boys" });
+    const channel = new FakeElement({
+      attributes: { href: "/@OutdoorBoys" },
+      card: channelCard,
+      text: "Outdoor Boys"
+    });
+
+    expect(executeYouTubeScript(intent({
+      action: "open",
+      creator: null,
+      mediaType: "channel",
+      title: "Outdoor Boys"
+    }), [channel])).toBe("complete");
+    expect(channel.clicked).toBe(true);
   });
 
   it("skips fan uploads before opening the named creator's latest video", () => {
@@ -191,6 +209,17 @@ describe("voice provider automation", () => {
 
     expect(executeYouTubeScript(intent({ recency: "latest" }), [unrelatedVideo])).toBe("idle");
     expect(unrelatedVideo.clicked).toBe(false);
+  });
+
+  it("does not trust result-card text when a named creator byline is absent", () => {
+    const fanCard = new FakeElement({ text: "Outdoor Boys reaction and latest news" });
+    const fanVideo = new FakeElement({
+      attributes: { href: "/watch?v=fan", title: "Outdoor Boys newest upload" },
+      card: fanCard
+    });
+
+    expect(executeYouTubeScript(intent({ recency: "latest" }), [fanVideo])).toBe("idle");
+    expect(fanVideo.clicked).toBe(false);
   });
 
   it("tolerates one phonetic spelling character in a YouTube creator name", () => {
@@ -353,6 +382,97 @@ describe("voice provider automation", () => {
     expect(rightDestination.clicked).toBe(true);
   });
 
+  it("selects the exact requested Netflix episode instead of generic Resume", () => {
+    const wrongPlay = new FakeElement({ attributes: { "aria-label": "Play episode 2" } });
+    const rightPlay = new FakeElement({ attributes: { "aria-label": "Play episode 3" } });
+    const selectedSeason = new FakeElement({ attributes: { "aria-label": "Season 1" } });
+    const row = (coordinate: string, play: FakeElement) => new FakeElement({
+      attributes: { "aria-label": coordinate },
+      selectAll: (selector) => selector.includes('[data-uia*="play"]') ? [play] : []
+    });
+    const wrongRow = row("S1 E2", wrongPlay);
+    const rightRow = row("S1 E3", rightPlay);
+    const resume = new FakeElement({ attributes: { "aria-label": "Resume" } });
+    const documentValue = {
+      body: { innerText: "Breaking Bad" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes('data-uia="profile-link"')) return [];
+        if (selector.includes('select[data-uia*="season"]')) return [selectedSeason];
+        if (selector.includes('[data-uia^="episode-item-"]')) return [wrongRow, rightRow];
+        if (selector === 'button,a,[role="button"]') return [resume];
+        return [];
+      }
+    };
+
+    const script = buildNetflixVoiceAutomationScript(intent({
+      creator: null,
+      episode: 3,
+      mediaType: "episode",
+      providerHint: "netflix",
+      season: 1,
+      title: "Breaking Bad"
+    }));
+    expect(script).toContain('"episode":3');
+    expect(script).toContain('"season":1');
+    expect(executeProviderScript(script, documentValue, "/title/70143836"))
+      .toBe("play-clicked");
+    expect(wrongPlay.clicked).toBe(false);
+    expect(rightPlay.clicked).toBe(true);
+    expect(resume.clicked).toBe(false);
+  });
+
+  it("opens Netflix title details for exact episodes and open-only requests", () => {
+    const execute = (voiceIntent: VoiceMediaIntent) => {
+      const watch = new FakeElement({ attributes: { href: "/watch/current" } });
+      const title = new FakeElement({ attributes: { href: "/title/breaking-bad" } });
+      const signal = new FakeElement({ attributes: { "aria-label": "Breaking Bad" } });
+      const card = new FakeElement({
+        selectAll: (selector) => selector.includes("img[alt]")
+          ? [signal]
+          : selector.includes('a[href^="/title/"]') ? [watch, title] : []
+      });
+      const documentValue = {
+        body: { innerText: "Search" },
+        fullscreenElement: null,
+        querySelector: () => null,
+        querySelectorAll: (selector: string) =>
+          selector.includes('data-uia="search-video"') ? [card] : []
+      };
+
+      const result = executeProviderScript(
+        buildNetflixVoiceAutomationScript(voiceIntent),
+        documentValue,
+        "/search"
+      );
+      return { result, title, watch };
+    };
+
+    const episodeResult = execute(intent({
+      creator: null,
+      episode: 3,
+      mediaType: "episode",
+      providerHint: "netflix",
+      season: 1,
+      title: "Breaking Bad"
+    }));
+    expect(episodeResult.result).toBe("navigated");
+    expect(episodeResult.title.clicked).toBe(true);
+    expect(episodeResult.watch.clicked).toBe(false);
+
+    const openResult = execute(intent({
+      action: "open",
+      creator: null,
+      mediaType: "show",
+      providerHint: "netflix",
+      title: "Breaking Bad"
+    }));
+    expect(openResult.result).toBe("complete");
+    expect(openResult.title.clicked).toBe(true);
+    expect(openResult.watch.clicked).toBe(false);
+  });
+
   it("plays only the Spotify song row with an exact title and artist pair", () => {
     const wrongPlay = new FakeElement({ attributes: { "aria-label": "Play Stronger" } });
     const rightPlay = new FakeElement({ attributes: { "aria-label": "Play Stronger" } });
@@ -406,6 +526,61 @@ describe("voice provider automation", () => {
       .toBe("complete");
   });
 
+  it("does not accept unrelated Spotify playback until the requested artist was started", () => {
+    const play = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
+    const artist = new FakeElement({ attributes: { href: "/artist/kanye" }, text: "Kanye West" });
+    const artistCard = new FakeElement({
+      selectAll: (selector) => selector === "a[href]"
+        ? [artist]
+        : selector.includes('data-testid="play-button"') ? [play] : []
+    });
+    const unrelatedPause = new FakeElement({ attributes: { "aria-label": "Pause" } });
+    const documentValue = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => {
+        if (selector.includes('data-testid="control-button-playpause"')) return [unrelatedPause];
+        if (selector.includes('data-testid="tracklist-row"')) return [artistCard];
+        return [];
+      }
+    };
+    const artistIntent = intent({
+      creator: "Kanye West",
+      mediaType: "artist",
+      providerHint: "spotify",
+      title: "Kanye West"
+    });
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, false),
+      documentValue,
+      "/search/Kanye%20West"
+    )).toBe("play-clicked");
+    expect(play.clicked).toBe(true);
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, true),
+      documentValue,
+      "/search/Kanye%20West"
+    )).toBe("play-clicked");
+
+    const localPause = new FakeElement({ attributes: { "aria-label": "Pause Kanye West" } });
+    const playingArtistCard = new FakeElement({
+      selectAll: (selector) => selector === "a[href]"
+        ? [artist]
+        : selector.includes('data-testid="control-button-playpause"') ? [localPause] : []
+    });
+    const verifiedDocument = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector.includes('data-testid="tracklist-row"') ? [playingArtistCard] : []
+    };
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, true),
+      verifiedDocument,
+      "/search/Kanye%20West"
+    )).toBe("playing");
+  });
+
   it("bounds provider retries and revalidates a Netflix destination before profile recovery", async () => {
     const source = await import("node:fs/promises").then(({ readFile }) =>
       readFile(new URL("../src/main/service-host.ts", import.meta.url), "utf8")
@@ -417,6 +592,8 @@ describe("voice provider automation", () => {
     expect(source).toContain("isAllowedServiceUrl(");
     expect(source).toContain("await view.webContents.loadURL(intendedDestination)");
     expect(source).toContain("result === \"playing\"");
+    expect(source).toContain("let playbackRequested = false");
+    expect(source).toContain("buildSpotifyVoiceAutomationScript(intent, playbackRequested)");
     expect(source).toContain('keyCode: "F"');
     expect(source).toContain('result === "complete"');
   });

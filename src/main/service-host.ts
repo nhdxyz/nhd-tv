@@ -1390,11 +1390,6 @@ export class ServiceHost {
       return false;
     }
 
-    const script = definition.id === "netflix"
-      ? buildNetflixVoiceAutomationScript(intent, options.profileNameHint ?? null)
-      : definition.id === "spotify"
-        ? buildSpotifyVoiceAutomationScript(intent)
-        : buildYouTubeVoiceAutomationScript(intent);
     const suppliedDestination = options.intendedUrl ?? null;
     const safeSuppliedDestination = suppliedDestination !== null && isAllowedServiceUrl(
       suppliedDestination,
@@ -1409,6 +1404,7 @@ export class ServiceHost {
     const intendedDestination = safeSuppliedDestination ?? netflixFallbackDestination;
     let profileRetried = false;
     let playbackRevealAttempts = 0;
+    let playbackRequested = false;
     const deadline = Date.now() + VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS;
     while (
       Date.now() < deadline &&
@@ -1417,6 +1413,11 @@ export class ServiceHost {
     ) {
       let settleDelayMs = 250;
       try {
+        const script = definition.id === "netflix"
+          ? buildNetflixVoiceAutomationScript(intent, options.profileNameHint ?? null)
+          : definition.id === "spotify"
+            ? buildSpotifyVoiceAutomationScript(intent, playbackRequested)
+            : buildYouTubeVoiceAutomationScript(intent);
         const result = await view.webContents.executeJavaScript(
           script,
           true
@@ -1427,8 +1428,13 @@ export class ServiceHost {
         }
         if (result === "navigated" || result === "play-clicked") {
           settleDelayMs = 650;
+          if (result === "play-clicked") playbackRequested = true;
         } else if (result === "fullscreen-requested") {
           settleDelayMs = 450;
+        }
+        if (result === "playing" && definition.id === "spotify" && playbackRequested) {
+          void this.#captureSpotifyPlayback();
+          return true;
         }
         if (
           result === "playing" &&

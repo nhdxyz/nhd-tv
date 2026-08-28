@@ -72,6 +72,7 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("mediaType=recommendation");
       expect(body.instructions).toContain("mediaType=similar-title");
       expect(body.instructions).toContain('"play it" is unknown');
+      expect(body.instructions).toContain('A bare exact movie, show, or title name such as "Apollo 13"');
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 
@@ -83,6 +84,21 @@ describe("OpenAI voice client", () => {
       "https://api.openai.com/v1/responses",
       expect.any(Object)
     );
+  });
+
+  it("defines a bare exact title as a playback request", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.input).toBe("Apollo 13");
+      expect(body.instructions).toContain("mediaAction=play");
+      expect(body.instructions).toContain("Do not reinterpret a bare named title as open or lookup");
+      return Response.json({ output_text: JSON.stringify(outputIntent()) });
+    });
+
+    await expect(client(fetchMock).interpret("Apollo 13")).resolves.toMatchObject({
+      action: "play",
+      title: "Apollo 13"
+    });
   });
 
   it("accepts nested output text from the Responses API", async () => {
@@ -99,6 +115,45 @@ describe("OpenAI voice client", () => {
     }));
     await expect(client(fetchMock).interpret("Breaking Bad season 1 episode 3")).resolves
       .toMatchObject({ episode: 3, season: 1 });
+  });
+
+  it("reports the final transcript before intent interpretation can fail", async () => {
+    const onTranscript = vi.fn();
+    let request = 0;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      request += 1;
+      return request === 1
+        ? Response.json({ text: "Play a song from Kanye West" })
+        : new Response(null, { status: 500 });
+    });
+
+    await expect(client(fetchMock).understand(audioClip(), undefined, onTranscript))
+      .rejects.toMatchObject({ code: "rejected" });
+    expect(onTranscript).toHaveBeenCalledOnce();
+    expect(onTranscript).toHaveBeenCalledWith("Play a song from Kanye West");
+  });
+
+  it("defines unspecified artist playback without inventing a song title", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.input).toBe("Play a song from Kanye West");
+      expect(body.instructions).toContain('"play a song from Kanye West"');
+      return Response.json({ output_text: JSON.stringify(outputIntent({
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      })) });
+    });
+
+    await expect(client(fetchMock).interpret("Play a song from Kanye West")).resolves
+      .toMatchObject({
+        action: "play",
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      });
   });
 
   it("rejects oversized, short, and unsupported recordings before a request", async () => {

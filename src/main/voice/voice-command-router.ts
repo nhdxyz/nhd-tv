@@ -126,6 +126,12 @@ export function planVoiceCommand(
   intent: VoiceIntent,
   context: VoiceCommandContext
 ): VoiceCommandPlan {
+  if (intent.kind === "unknown") {
+    return {
+      detail: "Please name what you want to watch, play, open, or control.",
+      kind: "no-op"
+    };
+  }
   return intent.kind === "control"
     ? controlPlan(intent.action, context)
     : mediaPlan(intent, context);

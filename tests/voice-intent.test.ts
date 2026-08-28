@@ -113,6 +113,25 @@ describe("voice intent boundary", () => {
     })).toEqual({ action: "pause", kind: "control" });
   });
 
+  it("accepts only an entirely empty unknown intent", () => {
+    expect(parseVoiceIntent({
+      kind: "unknown",
+      controlAction: null,
+      mediaAction: null,
+      mediaType: null,
+      title: null,
+      creator: null,
+      season: null,
+      episode: null,
+      providerHint: null,
+      recency: null
+    })).toEqual({ kind: "unknown" });
+    expect(() => parseVoiceIntent(mediaIntent({
+      kind: "unknown",
+      mediaAction: null
+    }))).toThrow("unknown voice intent is inconsistent");
+  });
+
   it("rejects extra fields, executable URLs, and unknown actions", () => {
     expect(() => parseVoiceIntent(mediaIntent({ selector: "#play" }))).toThrow("exactly");
     expect(() => parseVoiceIntent(mediaIntent({ title: "https://evil.example/watch" }))).toThrow(

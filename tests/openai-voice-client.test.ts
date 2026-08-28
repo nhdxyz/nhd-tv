@@ -71,6 +71,7 @@ describe("OpenAI voice client", () => {
       expect(body.text.format.schema.additionalProperties).toBe(false);
       expect(body.instructions).toContain("mediaType=recommendation");
       expect(body.instructions).toContain("mediaType=similar-title");
+      expect(body.instructions).toContain('"play it" is unknown');
       return Response.json({ output_text: JSON.stringify(outputIntent()) });
     });
 

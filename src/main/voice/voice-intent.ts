@@ -54,6 +54,10 @@ export interface VoiceControlIntent {
   kind: "control";
 }
 
+export interface VoiceUnknownIntent {
+  kind: "unknown";
+}
+
 export interface VoiceMediaIntent {
   action: VoiceMediaAction;
   creator: string | null;
@@ -66,12 +70,12 @@ export interface VoiceMediaIntent {
   title: string;
 }
 
-export type VoiceIntent = VoiceControlIntent | VoiceMediaIntent;
+export type VoiceIntent = VoiceControlIntent | VoiceMediaIntent | VoiceUnknownIntent;
 
 export const VOICE_INTENT_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
-    kind: { enum: ["control", "media"], type: "string" },
+    kind: { enum: ["control", "media", "unknown"], type: "string" },
     controlAction: {
       anyOf: [
         { enum: VOICE_CONTROL_ACTIONS, type: "string" },
@@ -192,6 +196,13 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
       throw new TypeError("The voice control intent is inconsistent.");
     }
     return { action: value.controlAction, kind: "control" };
+  }
+
+  if (value.kind === "unknown") {
+    if (!allNull(value, VOICE_INTENT_KEYS.filter((key) => key !== "kind"))) {
+      throw new TypeError("The unknown voice intent is inconsistent.");
+    }
+    return { kind: "unknown" };
   }
 
   if (value.kind !== "media" || value.controlAction !== null) {

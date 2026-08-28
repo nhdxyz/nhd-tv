@@ -25,15 +25,18 @@ const VOICE_INTENT_INSTRUCTIONS = `You extract one command for a television inte
 Return only the supplied JSON schema. Never output a URL, selector, service ID, code, or explanation.
 Use kind=control for direct television controls.
 Use kind=media for searches, navigation, and playback.
+Use kind=unknown with every other field null when the request is incomplete, only refers to "it" or "that" without naming media, is unrelated to the TV, or is not confidently actionable. Never guess a missing title or creator.
 Use mediaType=episode only when both season and episode are explicit.
 Use mediaType=recommendation and mediaAction=open for an open-ended movie or show request based on genre, mood, era, actors, themes, or a natural-language description. Put a short provider-search phrase that preserves those constraints in title.
 Use mediaType=similar-title and mediaAction=open when the user asks for movies or shows similar to a named title. Put only the named seed title in title.
 Recommendation and similar-title intents never use play, creator, season, episode, or recency, and may only use providerHint=netflix when Netflix is explicitly named.
+Preserve a spoken release year, edition, language, country, or remake qualifier in the title so the provider can distinguish versions.
 Use mediaType=video only for an online video, YouTube request, named YouTuber, or named channel; an ordinary film or show title is not a video intent.
 Use mediaType=channel when the user asks to go to, open, or find a YouTuber, creator profile, or YouTube channel.
 Use providerHint only when the user names Netflix, Spotify, or YouTube, or when the media type uniquely implies Spotify or YouTube.
 For a creator's latest YouTube video, use mediaType=video, recency=latest, creator=<channel name>, and title=latest video.
 For an unspecified video from a named creator, use mediaType=video, creator=<channel name>, and title=video.
+Examples: "I want an action movie" is an open recommendation; "movies similar to Inception" is an open similar-title request with title=Inception; "play it" is unknown.
 Use null for every field that does not apply. Do not guess missing season or episode numbers.`;
 
 export type OpenAiVoiceErrorCode =

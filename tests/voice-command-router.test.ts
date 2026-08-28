@@ -30,6 +30,13 @@ function mediaIntent(overrides: Partial<VoiceMediaIntent> = {}): VoiceMediaInten
 }
 
 describe("voice command planning", () => {
+  it("does nothing for an underspecified command instead of guessing", () => {
+    expect(planVoiceCommand({ kind: "unknown" }, context)).toEqual({
+      detail: "Please name what you want to watch, play, open, or control.",
+      kind: "no-op"
+    });
+  });
+
   it("routes ordinary controls directly", () => {
     expect(planVoiceCommand({ action: "volume-up", kind: "control" }, context)).toEqual({
       action: "volume-up",

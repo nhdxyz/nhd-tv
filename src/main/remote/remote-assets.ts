@@ -136,6 +136,7 @@ export const REMOTE_HTML = `<!doctype html>
             <span id="voice-button-copy">Hold to talk</span>
             <small>Ask NHD-TV</small>
           </button>
+          <button class="voice-cancel" id="voice-cancel" type="button" aria-label="Cancel the active voice command" hidden>Cancel</button>
           <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
         </section>
 
@@ -416,6 +417,7 @@ input {
 }
 
 .voice-control {
+  position: relative;
   display: grid;
   flex: 0 0 auto;
   gap: 0.35rem;
@@ -474,6 +476,24 @@ input {
 }
 .voice-button.is-processing { animation: voice-pulse 0.7s ease-in-out infinite; }
 .voice-button:disabled { background: #282826; color: #74746f; box-shadow: inset 0 0 0 1px #333330; }
+.voice-cancel {
+  position: absolute;
+  z-index: 2;
+  top: 0.75rem;
+  right: 0.75rem;
+  min-width: 5.25rem;
+  min-height: 3rem;
+  border: 1px solid #ff687c;
+  border-radius: 999px;
+  background: #32171c;
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  touch-action: manipulation;
+}
+.voice-cancel[hidden] { display: none; }
+.voice-cancel:not(:disabled):active { transform: scale(0.96); }
 .voice-help {
   min-height: 0.8rem;
   margin: 0;
@@ -891,6 +911,7 @@ export const REMOTE_JS = `(() => {
   const searchToggleCopy = document.querySelector("#search-toggle-copy");
   const voiceButton = document.querySelector("#voice-button");
   const voiceButtonCopy = document.querySelector("#voice-button-copy");
+  const voiceCancel = document.querySelector("#voice-cancel");
   const voiceHelp = document.querySelector("#voice-help");
   const voiceConfirm = document.querySelector("#voice-confirm");
   const voiceConfirmLabel = document.querySelector("#voice-confirm-label");
@@ -927,10 +948,14 @@ export const REMOTE_JS = `(() => {
   let voiceReleaseRequested = false;
   let voiceDiscardRequested = false;
   let voiceProcessing = false;
+  let voiceCancelling = false;
+  let activeVoiceRequest = null;
   let pendingVoiceConfirmation = null;
   let voiceConfirmationTimer = null;
   let activeVoiceConfirmationId = null;
   let pageTerminationPending = false;
+  let heartbeatSequence = 0;
+  let latestHeartbeatSequence = 0;
   const POINTER_INTERVAL_MS = 32;
   const TEXT_ENTRY_DEBOUNCE_MS = 120;
   const DIRECTION_REPEAT_DELAY_MS = 380;
@@ -977,6 +1002,8 @@ export const REMOTE_JS = `(() => {
     const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
     voiceButton.disabled = !ready || voiceBusy || voiceProcessing || awaitingSubmittedResult;
     voiceButton.classList.toggle("is-processing", voiceProcessing);
+    voiceCancel.hidden = !voiceProcessing || activeVoiceRequest === null;
+    voiceCancel.disabled = !remoteEnabled || voiceCancelling || activeVoiceRequest === null;
     voiceHelp.textContent = awaitingSubmittedResult
       ? "Check the playback result before starting another voice command."
       : awaitingConfirmation
@@ -1049,6 +1076,7 @@ export const REMOTE_JS = `(() => {
     if (!response.ok) {
       const error = new Error(body.error || body.detail || "Remote request failed");
       error.status = response.status;
+      error.code = typeof body.code === "string" ? body.code : null;
       throw error;
     }
     return body;
@@ -1222,13 +1250,107 @@ export const REMOTE_JS = `(() => {
     }
   }
 
+  function beginActiveVoiceRequest(operationId, commandId, controller) {
+    const request = {
+      cancelAccepted: false,
+      cancelRequested: false,
+      commandId,
+      controller,
+      deferredApply: null,
+      networkSettled: false,
+      operationId
+    };
+    activeVoiceRequest = request;
+    voiceProcessing = true;
+    voiceCancelling = false;
+    updateVoiceButton();
+    updateVoiceConfirmationButtons();
+    return request;
+  }
+
+  function applyOrDeferVoiceResponse(request, apply) {
+    if (request.cancelRequested) {
+      request.deferredApply = apply;
+      return;
+    }
+    apply();
+  }
+
+  function finishActiveVoiceRequest(request) {
+    if (activeVoiceRequest !== request) return;
+    activeVoiceRequest = null;
+    voiceProcessing = false;
+    voiceCancelling = false;
+    voiceButtonCopy.textContent = "Hold to talk";
+    updateVoiceButton();
+    updateVoiceConfirmationButtons();
+    void sendHeartbeat();
+  }
+
+  async function cancelActiveVoiceCommand() {
+    const request = activeVoiceRequest;
+    const token = controllerToken;
+    if (request === null || !token || voiceCancelling) return;
+    request.cancelRequested = true;
+    voiceCancelling = true;
+    voiceButtonCopy.textContent = "Cancelling";
+    setState("Cancelling voice command…");
+    updateVoiceButton();
+    const cancelController = new AbortController();
+    const cancelTimeout = setTimeout(
+      () => cancelController.abort(),
+      VOICE_CANCELLATION_REQUEST_TIMEOUT_MS
+    );
+    try {
+      const result = await jsonRequest("/api/voice/cancel", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ operationId: request.operationId }),
+        signal: cancelController.signal
+      });
+      if (activeVoiceRequest !== request) return;
+      request.cancelAccepted = true;
+      request.controller.abort();
+      voiceBusy = result.ready !== true;
+      finishActiveVoiceRequest(request);
+      setState("Cancelled — hold to correct", "connected");
+      voiceButton.focus({ preventScroll: true });
+      if (navigator.vibrate) navigator.vibrate([12, 35, 12]);
+    } catch (error) {
+      if (activeVoiceRequest !== request) return;
+      request.cancelRequested = false;
+      voiceCancelling = false;
+      const deferredApply = request.deferredApply;
+      request.deferredApply = null;
+      if (deferredApply !== null) deferredApply();
+      if (request.networkSettled) {
+        finishActiveVoiceRequest(request);
+      } else {
+        voiceButtonCopy.textContent = "Understanding";
+        setState(
+          error && error.status === 409
+            ? "That command already finished"
+            : error && error.name === "AbortError"
+              ? "The TV did not respond to Cancel — command still working"
+              : "Could not cancel — command still working",
+          "error"
+        );
+        updateVoiceButton();
+      }
+    } finally {
+      clearTimeout(cancelTimeout);
+    }
+  }
+
   async function uploadVoiceRecording(blob, durationMs, commandId, confirmationId) {
     if (!controllerToken || !commandId) return;
-    voiceProcessing = true;
     voiceButtonCopy.textContent = "Understanding";
-    updateVoiceButton();
     setState("Understanding voice command…");
     const requestController = new AbortController();
+    const request = beginActiveVoiceRequest(commandId, commandId, requestController);
     const requestTimeout = setTimeout(
       () => requestController.abort(),
       VOICE_COMMAND_REQUEST_TIMEOUT_MS
@@ -1248,55 +1370,57 @@ export const REMOTE_JS = `(() => {
         body: blob,
         signal: requestController.signal
       });
-      if (
-        result.outcome === "confirmation-required" &&
-        typeof result.confirmationId === "string"
-      ) {
-        const now = Date.now();
-        const expiresAt = Number.isFinite(result.confirmationExpiresAt) &&
-          result.confirmationExpiresAt > now &&
-          result.confirmationExpiresAt <= now + VOICE_CONFIRMATION_TTL_MS
-          ? result.confirmationExpiresAt
-          : now + VOICE_CONFIRMATION_TTL_MS;
-        const shown = showVoiceConfirmation({
-          commandId,
-          confirmationId: result.confirmationId,
-          detail: typeof result.detail === "string"
-            ? result.detail.slice(0, 200)
-            : "Play this title?",
-          expiresAt
-        });
-        if (shown) {
-          setState("Confirm on your phone", "connected");
-          if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+      applyOrDeferVoiceResponse(request, () => {
+        if (
+          result.outcome === "confirmation-required" &&
+          typeof result.confirmationId === "string"
+        ) {
+          const now = Date.now();
+          const expiresAt = Number.isFinite(result.confirmationExpiresAt) &&
+            result.confirmationExpiresAt > now &&
+            result.confirmationExpiresAt <= now + VOICE_CONFIRMATION_TTL_MS
+            ? result.confirmationExpiresAt
+            : now + VOICE_CONFIRMATION_TTL_MS;
+          const shown = showVoiceConfirmation({
+            commandId,
+            confirmationId: result.confirmationId,
+            detail: typeof result.detail === "string"
+              ? result.detail.slice(0, 200)
+              : "Play this title?",
+            expiresAt
+          });
+          if (shown) {
+            setState("Confirm on your phone", "connected");
+            if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
+          }
+        } else {
+          closeVoiceConfirmation();
+          setState(
+            typeof result.detail === "string" ? result.detail : "Voice command sent",
+            result.outcome === "failed" ? "error" : "connected"
+          );
+          if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
         }
-      } else {
-        closeVoiceConfirmation();
-        setState(
-          typeof result.detail === "string" ? result.detail : "Voice command sent",
-          result.outcome === "failed" ? "error" : "connected"
-        );
-        if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
-      }
+      });
     } catch (error) {
-      // Sanitized command failures and server deadlines have already published
-      // the TV error and must not be hidden by a later cancellation activity.
-      if (!error || (error.status !== 422 && error.status !== 504)) {
-        sendVoiceActivity("cancelled", false, commandId);
-      }
-      setState(
-        error && error.name === "AbortError"
-          ? "The TV did not finish the voice command — hold the microphone and try again"
-          : error instanceof Error ? error.message : "Voice command failed",
-        "error"
-      );
+      if (request.cancelAccepted) return;
+      applyOrDeferVoiceResponse(request, () => {
+        // Sanitized command failures and server deadlines have already published
+        // the TV error and must not be hidden by a later cancellation activity.
+        if (!error || (error.status !== 422 && error.status !== 504)) {
+          sendVoiceActivity("cancelled", false, commandId);
+        }
+        setState(
+          error && error.name === "AbortError"
+            ? "The TV did not finish the voice command — hold the microphone and try again"
+            : error instanceof Error ? error.message : "Voice command failed",
+          "error"
+        );
+      });
     } finally {
       clearTimeout(requestTimeout);
-      voiceProcessing = false;
-      voiceButtonCopy.textContent = "Hold to talk";
-      updateVoiceButton();
-      updateVoiceConfirmationButtons();
-      void sendHeartbeat();
+      request.networkSettled = true;
+      if (!request.cancelRequested) finishActiveVoiceRequest(request);
     }
   }
 
@@ -1352,9 +1476,10 @@ export const REMOTE_JS = `(() => {
         },
         video: false
       });
+      voiceStream = stream;
       if (voiceReleaseRequested) {
         voiceCommandId = null;
-        stream.getTracks().forEach((track) => track.stop());
+        stopVoiceStream();
         sendVoiceActivity("cancelled", false, commandId);
         setState("Microphone ready — hold again to speak", "connected");
         return;
@@ -1363,13 +1488,11 @@ export const REMOTE_JS = `(() => {
       await beginVoiceActivity(commandId);
       if (voiceReleaseRequested) {
         voiceCommandId = null;
-        stream.getTracks().forEach((track) => track.stop());
+        stopVoiceStream();
         sendVoiceActivity("cancelled", false, commandId);
         setState("Microphone ready — hold again to speak", "connected");
         return;
       }
-
-      voiceStream = stream;
       const recorder = new MediaRecorder(stream, {
         audioBitsPerSecond: 64_000,
         mimeType: supportedVoiceMimeType
@@ -1422,6 +1545,7 @@ export const REMOTE_JS = `(() => {
       }, 19_500);
     } catch (error) {
       const commandId = voiceCommandId;
+      const releasedBeforeRecording = voiceReleaseRequested;
       voiceRecorder = null;
       voiceCommandId = null;
       voiceChunks = [];
@@ -1431,8 +1555,18 @@ export const REMOTE_JS = `(() => {
       voiceButton.classList.remove("is-recording");
       voiceButtonCopy.textContent = "Hold to talk";
       sendVoiceActivity("cancelled", false, commandId);
+      if (releasedBeforeRecording) {
+        setState("Hold the microphone to speak", "connected");
+        return;
+      }
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";
       const remoteError = error && typeof error === "object" && "status" in error;
+      if (remoteError && error.status === 409) {
+        voiceBusy = true;
+        setState("Another phone is using voice control", "connected");
+        void sendHeartbeat();
+        return;
+      }
       setState(
         denied
           ? "Allow microphone access in Safari to use voice"
@@ -1459,11 +1593,14 @@ export const REMOTE_JS = `(() => {
       ? pending.replayExpiresAt
       : Date.now() + VOICE_CONFIRMATION_REPLAY_TTL_MS;
     closeVoiceConfirmation();
-    voiceProcessing = true;
     activeVoiceConfirmationId = confirmationId;
-    updateVoiceButton();
     setState("Starting playback…");
     const requestController = new AbortController();
+    const request = beginActiveVoiceRequest(
+      confirmationId,
+      pending.commandId,
+      requestController
+    );
     const requestTimeout = setTimeout(
       () => requestController.abort(),
       VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS
@@ -1479,50 +1616,53 @@ export const REMOTE_JS = `(() => {
         keepalive: true,
         signal: requestController.signal
       });
-      setState(result.detail || "Voice command confirmed", "connected");
-      if (navigator.vibrate) navigator.vibrate(18);
+      applyOrDeferVoiceResponse(request, () => {
+        setState(result.detail || "Voice command confirmed", "connected");
+        if (navigator.vibrate) navigator.vibrate(18);
+      });
     } catch (error) {
-      const status = error && typeof error.status === "number" ? error.status : null;
-      const retryable = status === null || status === 409 || (status >= 500 && status !== 504);
-      const retryPending = status === 409
-        ? pending
-        : {
-          ...pending,
-          detail: "Playback may already be running. Check the result without starting it again.",
-          expiresAt: replayExpiresAt,
-          replayExpiresAt,
-          submitted: true
-        };
-      if (
-        retryable &&
-        !pageTerminationPending &&
-        controllerToken !== null &&
-        remoteEnabled &&
-        showVoiceConfirmation(retryPending)
-      ) {
-        setState(
-          status === 409
-            ? "Another command is active — tap Play again"
-            : error && error.name === "AbortError"
-              ? "Response timed out — check the result"
-              : "Connection interrupted — check the result",
-          "error"
-        );
-      } else if (status === 401) {
-        controllerToken = null;
-        sessionStorage.removeItem("nhd-controller-token");
-        setEnabled(false);
-        setState("Remote session expired — rescan the TV code", "error");
-      } else if (status !== null || !retryable) {
-        setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
-      }
+      if (request.cancelAccepted) return;
+      applyOrDeferVoiceResponse(request, () => {
+        const status = error && typeof error.status === "number" ? error.status : null;
+        const retryable = status === null || status === 409 || (status >= 500 && status !== 504);
+        const retryPending = status === 409
+          ? pending
+          : {
+            ...pending,
+            detail: "Playback may already be running. Check the result without starting it again.",
+            expiresAt: replayExpiresAt,
+            replayExpiresAt,
+            submitted: true
+          };
+        if (
+          retryable &&
+          !pageTerminationPending &&
+          controllerToken !== null &&
+          remoteEnabled &&
+          showVoiceConfirmation(retryPending)
+        ) {
+          setState(
+            status === 409
+              ? "Another command is active — tap Play again"
+              : error && error.name === "AbortError"
+                ? "Response timed out — check the result"
+                : "Connection interrupted — check the result",
+            "error"
+          );
+        } else if (status === 401) {
+          controllerToken = null;
+          sessionStorage.removeItem("nhd-controller-token");
+          setEnabled(false);
+          setState("Remote session expired — rescan the TV code", "error");
+        } else if (status !== null || !retryable) {
+          setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
+        }
+      });
     } finally {
       clearTimeout(requestTimeout);
       if (activeVoiceConfirmationId === confirmationId) activeVoiceConfirmationId = null;
-      voiceProcessing = false;
-      updateVoiceButton();
-      updateVoiceConfirmationButtons();
-      void sendHeartbeat();
+      request.networkSettled = true;
+      if (!request.cancelRequested) finishActiveVoiceRequest(request);
     }
   }
 
@@ -1653,22 +1793,39 @@ export const REMOTE_JS = `(() => {
 
   async function sendHeartbeat(showConnected = false) {
     if (!controllerToken) return;
+    const token = controllerToken;
+    const sequence = ++heartbeatSequence;
     const stateBeforeRequest = state.textContent;
+    const commandBeforeRequest = voiceCommandId;
+    const recorderBeforeRequest = voiceRecorder;
+    const activeRequestBeforeRequest = activeVoiceRequest;
+    const startingBeforeRequest = voiceStarting;
     try {
       const result = await jsonRequest("/api/heartbeat", {
         method: "POST",
         headers: {
-          "Authorization": "Bearer " + controllerToken,
+          "Authorization": "Bearer " + token,
           "Content-Type": "application/json"
         },
         body: "{}"
       });
+      if (controllerToken !== token || sequence < latestHeartbeatSequence) return;
+      latestHeartbeatSequence = sequence;
       renderContext(result.context);
-      renderVoiceStatus(result.voice);
+      if (
+        commandBeforeRequest === voiceCommandId &&
+        recorderBeforeRequest === voiceRecorder &&
+        activeRequestBeforeRequest === activeVoiceRequest &&
+        startingBeforeRequest === voiceStarting
+      ) {
+        renderVoiceStatus(result.voice);
+      }
       if (showConnected && state.textContent === stateBeforeRequest) {
         setState("Connected", "connected");
       }
     } catch (error) {
+      if (controllerToken !== token || sequence < latestHeartbeatSequence) return;
+      latestHeartbeatSequence = sequence;
       controllerToken = null;
       sessionStorage.removeItem("nhd-controller-token");
       setEnabled(false);
@@ -1979,6 +2136,9 @@ export const REMOTE_JS = `(() => {
   });
   const releaseVoiceButton = () => {
     voiceReleaseRequested = true;
+    if (voiceRecorder === null && voiceCommandId !== null) {
+      sendVoiceActivity("cancelled", true, voiceCommandId);
+    }
     finishVoiceRecording();
   };
   voiceButton.addEventListener("pointerup", releaseVoiceButton);
@@ -1996,6 +2156,7 @@ export const REMOTE_JS = `(() => {
     }
   });
   voiceButton.addEventListener("click", (event) => event.preventDefault());
+  voiceCancel.addEventListener("click", () => void cancelActiveVoiceCommand());
   voiceConfirmCancel.addEventListener("click", () => {
     const pending = closeVoiceConfirmation();
     if (pending !== null) void cancelVoiceConfirmation(pending, true);

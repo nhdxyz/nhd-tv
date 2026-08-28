@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import {
+  VoiceOperationCancelledError,
+  VoiceOperationRegistry
+} from "../src/main/remote/voice-operation-registry";
+
+function beginCommand(registry: VoiceOperationRegistry, operationId = "voice-command-a-1234") {
+  const operation = registry.begin({
+    commandId: "voice-command-a-1234",
+    confirmationId: null,
+    controllerId: "phone-a",
+    kind: "command",
+    operationId
+  });
+  if (operation === null) throw new Error("operation was not reserved");
+  return operation;
+}
+
+describe("voice operation registry", () => {
+  it("only lets the owning phone cancel the exact active execution", async () => {
+    const registry = new VoiceOperationRegistry();
+    const operation = beginCommand(registry);
+
+    expect(registry.cancel("phone-b", operation.operationId)).toMatchObject({
+      operation: null,
+      state: "not-owner"
+    });
+    expect(operation.controller.signal.aborted).toBe(false);
+    expect(registry.cancel("phone-a", "voice-command-stale-9")).toMatchObject({
+      operation: null,
+      state: "not-active"
+    });
+
+    const cancellation = registry.cancel("phone-a", operation.operationId);
+    expect(cancellation.state).toBe("accepted");
+    expect(operation.controller.signal.aborted).toBe(true);
+    expect(operation.controller.signal.reason).toBeInstanceOf(VoiceOperationCancelledError);
+    expect(registry.finish(operation)).toBe(true);
+    await expect(operation.finished).resolves.toBeUndefined();
+  });
+
+  it("makes duplicate cancellation idempotent without targeting a later operation", () => {
+    const registry = new VoiceOperationRegistry();
+    const first = beginCommand(registry);
+    registry.cancel("phone-a", first.operationId);
+    registry.finish(first);
+
+    expect(registry.cancel("phone-a", first.operationId)).toEqual({
+      operation: null,
+      state: "already-cancelled"
+    });
+    const next = beginCommand(registry, "voice-command-next-5678");
+    expect(registry.cancel("phone-a", first.operationId)).toEqual({
+      operation: null,
+      state: "not-active"
+    });
+    expect(next.controller.signal.aborted).toBe(false);
+  });
+
+  it("ignores late cleanup from an older operation", () => {
+    const registry = new VoiceOperationRegistry();
+    const first = beginCommand(registry);
+    registry.finish(first);
+    const next = beginCommand(registry, "voice-command-next-5678");
+
+    expect(registry.finish(first)).toBe(false);
+    expect(registry.active).toBe(next);
+    expect(registry.busy).toBe(true);
+  });
+});

@@ -6,6 +6,7 @@ import {
   runVoiceOperationWithDeadline,
   VoiceOperationTimeoutError
 } from "../src/main/remote/phone-remote-server";
+import { VoiceOperationCancelledError } from "../src/main/remote/voice-operation-registry";
 
 function incoming(stream: PassThrough): IncomingMessage {
   return stream as unknown as IncomingMessage;
@@ -38,5 +39,27 @@ describe("phone voice upload body", () => {
 
     await expect(operation).rejects.toBeInstanceOf(VoiceOperationTimeoutError);
     expect(operationSignal?.aborted).toBe(true);
+  });
+
+  it("releases an uncooperative operation when its owning controller cancels", async () => {
+    const controller = new AbortController();
+    const operation = runVoiceOperationWithDeadline(
+      () => new Promise<never>(() => undefined),
+      5_000,
+      controller
+    );
+
+    controller.abort(new VoiceOperationCancelledError());
+    await expect(operation).rejects.toBeInstanceOf(VoiceOperationCancelledError);
+  });
+
+  it("destroys and releases a pending upload body when its operation cancels", async () => {
+    const stream = new PassThrough();
+    const controller = new AbortController();
+    const body = readVoiceBody(incoming(stream), 5_000, controller.signal);
+
+    controller.abort(new VoiceOperationCancelledError());
+    await expect(body).rejects.toBeInstanceOf(VoiceOperationCancelledError);
+    expect(stream.destroyed).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   parseDisconnectVoiceConfirmationId,
+  parseVoiceOperationId,
   parseVoiceUploadMetadata,
   remotePostHeadersAreAllowed,
   secureRemoteHeadersAllowMicrophone,
@@ -120,6 +121,14 @@ describe("phone remote boundary", () => {
     expect(parseDisconnectVoiceConfirmationId(null)).toBeUndefined();
   });
 
+  it("accepts only one opaque operation id for active cancellation", () => {
+    expect(parseVoiceOperationId({ operationId: "voice-command-a-1234" }))
+      .toBe("voice-command-a-1234");
+    expect(parseVoiceOperationId({ operationId: "short" })).toBeNull();
+    expect(parseVoiceOperationId({ operationId: "voice-command-a-1234", extra: true }))
+      .toBeNull();
+  });
+
   it("exposes only the bounded search text field and no credential controls", () => {
     expect(() => new Function(REMOTE_JS)).not.toThrow();
     expect(REMOTE_HTML.match(/<input\b/g)).toHaveLength(1);
@@ -142,6 +151,9 @@ describe("phone remote boundary", () => {
     expect(startVoiceRecording.indexOf("await reserveVoiceActivity(commandId)")).toBeLessThan(
       startVoiceRecording.indexOf("navigator.mediaDevices.getUserMedia")
     );
+    expect(startVoiceRecording.indexOf("voiceStream = stream")).toBeLessThan(
+      startVoiceRecording.indexOf("await beginVoiceActivity(commandId)")
+    );
     expect(REMOTE_JS).toContain("await beginVoiceActivity(commandId)");
     expect(REMOTE_JS).toContain("voiceBusy = Boolean(status && status.busy === true)");
     expect(REMOTE_JS).toContain("Another phone is using voice control.");
@@ -154,7 +166,10 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("JSON.stringify(confirmationId === null ? {} : { confirmationId })");
     expect(REMOTE_JS).toContain("void sendHeartbeat(true);");
     expect(REMOTE_JS).toContain("state.textContent === stateBeforeRequest");
+    expect(REMOTE_JS).toContain("sequence < latestHeartbeatSequence");
+    expect(REMOTE_JS).toContain("activeRequestBeforeRequest === activeVoiceRequest");
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm"');
+    expect(serverSource).toContain('url.pathname === "/api/voice/cancel"');
     expect(serverSource).toContain('url.pathname === "/api/voice/confirm/cancel"');
     expect(serverSource).toContain("beginBoundOperation(controllerId, binding.commandId)");
     expect(serverSource).toContain("secureRemoteHeadersAllowMicrophone(request.headers");
@@ -176,14 +191,14 @@ describe("phone remote boundary", () => {
     expect(confirmationRoute).toContain(
       "replay !== null && (!disconnecting || deferredConfirmationId === confirmationId)"
     );
-    expect(confirmationRoute).toContain("#activeVoiceConfirmationId = confirmationId");
-    expect(serverSource).toContain("#activeVoiceConfirmationId === confirmationId");
+    expect(confirmationRoute).toContain('kind: "confirmation"');
+    expect(confirmationRoute).toContain("operationId: confirmationId");
     expect(serverSource).toContain(
       "deferredConfirmationId === activeConfirmationId"
     );
     expect(serverSource).toContain("#scheduleDeferredDisconnectCompletion(controllerId)");
-    expect(serverSource).toContain("await this.#cancelAllVoiceConfirmations()");
-    expect(serverSource).toContain("await this.#cancelAllVoiceConfirmations(metadata.confirmationId)");
+    expect(serverSource).toContain("this.#cancelAllVoiceConfirmations()");
+    expect(serverSource).toContain("this.#cancelAllVoiceConfirmations(metadata.confirmationId)");
     expect(serverSource).toContain(
       "this.#voiceConfirmationForController(metadata.confirmationId, controllerId)"
     );
@@ -191,11 +206,13 @@ describe("phone remote boundary", () => {
 
   it("records voice only while the secure push-to-talk control is held", () => {
     expect(REMOTE_HTML).toContain('id="voice-button"');
+    expect(REMOTE_HTML).toContain('id="voice-cancel"');
     expect(REMOTE_HTML).toContain('id="voice-confirm"');
     expect(REMOTE_HTML).toContain('id="voice-confirm-play"');
     expect(REMOTE_JS).toContain("navigator.mediaDevices.getUserMedia");
     expect(REMOTE_JS).toContain("new MediaRecorder(stream");
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
+    expect(REMOTE_JS).toContain('jsonRequest("/api/voice/cancel"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm/cancel"');
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS");
@@ -203,6 +220,8 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("error.status !== 422 && error.status !== 504");
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REPLAY_TTL_MS");
     expect(REMOTE_JS).toContain("VOICE_CANCELLATION_REQUEST_TIMEOUT_MS");
+    expect(REMOTE_JS).toContain("JSON.stringify({ operationId: request.operationId })");
+    expect(REMOTE_JS).toContain('setState("Cancelled — hold to correct"');
     expect(REMOTE_JS).toContain("status >= 500 && status !== 504");
     expect(REMOTE_JS).toContain('voiceConfirmPlay.textContent = retry ? "Check result" : "Play"');
     expect(REMOTE_JS).toContain("voiceConfirmCancel.hidden = retry");
@@ -236,6 +255,11 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain(".catch(() => {})");
     expect(REMOTE_JS).toContain("finishVoiceRecording");
     expect(REMOTE_JS).toContain("stopVoiceStream");
+    const releaseVoiceButton = REMOTE_JS.slice(
+      REMOTE_JS.indexOf("const releaseVoiceButton ="),
+      REMOTE_JS.indexOf('voiceButton.addEventListener("pointerup"')
+    );
+    expect(releaseVoiceButton).toContain('sendVoiceActivity("cancelled", true, voiceCommandId)');
     const recorderStart = REMOTE_JS.indexOf("recorder.start(250)");
     const recorderAssignment = REMOTE_JS.indexOf("voiceRecorder = recorder", recorderStart);
     expect(recorderStart).toBeGreaterThan(-1);
@@ -273,7 +297,7 @@ describe("phone remote boundary", () => {
       "#voiceActivityLease.beginUpload(controllerId, metadata.commandId)"
     );
     const understanding = uploadRoute.indexOf('phase: "understanding"', uploadLease);
-    const bodyRead = uploadRoute.indexOf("bytes = await readVoiceBody(request)", uploadLease);
+    const bodyRead = uploadRoute.indexOf("bytes = await readVoiceBody(", uploadLease);
     expect(uploadLease).toBeGreaterThan(-1);
     expect(understanding).toBeGreaterThan(uploadLease);
     expect(bodyRead).toBeGreaterThan(understanding);

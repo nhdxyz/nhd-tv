@@ -79,6 +79,9 @@ export class VoiceActivityLease {
       if (active.locked || PHASE_RANK[event.phase] <= PHASE_RANK[active.phase]) {
         return "ignored";
       }
+      if (active.phase === "reserved" && event.phase !== "listening" && event.phase !== "cancelled") {
+        return "ignored";
+      }
       if (event.phase === "cancelled") {
         this.#remember(key);
         this.#active = null;
@@ -89,7 +92,7 @@ export class VoiceActivityLease {
       return "accepted";
     }
 
-    if (event.phase === "cancelled") {
+    if (event.phase !== "reserved") {
       this.#remember(key);
       return "ignored";
     }
@@ -109,20 +112,12 @@ export class VoiceActivityLease {
     if (this.#tombstones.has(key)) return false;
 
     const active = this.#active;
-    if (active === null) {
-      this.#active = {
-        commandId,
-        controllerId,
-        expiresAt: this.#now() + this.#leaseMs,
-        locked: true,
-        phase: "understanding"
-      };
-      return true;
-    }
+    if (active === null) return false;
     if (
       active.controllerId !== controllerId ||
       active.commandId !== commandId ||
-      active.locked
+      active.locked ||
+      active.phase === "reserved"
     ) {
       if (active.controllerId !== controllerId || active.commandId !== commandId) {
         this.#remember(key);

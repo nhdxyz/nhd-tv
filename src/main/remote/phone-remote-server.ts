@@ -33,6 +33,11 @@ import {
   type VoiceActivityEvent
 } from "./voice-activity-lease";
 import {
+  VoiceOperationCancelledError,
+  VoiceOperationRegistry,
+  type VoiceOperationHandle
+} from "./voice-operation-registry";
+import {
   MAX_VOICE_AUDIO_BYTES,
   MAX_VOICE_AUDIO_DURATION_MS,
   MIN_VOICE_AUDIO_DURATION_MS,
@@ -50,6 +55,7 @@ const VOICE_COMMAND_OPERATION_TIMEOUT_MS = 60_000;
 const VOICE_CONFIRM_OPERATION_TIMEOUT_MS = 60_000;
 const VOICE_UPLOAD_BODY_TIMEOUT_MS = 15_000;
 const VOICE_DISCONNECT_CONFIRM_GRACE_MS = 5_000;
+const VOICE_CANCELLATION_SETTLE_MS = 1_000;
 const VOICE_AUDIO_TYPES = new Set([
   "audio/mp4",
   "audio/mpeg",
@@ -156,6 +162,21 @@ function parseVoiceConfirmationId(
     return null;
   }
   return value.confirmationId;
+}
+
+export function parseVoiceOperationId(
+  value: Record<string, unknown> | null
+): string | null {
+  if (
+    value === null ||
+    Object.keys(value).some((key) => key !== "operationId") ||
+    typeof value.operationId !== "string" ||
+    (!VOICE_COMMAND_ID_PATTERN.test(value.operationId) &&
+      !VOICE_CONFIRMATION_ID_PATTERN.test(value.operationId))
+  ) {
+    return null;
+  }
+  return value.operationId;
 }
 
 export function parseDisconnectVoiceConfirmationId(
@@ -356,11 +377,49 @@ async function readJsonBody(request: IncomingMessage): Promise<Record<string, un
   }
 }
 
+function voiceAbortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new VoiceOperationCancelledError();
+}
+
+async function waitForVoiceSignal<T>(value: T | Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw voiceAbortReason(signal);
+  let abortHandler: (() => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abortHandler = () => reject(voiceAbortReason(signal));
+    signal.addEventListener("abort", abortHandler, { once: true });
+  });
+  try {
+    return await Promise.race([Promise.resolve(value), aborted]);
+  } finally {
+    if (abortHandler !== null) signal.removeEventListener("abort", abortHandler);
+  }
+}
+
+async function voiceOperationFinishedWithin(
+  operation: VoiceOperationHandle,
+  timeoutMs: number
+): Promise<boolean> {
+  let timeout: NodeJS.Timeout | null = null;
+  const deadline = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => resolve(false), timeoutMs);
+  });
+  try {
+    return await Promise.race([operation.finished.then(() => true as const), deadline]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+  }
+}
+
 export async function readVoiceBody(
   request: IncomingMessage,
-  timeoutMs = VOICE_UPLOAD_BODY_TIMEOUT_MS
+  timeoutMs = VOICE_UPLOAD_BODY_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<Uint8Array | null> {
+  if (signal?.aborted) throw voiceAbortReason(signal);
   let timeout: NodeJS.Timeout | null = null;
+  let abortHandler: (() => void) | null = null;
   const read = (async () => {
     const chunks: Buffer[] = [];
     let totalBytes = 0;
@@ -388,11 +447,24 @@ export async function readVoiceBody(
       request.destroy(error);
     }, timeoutMs);
   });
+  const aborted = signal === undefined
+    ? null
+    : new Promise<never>((_resolve, reject) => {
+      abortHandler = () => {
+        const error = voiceAbortReason(signal);
+        reject(error);
+        request.destroy(error);
+      };
+      signal.addEventListener("abort", abortHandler, { once: true });
+    });
 
   try {
-    return await Promise.race([read, deadline]);
+    return await Promise.race(aborted === null ? [read, deadline] : [read, deadline, aborted]);
   } finally {
     if (timeout !== null) clearTimeout(timeout);
+    if (signal !== undefined && abortHandler !== null) {
+      signal.removeEventListener("abort", abortHandler);
+    }
   }
 }
 
@@ -412,31 +484,38 @@ export class VoiceOperationTimeoutError extends Error {
 
 export async function runVoiceOperationWithDeadline<T>(
   operation: (signal: AbortSignal) => T | Promise<T>,
-  timeoutMs: number
+  timeoutMs: number,
+  controller = new AbortController()
 ): Promise<T> {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new TypeError("A positive voice operation timeout is required");
   }
-  const controller = new AbortController();
+  if (controller.signal.aborted) throw voiceAbortReason(controller.signal);
   let timeout: NodeJS.Timeout | null = null;
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => {
-      const error = new VoiceOperationTimeoutError();
-      controller.abort(error);
-      reject(error);
-    }, timeoutMs);
+  let abortHandler: (() => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abortHandler = () => reject(voiceAbortReason(controller.signal));
+    controller.signal.addEventListener("abort", abortHandler, { once: true });
   });
+  timeout = setTimeout(() => {
+    controller.abort(new VoiceOperationTimeoutError());
+  }, timeoutMs);
 
   try {
-    return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]);
+    return await Promise.race([
+      Promise.resolve().then(() => operation(controller.signal)),
+      aborted
+    ]);
   } finally {
     if (timeout !== null) clearTimeout(timeout);
+    if (abortHandler !== null) controller.signal.removeEventListener("abort", abortHandler);
   }
 }
 
 export class PhoneRemoteServer {
   readonly #manager = new PairingManager();
   readonly #voiceActivityLease = new VoiceActivityLease();
+  readonly #voiceOperations = new VoiceOperationRegistry();
   readonly #pendingVoiceConfirmations = new Map<string, PendingVoiceConfirmationBinding>();
   readonly #voiceConfirmationReplays =
     new VoiceConfirmationReplayCache<VoiceConfirmationExecutionResponse>(
@@ -462,8 +541,6 @@ export class PhoneRemoteServer {
   readonly #deferredDisconnectConfirmationIds = new Map<string, string>();
   readonly #deferredDisconnectTimers = new Map<string, NodeJS.Timeout>();
   readonly #disconnectingControllers = new Set<string>();
-  #activeVoiceConfirmationId: string | null = null;
-  #activeVoiceControllerId: string | null = null;
   #expiresAt: number | null = null;
   #lastCommandAt = 0;
   #lastPointerAt = 0;
@@ -477,7 +554,6 @@ export class PhoneRemoteServer {
     state: "unavailable"
   };
   #server: Server | null = null;
-  #voiceInFlight = false;
 
   constructor(options: PhoneRemoteServerOptions) {
     this.#onAction = options.onAction;
@@ -631,6 +707,7 @@ export class PhoneRemoteServer {
   async stop(): Promise<void> {
     this.#manager.revokeAll();
     this.#voiceActivityLease.reset();
+    this.#voiceOperations.reset();
     this.#pendingVoiceConfirmations.clear();
     this.#voiceConfirmationReplays.clear();
     this.#deferredVoiceDisconnects.clear();
@@ -638,9 +715,6 @@ export class PhoneRemoteServer {
     for (const timeout of this.#deferredDisconnectTimers.values()) clearTimeout(timeout);
     this.#deferredDisconnectTimers.clear();
     this.#disconnectingControllers.clear();
-    this.#activeVoiceConfirmationId = null;
-    this.#activeVoiceControllerId = null;
-    this.#voiceInFlight = false;
     this.#expiresAt = null;
     this.#networkAddress = null;
     this.#qrDataUrl = null;
@@ -1023,7 +1097,7 @@ export class PhoneRemoteServer {
       }
       if (
         activity.phase === "reserved" &&
-        (this.#voiceInFlight || Date.now() - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS)
+        (this.#voiceOperations.busy || Date.now() - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS)
       ) {
         writeJson(response, 409, { error: "Another voice command is already active" });
         return;
@@ -1075,7 +1149,7 @@ export class PhoneRemoteServer {
         return;
       }
       const now = Date.now();
-      if (this.#voiceInFlight || now - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS) {
+      if (this.#voiceOperations.busy || now - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS) {
         writeJson(response, 429, { error: "A voice command is already being processed" });
         return;
       }
@@ -1083,34 +1157,50 @@ export class PhoneRemoteServer {
         writeJson(response, 409, { error: "This voice recording is no longer active" });
         return;
       }
-
-      // Upload can overtake the phone's fire-and-forget "understanding"
-      // activity request. End capture-only side effects at this authenticated,
-      // command-bound boundary so AI processing never remains muted.
-      await this.#onVoiceActivity?.({
+      const operation = this.#voiceOperations.begin({
         commandId: metadata.commandId,
-        phase: "understanding"
-      }, controllerId);
-
+        confirmationId: metadata.confirmationId,
+        controllerId,
+        kind: "command",
+        operationId: metadata.commandId
+      });
+      if (operation === null) {
+        this.#voiceActivityLease.finishUpload(controllerId, metadata.commandId);
+        writeJson(response, 429, { error: "A voice command is already being processed" });
+        return;
+      }
       this.#lastVoiceAt = now;
-      this.#voiceInFlight = true;
-      this.#activeVoiceConfirmationId = metadata.confirmationId;
-      this.#activeVoiceControllerId = controllerId;
+
       try {
+        // Upload can overtake the phone's fire-and-forget "understanding"
+        // activity request. End capture-only side effects at this authenticated,
+        // command-bound boundary so AI processing never remains muted.
+        await waitForVoiceSignal(this.#onVoiceActivity?.({
+          commandId: metadata.commandId,
+          phase: "understanding"
+        }, controllerId), operation.controller.signal);
+
         if (metadata.confirmationId === null) {
-          await this.#cancelAllVoiceConfirmations();
+          await waitForVoiceSignal(
+            this.#cancelAllVoiceConfirmations(),
+            operation.controller.signal
+          );
         } else {
-          await this.#cancelAllVoiceConfirmations(metadata.confirmationId);
+          await waitForVoiceSignal(
+            this.#cancelAllVoiceConfirmations(metadata.confirmationId),
+            operation.controller.signal
+          );
         }
         let bytes: Uint8Array | null;
         try {
-          bytes = await readVoiceBody(request);
+          bytes = await readVoiceBody(
+            request,
+            VOICE_UPLOAD_BODY_TIMEOUT_MS,
+            operation.controller.signal
+          );
         } catch (error) {
-          await this.#onVoiceActivity?.({
-            commandId: metadata.commandId,
-            phase: "cancelled"
-          }, controllerId);
           if (error instanceof VoiceUploadBodyTimeoutError) {
+            await this.#publishVoiceCancellation(metadata.commandId, controllerId);
             if (!response.destroyed && !response.writableEnded) {
               writeJson(response, 408, { error: "The voice upload timed out" });
             }
@@ -1137,7 +1227,8 @@ export class PhoneRemoteServer {
               detail: "Voice control is unavailable.",
               outcome: "failed" as const
             }),
-            VOICE_COMMAND_OPERATION_TIMEOUT_MS
+            VOICE_COMMAND_OPERATION_TIMEOUT_MS,
+            operation.controller
           );
         } catch (error) {
           if (error instanceof VoiceOperationTimeoutError) {
@@ -1154,9 +1245,6 @@ export class PhoneRemoteServer {
         }
         if (metadata.confirmationId !== null) {
           this.#pendingVoiceConfirmations.delete(metadata.confirmationId);
-          if (this.#activeVoiceConfirmationId === metadata.confirmationId) {
-            this.#activeVoiceConfirmationId = null;
-          }
         }
         let responseResult = result;
         if (
@@ -1181,12 +1269,33 @@ export class PhoneRemoteServer {
             controllerId,
             metadata.commandId
           );
-          this.#activeVoiceConfirmationId = result.confirmationId;
           responseResult = { ...result, confirmationExpiresAt };
         }
-        writeJson(response, responseResult.outcome === "failed" ? 422 : 200, responseResult);
+        if (!response.destroyed && !response.writableEnded) {
+          writeJson(response, responseResult.outcome === "failed" ? 422 : 200, responseResult);
+        }
+      } catch (error) {
+        if (error instanceof VoiceOperationCancelledError) {
+          this.#lastVoiceAt = 0;
+          if (metadata.confirmationId !== null) {
+            this.#pendingVoiceConfirmations.delete(metadata.confirmationId);
+            await this.#notifyVoiceConfirmationCancelled(
+              metadata.confirmationId,
+              metadata.commandId
+            );
+          }
+          await this.#publishVoiceCancellation(metadata.commandId, controllerId);
+          if (!response.destroyed && !response.writableEnded) {
+            writeJson(response, 409, {
+              code: "voice_cancelled",
+              error: "Voice command cancelled"
+            });
+          }
+          return;
+        }
+        throw error;
       } finally {
-        await this.#finishVoiceOperation(controllerId, metadata.commandId);
+        await this.#finishVoiceOperation(operation);
       }
       return;
     }
@@ -1239,17 +1348,26 @@ export class PhoneRemoteServer {
         return;
       }
       if (
-        this.#voiceInFlight ||
+        this.#voiceOperations.busy ||
         !this.#voiceActivityLease.beginBoundOperation(controllerId, binding.commandId)
       ) {
         writeJson(response, 409, { error: "Another voice command is already active" });
         return;
       }
+      const operation = this.#voiceOperations.begin({
+        commandId: binding.commandId,
+        confirmationId,
+        controllerId,
+        kind: "confirmation",
+        operationId: confirmationId
+      });
+      if (operation === null) {
+        this.#voiceActivityLease.finishUpload(controllerId, binding.commandId);
+        writeJson(response, 409, { error: "Another voice command is already active" });
+        return;
+      }
 
       this.#pendingVoiceConfirmations.delete(confirmationId);
-      this.#voiceInFlight = true;
-      this.#activeVoiceConfirmationId = confirmationId;
-      this.#activeVoiceControllerId = controllerId;
       const execution = (async (): Promise<VoiceConfirmationExecutionResponse> => {
         try {
           const result = await runVoiceOperationWithDeadline(
@@ -1261,7 +1379,8 @@ export class PhoneRemoteServer {
               detail: "Voice confirmation is unavailable.",
               outcome: "failed" as const
             }),
-            VOICE_CONFIRM_OPERATION_TIMEOUT_MS
+            VOICE_CONFIRM_OPERATION_TIMEOUT_MS,
+            operation.controller
           );
           return {
             result,
@@ -1278,6 +1397,17 @@ export class PhoneRemoteServer {
               statusCode: 504
             };
           }
+          if (error instanceof VoiceOperationCancelledError) {
+            this.#lastVoiceAt = 0;
+            await this.#publishVoiceCancellation(binding.commandId, controllerId);
+            return {
+              result: {
+                detail: "Voice command cancelled.",
+                outcome: "failed"
+              },
+              statusCode: 409
+            };
+          }
           return {
             result: {
               detail: "Voice confirmation could not be completed.",
@@ -1286,12 +1416,64 @@ export class PhoneRemoteServer {
             statusCode: 422
           };
         } finally {
-          await this.#finishVoiceOperation(controllerId, binding.commandId);
+          await this.#finishVoiceOperation(operation);
         }
       })();
       this.#voiceConfirmationReplays.set(confirmationId, controllerId, execution);
       const completed = await execution;
-      writeJson(response, completed.statusCode, completed.result);
+      if (!response.destroyed && !response.writableEnded) {
+        writeJson(response, completed.statusCode, completed.result);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/cancel") {
+      if (
+        !isSameOriginPost(request, this.#remoteOrigin) ||
+        !secureRemoteHeadersAllowMicrophone(request.headers, this.#remoteOrigin)
+      ) {
+        writeJson(response, 403, { error: "Voice cancellation rejected" });
+        return;
+      }
+
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      const controllerId = this.#authorizeController(token);
+      if (controllerId === null) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      const operationId = parseVoiceOperationId(await readJsonBody(request));
+      if (operationId === null) {
+        writeJson(response, 400, { error: "A valid active voice operation is required" });
+        return;
+      }
+
+      const cancellation = this.#voiceOperations.cancel(controllerId, operationId);
+      if (cancellation.state === "not-owner") {
+        writeJson(response, 403, { error: "Only the phone that started voice can cancel it" });
+        return;
+      }
+      if (cancellation.state === "not-active") {
+        writeJson(response, 409, { error: "That voice command already finished" });
+        return;
+      }
+      if (cancellation.state === "already-cancelled") {
+        writeJson(response, 200, { cancelled: true, ok: true, ready: true });
+        return;
+      }
+      if (cancellation.operation === null) {
+        writeJson(response, 409, { error: "That voice command is no longer active" });
+        return;
+      }
+
+      const ready = await voiceOperationFinishedWithin(
+        cancellation.operation,
+        VOICE_CANCELLATION_SETTLE_MS
+      );
+      writeJson(response, ready ? 200 : 202, { cancelled: true, ok: true, ready });
       return;
     }
 
@@ -1364,10 +1546,11 @@ export class PhoneRemoteServer {
         writeJson(response, 202, { deferred: true, ok: true });
         return;
       }
-      if (this.#activeVoiceControllerId === controllerId) {
+      const activeVoiceOperation = this.#voiceOperations.active;
+      if (activeVoiceOperation?.controllerId === controllerId) {
         this.#deferControllerDisconnect(
           controllerId,
-          this.#activeVoiceConfirmationId === confirmationId
+          activeVoiceOperation.confirmationId === confirmationId
             ? confirmationId ?? undefined
             : undefined
         );
@@ -1430,21 +1613,17 @@ export class PhoneRemoteServer {
     if (existingTimer !== undefined) clearTimeout(existingTimer);
     const timer = setTimeout(() => {
       this.#deferredDisconnectTimers.delete(controllerId);
-      if (this.#activeVoiceControllerId === controllerId) return;
+      if (this.#voiceOperations.active?.controllerId === controllerId) return;
       this.#deferredDisconnectConfirmationIds.delete(controllerId);
       void this.#completeControllerDisconnect(controllerId);
     }, VOICE_DISCONNECT_CONFIRM_GRACE_MS);
     this.#deferredDisconnectTimers.set(controllerId, timer);
   }
 
-  async #finishVoiceOperation(controllerId: string, commandId: string): Promise<void> {
-    const activeConfirmationId = this.#activeVoiceConfirmationId;
+  async #finishVoiceOperation(operation: VoiceOperationHandle): Promise<void> {
+    const { commandId, confirmationId: activeConfirmationId, controllerId } = operation;
     this.#voiceActivityLease.finishUpload(controllerId, commandId);
-    this.#voiceInFlight = false;
-    if (this.#activeVoiceControllerId === controllerId) {
-      this.#activeVoiceConfirmationId = null;
-      this.#activeVoiceControllerId = null;
-    }
+    if (!this.#voiceOperations.finish(operation)) return;
     if (!this.#deferredVoiceDisconnects.has(controllerId)) return;
 
     const deferredConfirmationId = this.#deferredDisconnectConfirmationIds.get(controllerId);
@@ -1520,6 +1699,14 @@ export class PhoneRemoteServer {
     }
   }
 
+  async #publishVoiceCancellation(commandId: string, controllerId: string): Promise<void> {
+    try {
+      await this.#onVoiceActivity?.({ commandId, phase: "cancelled" }, controllerId);
+    } catch {
+      // Cancellation must still release the exact operation and activity lease.
+    }
+  }
+
   #publishVoiceTimeout(commandId: string): void {
     try {
       void Promise.resolve(this.#onVoiceTimeout?.(commandId)).catch(() => undefined);
@@ -1556,7 +1743,9 @@ export class PhoneRemoteServer {
     };
     return {
       ...status,
-      busy: this.#voiceInFlight || this.#voiceActivityLease.busy
+      busy: this.#voiceOperations.busy ||
+        this.#voiceActivityLease.busy ||
+        Date.now() - this.#lastVoiceAt < MIN_VOICE_INTERVAL_MS
     };
   }
 

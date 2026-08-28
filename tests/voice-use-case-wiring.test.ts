@@ -47,6 +47,7 @@ describe("voice use-case execution wiring", () => {
     expect(execution).toContain('plan.intent.action === "search"');
     expect(execution).toContain("Searched ${definition.name} for ${destination.query}.");
     expect(execution).toContain("I couldn't verify where ${plan.intent.title} is available");
+    expect(source.match(/Choose your Netflix profile on the TV/g)?.length).toBe(2);
   });
 
   it("stores and presents numbered choices only for safe enabled watch providers", () => {

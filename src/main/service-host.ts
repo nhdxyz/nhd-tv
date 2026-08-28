@@ -185,7 +185,7 @@ const PLAYBACK_QUALIFICATION_DELAY_MS = 5_500;
 const SPOTIFY_PLAYBACK_INTERVAL_MS = 1_000;
 const AUDIO_CURRENT_MEDIA_FRESHNESS_MS = SPOTIFY_PLAYBACK_INTERVAL_MS * 5;
 const VIDEO_CURRENT_MEDIA_FRESHNESS_MS = PLAYBACK_CHECKPOINT_INTERVAL_MS * 3;
-const VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000;
+const VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 14_000;
 const VOICE_FULLSCREEN_ENHANCEMENT_TIMEOUT_MS = 1_500;
 const VOICE_FULLSCREEN_ENHANCEMENT_MAX_ATTEMPTS = 5;
 const SERVICE_EXTENSION_LOAD_TIMEOUT_MS = 8_000;
@@ -1799,6 +1799,9 @@ export class ServiceHost {
             if (definition.id === "spotify") void this.#captureSpotifyPlayback();
             return "complete";
           }
+          if (result === "profile-required") {
+            return "profile-required";
+          }
           if (result === "navigated" || result === "play-clicked") {
             settleDelayMs = 650;
             if (result === "play-clicked") playbackRequested = true;
@@ -1847,12 +1850,23 @@ export class ServiceHost {
             await waitForProviderNavigation(view, 1_500, signal);
             this.#operationOwner.throwIfSuperseded(operation);
             if (this.#view !== view || view.webContents.isDestroyed()) return "failed";
+            const cancelProfileRecoveryNavigation = () => {
+              if (
+                this.#view === view &&
+                this.#operationOwner.owns(operation) &&
+                !view.webContents.isDestroyed()
+              ) {
+                view.webContents.stop();
+              }
+            };
+            signal?.addEventListener("abort", cancelProfileRecoveryNavigation, { once: true });
             try {
-              await view.webContents.loadURL(intendedDestination);
+              await waitWithSignal(view.webContents.loadURL(intendedDestination), signal);
               this.#operationOwner.throwIfSuperseded(operation);
               signal?.throwIfAborted();
             } catch (error) {
               signal?.throwIfAborted();
+              this.#operationOwner.throwIfSuperseded(operation);
               if (!isExpectedAllowedNavigationAbort(
                 error,
                 view.webContents.getURL(),
@@ -1861,6 +1875,8 @@ export class ServiceHost {
               )) {
                 throw error;
               }
+            } finally {
+              signal?.removeEventListener("abort", cancelProfileRecoveryNavigation);
             }
           }
         } catch {

@@ -1743,6 +1743,8 @@ async function executeGoogleWatchPlan(
         ? `Playing ${resolvedTitle} on ${definition.name}.`
         : automationResult === "playing-windowed"
           ? `Playing ${resolvedTitle} on ${definition.name}, but I couldn't verify full screen.`
+          : automationResult === "profile-required"
+            ? "Choose your Netflix profile on the TV, then say the command again."
           : `Opened ${resolvedTitle} on ${definition.name}, but could not start playback automatically.`
       : `Opened ${resolvedTitle} on ${definition.name}.`,
     handled
@@ -2040,6 +2042,8 @@ async function executeVoiceCommandPlanCore(
         ? `${plan.intent.action === "play" ? "Playing" : "Opening"} ${plan.intent.title} on ${definition.name}.`
         : automationResult === "playing-windowed"
           ? `Playing ${plan.intent.title} on ${definition.name}, but I couldn't verify full screen.`
+          : automationResult === "profile-required"
+            ? "Choose your Netflix profile on the TV, then say the command again."
           : plan.intent.action === "play"
             ? `Opened ${definition.name} results for ${plan.intent.title}${exactEpisode}, but could not start playback automatically.`
             : providerAppliedQuery

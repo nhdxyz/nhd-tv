@@ -1018,13 +1018,17 @@ describe("voice provider automation", () => {
       readFile(new URL("../src/main/service-host.ts", import.meta.url), "utf8")
     );
 
-    expect(source).toContain("VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 20_000");
+    expect(source).toContain("VOICE_PROVIDER_AUTOMATION_TIMEOUT_MS = 14_000");
     expect(source).toContain("VOICE_FULLSCREEN_ENHANCEMENT_TIMEOUT_MS = 1_500");
     expect(source).toContain("VOICE_FULLSCREEN_ENHANCEMENT_MAX_ATTEMPTS = 5");
     expect(source).toContain('["netflix", "spotify", "youtube"]');
     expect(source).toContain("result === \"profile-selected\"");
     expect(source).toContain("isAllowedServiceUrl(");
-    expect(source).toContain("await view.webContents.loadURL(intendedDestination)");
+    expect(source).toContain(
+      "await waitWithSignal(view.webContents.loadURL(intendedDestination), signal)"
+    );
+    expect(source).toContain("cancelProfileRecoveryNavigation");
+    expect(source).toContain("view.webContents.stop()");
     expect(source).toContain("result === \"playing\"");
     expect(source).toContain("let playbackRequested = false");
     expect(source).toContain("buildSpotifyVoiceAutomationScript(intent, playbackRequested)");
@@ -1040,6 +1044,11 @@ describe("voice provider automation", () => {
     expect(source).toContain("parseVoiceProviderAutomationResult(rawResult)");
     expect(source).toContain('keyCode: "F"');
     expect(source).toContain('result === "complete"');
+    const profileRequired = source.indexOf('result === "profile-required"');
+    const profileRecovery = source.indexOf('result === "profile-selected"');
+    expect(profileRequired).toBeGreaterThan(-1);
+    expect(profileRequired).toBeLessThan(profileRecovery);
+    expect(source.slice(profileRequired, profileRecovery)).toContain('return "profile-required"');
   });
 
   it("reports play as handled only after provider automation verifies it", () => {

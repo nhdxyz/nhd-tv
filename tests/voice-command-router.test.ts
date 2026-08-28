@@ -196,6 +196,29 @@ describe("voice command planning", () => {
     })).toMatchObject({ candidateServiceIds: ["spotify"], launchAllowed: true });
   });
 
+  it("honors an explicit provider for a non-playing search regardless of media label", () => {
+    expect(planVoiceCommand(mediaIntent({
+      action: "search",
+      mediaType: "movie",
+      providerHint: "spotify",
+      title: "Dune"
+    }), {
+      ...context,
+      enabledServiceIds: ["spotify", "youtube"],
+      serviceOrder: ["youtube", "spotify"]
+    })).toMatchObject({ candidateServiceIds: ["spotify"], launchAllowed: true });
+    expect(planVoiceCommand(mediaIntent({
+      action: "search",
+      mediaType: "artist",
+      providerHint: "youtube",
+      title: "Taylor Swift"
+    }), {
+      ...context,
+      enabledServiceIds: ["spotify", "youtube"],
+      serviceOrder: ["spotify", "youtube"]
+    })).toMatchObject({ candidateServiceIds: ["youtube"], launchAllowed: true });
+  });
+
   it("honors an explicit Disney Plus request when it is enabled", () => {
     expect(planVoiceCommand(mediaIntent({
       mediaType: "movie",

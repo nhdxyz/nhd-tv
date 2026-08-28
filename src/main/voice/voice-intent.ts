@@ -260,6 +260,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
   }
 
   if (
+    action !== "search" &&
     (["album", "artist", "playlist", "song"] as const).includes(
       mediaType as "album" | "artist" | "playlist" | "song"
     ) &&
@@ -269,6 +270,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     throw new TypeError("Audio intents may only target Spotify.");
   }
   if (
+    action !== "search" &&
     (mediaType === "channel" || mediaType === "video") &&
     providerHint !== null &&
     providerHint !== "youtube"
@@ -276,6 +278,7 @@ export function parseVoiceIntent(value: unknown): VoiceIntent {
     throw new TypeError("Video intents may only target YouTube.");
   }
   if (
+    action !== "search" &&
     providerHint === "spotify" &&
     !(["album", "artist", "playlist", "song"] as const).includes(
       mediaType as "album" | "artist" | "playlist" | "song"

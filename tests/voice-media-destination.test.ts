@@ -104,4 +104,16 @@ describe("voice media destination", () => {
       title: "Kanye West"
     }), ["spotify"])).toEqual({ query: "Kanye West", serviceId: "spotify" });
   });
+
+  it("honors a named search provider even when the media label implies another app", () => {
+    expect(resolveVoiceMediaDestination(intent({
+      action: "search",
+      mediaType: "artist",
+      providerHint: "youtube",
+      title: "Taylor Swift"
+    }), ["spotify", "youtube"])).toEqual({
+      query: "Taylor Swift",
+      serviceId: "youtube"
+    });
+  });
 });

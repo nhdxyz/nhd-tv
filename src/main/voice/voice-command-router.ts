@@ -53,6 +53,9 @@ function supportedEnabledServices(
 }
 
 function impliedProvider(intent: VoiceMediaIntent): VoiceProviderHint | null {
+  if (intent.action === "search" && intent.providerHint !== null) {
+    return intent.providerHint;
+  }
   if (intent.mediaType === "recommendation" || intent.mediaType === "similar-title") {
     return "netflix";
   }

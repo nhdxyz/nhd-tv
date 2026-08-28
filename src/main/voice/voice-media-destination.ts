@@ -24,6 +24,9 @@ export function voiceDiscoveryOpenedDetail(
 }
 
 function preferredService(intent: VoiceMediaIntent): VoiceServiceId {
+  if (intent.action === "search" && intent.providerHint !== null) {
+    return intent.providerHint;
+  }
   if (isVoiceDiscoveryIntent(intent)) {
     return "netflix";
   }

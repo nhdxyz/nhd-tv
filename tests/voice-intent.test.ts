@@ -100,6 +100,18 @@ describe("voice intent boundary", () => {
       mediaAction: "search",
       title: "Dune"
     }))).toMatchObject({ action: "search", kind: "media", title: "Dune" });
+    expect(parseVoiceIntent(mediaIntent({
+      mediaAction: "search",
+      mediaType: "movie",
+      providerHint: "spotify",
+      title: "Dune"
+    }))).toMatchObject({ action: "search", mediaType: "movie", providerHint: "spotify" });
+    expect(parseVoiceIntent(mediaIntent({
+      mediaAction: "search",
+      mediaType: "artist",
+      providerHint: "youtube",
+      title: "Taylor Swift"
+    }))).toMatchObject({ action: "search", mediaType: "artist", providerHint: "youtube" });
   });
 
   it("preserves an explicit Disney Plus destination for exact media", () => {

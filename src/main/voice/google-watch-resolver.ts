@@ -62,6 +62,12 @@ export interface GoogleWatchResolverOptions {
   partition?: string;
 }
 
+interface GoogleWatchResolutionOptions {
+  completeOffers?: boolean;
+  preferredProviderNames?: readonly string[];
+  signal?: AbortSignal;
+}
+
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -219,6 +225,41 @@ function verifiedCachedResult(
     ...result,
     ...googleWatchMetadataForLookup(lookup, result)
   };
+}
+
+function providerIdentity(value: string): string {
+  return value.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, "");
+}
+
+export function prioritizeGoogleWatchCandidates(
+  candidates: readonly { href: string; label: string }[],
+  preferredProviderNames: readonly string[]
+): Array<{ href: string; label: string }> {
+  const priorities = preferredProviderNames.map(providerIdentity);
+  return candidates.map((candidate, position) => {
+    const label = providerIdentity(candidate.label);
+    const priority = priorities.findIndex((provider) => label.includes(provider));
+    return {
+      candidate,
+      position,
+      priority: priority < 0 ? Number.MAX_SAFE_INTEGER : priority
+    };
+  }).sort((left, right) =>
+    left.priority - right.priority || left.position - right.position
+  ).map(({ candidate }) => candidate);
+}
+
+function isPreferredLaunchableOffer(
+  offer: GoogleWatchOffer,
+  preferredProviderNames: readonly string[]
+): boolean {
+  if (preferredProviderNames[0] !== offer.providerName) return false;
+  if (offer.monetizationType === "subscription" || offer.monetizationType === "free") {
+    return true;
+  }
+  return offer.monetizationType === null &&
+    offer.priceText === null &&
+    (offer.providerName === "Netflix" || offer.providerName === "Disney+");
 }
 
 function providerContentId(url: URL): string | null {
@@ -404,7 +445,7 @@ export class GoogleWatchResolver {
 
   async resolve(
     lookup: GoogleWatchLookup,
-    options: { completeOffers?: boolean; signal?: AbortSignal } = {}
+    options: GoogleWatchResolutionOptions = {}
   ): Promise<GoogleWatchResult> {
     const signal = options.signal;
     signal?.throwIfAborted();
@@ -434,6 +475,7 @@ export class GoogleWatchResolver {
         return await this.#resolveUncached(
           { ...lookup, countryCode },
           completeOffers,
+          options.preferredProviderNames ?? [],
           signal
         );
       } finally {
@@ -645,11 +687,17 @@ export class GoogleWatchResolver {
 
   async #offers(
     panel: ExtractedWatchPanel,
+    preferredProviderNames: readonly string[],
+    stopAfterPreferredOffer: boolean,
     signal?: AbortSignal
   ): Promise<GoogleWatchOffer[]> {
     const offers: GoogleWatchOffer[] = [];
     const seen = new Set<string>();
-    for (const candidate of panel.candidateLinks) {
+    const candidates = prioritizeGoogleWatchCandidates(
+      panel.candidateLinks,
+      preferredProviderNames
+    );
+    for (const candidate of candidates) {
       signal?.throwIfAborted();
       if (seen.has(candidate.href)) continue;
       seen.add(candidate.href);
@@ -659,6 +707,10 @@ export class GoogleWatchResolver {
       const offer = googleWatchOfferFromUrl(resolvedUrl, candidate.label);
       if (offer !== null && !offers.some((existing) => existing.watchUrl === offer.watchUrl)) {
         offers.push(offer);
+        if (
+          stopAfterPreferredOffer &&
+          isPreferredLaunchableOffer(offer, preferredProviderNames)
+        ) return offers;
       }
     }
     return offers;
@@ -667,13 +719,19 @@ export class GoogleWatchResolver {
   async #resolveUncached(
     lookup: GoogleWatchLookup,
     requireCompleteOffers: boolean,
+    preferredProviderNames: readonly string[],
     signal?: AbortSignal
   ): Promise<GoogleWatchResult> {
     const sourceUrl = googleWatchSearchUrl(lookup.queryText, lookup.countryCode);
     const before = await this.#sessionRequest(sourceUrl, signal);
     let panel = before.hasData ? await this.#extractRequestBody(before.body) : null;
     signal?.throwIfAborted();
-    let offers = panel === null ? [] : await this.#offers(panel, signal);
+    let offers = panel === null ? [] : await this.#offers(
+      panel,
+      preferredProviderNames,
+      !requireCompleteOffers,
+      signal
+    );
     let renderMs: number | null = null;
     let requestAfterRenderHasData = false;
     let offersComplete = false;
@@ -689,7 +747,12 @@ export class GoogleWatchResolver {
       panel = await this.#extractRendered();
       signal?.throwIfAborted();
       renderMs = Date.now() - renderStartedAt;
-      offers = panel === null ? [] : await this.#offers(panel, signal);
+      offers = panel === null ? [] : await this.#offers(
+        panel,
+        preferredProviderNames,
+        !requireCompleteOffers,
+        signal
+      );
       offersComplete = true;
       const after = await this.#sessionRequest(sourceUrl, signal);
       requestAfterRenderHasData = after.hasData;

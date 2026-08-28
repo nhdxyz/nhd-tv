@@ -38,6 +38,21 @@ const LAUNCHABLE_WATCH_SERVICES = new Set<VoiceServiceId>([
   "youtube"
 ]);
 
+const WATCH_PROVIDER_NAMES: Readonly<Partial<Record<VoiceServiceId, string>>> = {
+  "disney-plus": "Disney+",
+  netflix: "Netflix",
+  youtube: "YouTube"
+};
+
+export function watchProviderPriorityNames(
+  serviceIds: readonly VoiceServiceId[]
+): string[] {
+  return serviceIds.flatMap((serviceId) => {
+    const providerName = WATCH_PROVIDER_NAMES[serviceId];
+    return providerName === undefined ? [] : [providerName];
+  });
+}
+
 export function isLaunchableWatchOffer(offer: GoogleWatchOffer): boolean {
   if (offer.monetizationType === "add_on") return false;
   if (offer.monetizationType === "subscription" || offer.monetizationType === "free") {

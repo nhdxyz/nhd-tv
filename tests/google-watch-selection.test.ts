@@ -5,7 +5,8 @@ import {
   watchAvailabilityDetail,
   watchOfferNavigationUrl,
   watchOffersShouldExpand,
-  watchOffersShouldBeComplete
+  watchOffersShouldBeComplete,
+  watchProviderPriorityNames
 } from "../src/main/voice/google-watch-selection";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
 import type { GoogleWatchResult } from "../src/main/voice/google-watch-cache";
@@ -186,6 +187,11 @@ describe("Google watch selection", () => {
     expect(selectEnabledWatchOffer(multiSubscription, ["netflix", "youtube"])).toMatchObject({
       serviceId: "netflix"
     });
+  });
+
+  it("translates lineup order into Google provider resolution priority", () => {
+    expect(watchProviderPriorityNames(["spotify", "youtube", "netflix", "disney-plus"]))
+      .toEqual(["YouTube", "Netflix", "Disney+"]);
   });
 
   it("starts playback with partial offers while lookups request the complete list", () => {

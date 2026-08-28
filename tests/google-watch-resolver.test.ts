@@ -4,6 +4,7 @@ import {
   googleWatchLookupFromIntent,
   googleWatchMetadataForLookup,
   googleWatchOfferFromUrl,
+  prioritizeGoogleWatchCandidates,
   googleWatchSearchUrl
 } from "../src/main/voice/google-watch-resolver";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
@@ -178,5 +179,15 @@ describe("Google watch resolver boundary", () => {
       "https://watch.sling.com/1/program/example-id",
       "Sling TV Subscription"
     )).toMatchObject({ providerName: "Sling TV" });
+  });
+
+  it("resolves the user's preferred provider before slower redirect candidates", () => {
+    const candidates = [
+      { href: "https://google.com/goto/1", label: "Apple TV $3.99 Watch" },
+      { href: "https://google.com/goto/2", label: "Netflix Subscription Watch" },
+      { href: "https://google.com/goto/3", label: "Disney+ Subscription Watch" }
+    ];
+    expect(prioritizeGoogleWatchCandidates(candidates, ["Disney+", "Netflix"]))
+      .toEqual([candidates[2], candidates[1], candidates[0]]);
   });
 });

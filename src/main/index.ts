@@ -116,7 +116,8 @@ import {
   watchAvailabilityDetail,
   watchOfferNavigationUrl,
   watchOffersShouldExpand,
-  watchOffersShouldBeComplete
+  watchOffersShouldBeComplete,
+  watchProviderPriorityNames
 } from "./voice/google-watch-selection";
 import {
   applyYouTubeLatestSort,
@@ -1295,11 +1296,16 @@ async function executeGoogleWatchPlan(
   const playbackDiscoveryDeadlineAt = Date.now() + VOICE_PLAYBACK_DISCOVERY_TIMEOUT_MS;
   const resolveOffers = async (completeOffers: boolean) => {
     if (plan.intent.action !== "play") {
-      return resolver.resolve(lookup, { completeOffers, signal });
+      return resolver.resolve(lookup, {
+        completeOffers,
+        preferredProviderNames: watchProviderPriorityNames(plan.candidateServiceIds),
+        signal
+      });
     }
     return runVoiceStageWithDeadline(
       (stageSignal) => resolver.resolve(lookup, {
         completeOffers,
+        preferredProviderNames: watchProviderPriorityNames(plan.candidateServiceIds),
         signal: stageSignal
       }),
       {

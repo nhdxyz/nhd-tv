@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const html = readFileSync(new URL("../src/renderer/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/renderer/style.css", import.meta.url), "utf8");
+const renderer = readFileSync(new URL("../src/renderer/index.ts", import.meta.url), "utf8");
 
 describe("TV catalog layout", () => {
   it("keeps phone pairing visible and the home controls purpose-built", () => {
@@ -27,6 +28,22 @@ describe("TV catalog layout", () => {
     expect(css).toContain("aspect-ratio: 16 / 9");
     expect(css).toContain("grid-area: 1 / 1");
     expect(css).toContain("-webkit-line-clamp: 3");
+  });
+
+  it("keeps Home content-first instead of decorating it like an AI dashboard", () => {
+    expect(html).not.toContain("featured-wash");
+    expect(html).not.toContain("featured-orbit");
+    expect(html).toContain("Choose something to watch");
+    expect(html).toContain('id="continue-manage"');
+    expect(html).toContain('<h2 id="services-title">Apps</h2>');
+    expect(css).toContain(".featured-icon.has-artwork");
+    expect(css).toContain(".home-view .service-tile[data-service-id]");
+  });
+
+  it("keeps destructive Continue Watching controls behind Manage mode", () => {
+    expect(renderer).toContain("remove.hidden = !continueManaging");
+    expect(renderer).toContain("continueManaging = !continueManaging");
+    expect(renderer).toContain("item.id !== featuredContinueItemId");
   });
 
   it("wraps experimental apps into a spatial grid instead of a clipped rail", () => {

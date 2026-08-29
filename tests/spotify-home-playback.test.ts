@@ -73,6 +73,7 @@ describe("Spotify playback on NHD-TV Home", () => {
     expect(html).not.toContain('id="spotify-now-playing-close"');
     expect(renderer).not.toContain("Playing in the background");
     expect(renderer).not.toContain("press Play to resume");
+    expect(renderer).toContain("elements.spotifyHomePlayer.hidden = !backgrounded");
     expect(renderer).toContain('elements.ambientDisplay.addEventListener("click"');
     expect(renderer).toContain('.closest(".spotify-now-playing-transport button")');
     expect(renderer).toContain('sendSpotifyHomeAction("rewind"');

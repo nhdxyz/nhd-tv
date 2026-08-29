@@ -100,6 +100,7 @@ const elements = {
   closeServiceButton: requireElement<HTMLButtonElement>("#close-service", "close-service"),
   continueActions: requireElement<HTMLDivElement>("#continue-actions", "continue-actions"),
   continueHint: requireElement<HTMLSpanElement>("#continue-hint", "continue-hint"),
+  continueManage: requireElement<HTMLButtonElement>("#continue-manage", "continue-manage"),
   customServiceForm: requireElement<HTMLFormElement>("#custom-service-form", "custom-service-form"),
   customServiceName: requireElement<HTMLInputElement>("#custom-service-name", "custom-service-name"),
   customServiceUrl: requireElement<HTMLInputElement>("#custom-service-url", "custom-service-url"),
@@ -270,6 +271,7 @@ let ambientShownAt = 0;
 let ambientIdleVisible = false;
 let spotifyNowPlayingOpen = false;
 let currentView: AppView = "home";
+let continueManaging = false;
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
 let voicePresentationFailsafeTimer: number | null = null;
@@ -357,11 +359,11 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
 
 function renderSpotifyHomePlayer(): void {
   const enabled = enabledServiceIds.has("spotify");
-  elements.spotifyHomePlayer.hidden = !enabled;
+  const backgrounded = enabled && currentHostStatus?.activeServiceId === "spotify" &&
+    currentHostStatus.playback.backgrounded;
+  elements.spotifyHomePlayer.hidden = !backgrounded;
   if (!enabled) return;
 
-  const backgrounded = currentHostStatus?.activeServiceId === "spotify" &&
-    currentHostStatus.playback.backgrounded;
   const playing = backgrounded && currentSpotifyPlayback.playing;
   const trackReady = backgrounded && currentSpotifyPlayback.title !== null;
 
@@ -389,8 +391,8 @@ function renderSpotifyHomePlayer(): void {
   );
   elements.spotifyHomeOpen.textContent = backgrounded ? "Return to Spotify" : "Open Spotify";
   elements.spotifyHomeTitle.textContent = trackReady
-    ? currentSpotifyPlayback.title ?? "Keep the music going."
-    : "Keep the music going.";
+    ? currentSpotifyPlayback.title ?? "Spotify"
+    : "Spotify";
   elements.spotifyHomeStatus.textContent = trackReady
     ? currentSpotifyPlayback.artist ?? currentSpotifyPlayback.album ?? "Spotify"
     : backgrounded
@@ -893,6 +895,7 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   remove.className = "continue-remove";
   remove.dataset.navGroup = "continue-remove";
   remove.type = "button";
+  remove.hidden = !continueManaging;
   remove.textContent = "Remove";
   remove.setAttribute("aria-label", `Remove ${presentation.title} from Continue Watching`);
   remove.addEventListener("click", async () => {
@@ -916,14 +919,21 @@ function renderContinueWatching(): void {
   const visibleItems = continueWatchingItems.filter(
     (item) => enabledServiceIds.has(item.serviceId)
   );
+  const shelfItems = !continueManaging && visibleItems.length > 1
+    ? visibleItems.filter((item) => item.id !== featuredContinueItemId)
+    : visibleItems;
   elements.continueHint.textContent = visibleItems.length === 0
-    ? "Saved only on this computer"
-    : `${visibleItems.length} ${visibleItems.length === 1 ? "item" : "items"} saved locally`;
+    ? ""
+    : `${visibleItems.length} ${visibleItems.length === 1 ? "title" : "titles"}`;
+  elements.continueManage.hidden = visibleItems.length === 0;
+  elements.continueManage.textContent = continueManaging ? "Done" : "Manage";
 
-  if (visibleItems.length > 0) {
-    elements.continueActions.replaceChildren(...visibleItems.map(continueCard));
+  if (shelfItems.length > 0) {
+    elements.continueActions.replaceChildren(...shelfItems.map(continueCard));
     return;
   }
+
+  continueManaging = false;
 
   const placeholder = document.createElement("button");
   placeholder.className = "continue-card continue-placeholder";
@@ -961,12 +971,18 @@ function renderContinueWatching(): void {
   elements.continueActions.replaceChildren(placeholder);
 }
 
+elements.continueManage.addEventListener("click", () => {
+  continueManaging = !continueManaging;
+  renderContinueWatching();
+  elements.continueManage.focus({ preventScroll: true });
+});
+
 async function initializeContinueWatching(): Promise<void> {
   continueWatchingItems = await window.nhd.getContinueWatching();
-  renderContinueWatching();
   if (services.length > 0) {
     renderFeatured(orderedEnabledServices());
   }
+  renderContinueWatching();
 }
 
 async function openService(serviceId: string, serviceName: string): Promise<void> {
@@ -1046,10 +1062,7 @@ function serviceTile(service: ServiceSummary): HTMLButtonElement {
   footer.className = "service-tile-footer";
   const name = document.createElement("strong");
   name.textContent = service.name;
-  const arrow = document.createElement("span");
-  arrow.setAttribute("aria-hidden", "true");
-  arrow.textContent = "→";
-  footer.append(name, arrow);
+  footer.append(name);
   button.append(footer);
   button.addEventListener("click", () => void openService(service.id, service.name));
   return button;
@@ -1212,12 +1225,13 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
     featuredContinueItemId = null;
     featuredServiceId = null;
     delete elements.featuredSection.dataset.serviceId;
-    elements.featuredEyebrow.textContent = "Your home screen";
+    elements.featuredSection.dataset.mode = "empty";
+    elements.featuredEyebrow.textContent = "Apps";
     elements.featuredBrand.replaceChildren();
     elements.featuredIcon.className = "featured-icon is-lineup";
     elements.featuredIcon.replaceChildren();
-    elements.featuredTitle.textContent = "Build your lineup.";
-    elements.featuredCopy.textContent = "Open the Store and choose which services belong on Home.";
+    elements.featuredTitle.textContent = "Add your apps";
+    elements.featuredCopy.textContent = "Choose the services you use on this TV.";
     elements.heroOpenButton.disabled = false;
     elements.heroOpenButton.textContent = "Open Store";
     return;
@@ -1226,6 +1240,7 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
   featuredContinueItemId = recentItem?.id ?? null;
   featuredServiceId = featured.id;
   elements.featuredSection.dataset.serviceId = featured.id;
+  elements.featuredSection.dataset.mode = recentItem === undefined ? "launch" : "resume";
   elements.featuredBrand.replaceChildren(createServiceLockup(featured.id, featured.name));
   elements.featuredIcon.replaceChildren();
 
@@ -1261,12 +1276,10 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
       : `${presentation.subtitle} · ${playbackTime(remaining)} left in ${featured.name}.`;
     elements.heroOpenButton.textContent = "Resume";
   } else {
-    elements.featuredEyebrow.textContent = favoriteServiceIds.has(featured.id)
-      ? "Your favorite app"
-      : "First in your lineup";
-    elements.featuredTitle.textContent = "Your next watch starts here.";
-    elements.featuredCopy.textContent = `Open ${featured.name}, or choose another app below. Your local sign-in stays ready.`;
-    elements.heroOpenButton.textContent = `Open ${featured.name}`;
+    elements.featuredEyebrow.textContent = "Open app";
+    elements.featuredTitle.textContent = featured.name;
+    elements.featuredCopy.textContent = "Ready when you are.";
+    elements.heroOpenButton.textContent = "Open";
   }
   elements.heroOpenButton.disabled = false;
 }
@@ -1487,10 +1500,11 @@ function renderSearchResults(rawQuery: string): void {
       .slice(0, 6)
     : matchContinueWatching(continueWatchingItems, enabledServiceIds, query);
   const historyButtons = localResults.map((item) => {
+    const presentation = presentContinueWatching(item);
     const button = document.createElement("button");
     button.className = "search-result-card search-history-card";
     button.type = "button";
-    button.setAttribute("aria-label", `Resume ${item.title} in ${item.serviceName}`);
+    button.setAttribute("aria-label", `Resume ${presentation.title} in ${item.serviceName}`);
     const art = document.createElement("span");
     art.className = "search-history-art";
     if (item.artworkDataUrl !== null) {
@@ -1503,7 +1517,7 @@ function renderSearchResults(rawQuery: string): void {
     }
     const copy = document.createElement("span");
     const title = document.createElement("strong");
-    title.textContent = item.title;
+    title.textContent = presentation.title;
     const detail = document.createElement("small");
     detail.textContent = `Resume in ${item.serviceName}`;
     copy.append(title, detail);
@@ -1794,7 +1808,8 @@ elements.heroOpenButton.addEventListener("click", () => {
   if (featuredContinueItemId !== null) {
     const item = continueWatchingItems.find(({ id }) => id === featuredContinueItemId);
     if (item !== undefined) {
-      showFeedback(`Resuming ${item.title} in ${item.serviceName}…`);
+      const presentation = presentContinueWatching(item);
+      showFeedback(`Resuming ${presentation.title} in ${item.serviceName}…`);
       void window.nhd.resumeContinueWatching(item.id).catch((error) => {
         showFeedback(error instanceof Error ? error.message : String(error));
       });

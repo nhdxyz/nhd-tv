@@ -10,10 +10,7 @@
     <title>NHD-TV</title>
   </head>
   <body data-view="home">
-    <div class="shell-backdrop" aria-hidden="true">
-      <span class="backdrop-glow backdrop-glow-one"></span>
-      <span class="backdrop-glow backdrop-glow-two"></span>
-    </div>
+    <div class="shell-backdrop" aria-hidden="true"></div>
 
     <header class="topbar">
       <div class="brand" aria-label="NHD-TV">
@@ -183,13 +180,12 @@
     <main class="tv-shell">
       <section class="app-view home-view" id="home-view" data-view="home">
         <section class="featured" aria-labelledby="featured-title">
-          <div class="featured-wash" aria-hidden="true"></div>
           <div class="featured-content">
-            <p class="eyebrow" id="featured-eyebrow">Featured from your lineup</p>
+            <p class="eyebrow" id="featured-eyebrow">Home</p>
             <div class="featured-brand" id="featured-brand" aria-hidden="true"></div>
-            <h1 id="featured-title">Your services. One television.</h1>
+            <h1 id="featured-title">Choose something to watch</h1>
             <p class="featured-copy" id="featured-copy">
-              Pick up the remote and open a service without leaving NHD-TV.
+              Open an app or hold the microphone button and ask for it.
             </p>
             <div class="featured-actions" data-nav-group="featured-actions">
               <button class="primary-action" id="hero-open" type="button" disabled>
@@ -198,8 +194,6 @@
             </div>
           </div>
           <div class="featured-art" id="featured-art" aria-hidden="true">
-            <span class="featured-orbit featured-orbit-one"></span>
-            <span class="featured-orbit featured-orbit-two"></span>
             <div class="featured-icon is-lineup" id="featured-icon"></div>
           </div>
         </section>
@@ -214,10 +208,10 @@
         >
           <div class="spotify-home-brand" id="spotify-home-brand" aria-hidden="true"></div>
           <div class="spotify-home-copy">
-            <p class="eyebrow">Spotify on Home</p>
-            <h2 id="spotify-home-title">Keep the music going.</h2>
+            <p class="eyebrow">Now playing</p>
+            <h2 id="spotify-home-title">Spotify</h2>
             <p id="spotify-home-status" aria-live="polite">
-              Choose music in Spotify, then press Home to control it here.
+              Playback controls will appear when Spotify is active.
             </p>
           </div>
           <div class="spotify-home-transport" data-nav-group="spotify-home-transport">
@@ -253,7 +247,10 @@
         <section class="rail continue-rail" aria-labelledby="continue-title">
           <div class="section-heading">
             <h2 id="continue-title">Continue Watching</h2>
-            <span class="section-hint" id="continue-hint">Saved only on this computer</span>
+            <div class="section-heading-actions">
+              <span class="section-hint" id="continue-hint"></span>
+              <button class="text-action" id="continue-manage" type="button" hidden>Manage</button>
+            </div>
           </div>
           <div class="horizontal-row" id="continue-actions" data-nav-group="continue-row">
             <button class="continue-card continue-placeholder" id="continue-placeholder" type="button">
@@ -271,8 +268,8 @@
 
         <section class="rail services-rail" aria-labelledby="services-title">
           <div class="section-heading">
-            <h2 id="services-title">Your Apps</h2>
-            <button class="text-action" data-view-target="apps" type="button">Manage</button>
+            <h2 id="services-title">Apps</h2>
+            <button class="text-action" data-view-target="apps" type="button">All apps</button>
           </div>
           <div class="service-row horizontal-row" id="service-actions" data-nav-group="home-services"></div>
         </section>

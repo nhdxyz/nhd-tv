@@ -4,9 +4,9 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --muted: #a8b0bf;
-  --panel: rgb(18 21 29 / 82%);
-  --panel-solid: #131721;
+  --muted: #a9adb5;
+  --panel: #141518;
+  --panel-solid: #17181c;
   --rail-focus-gutter: 2.15rem;
   --safe-x: clamp(2.2rem, 4vw, 5.5rem);
   --stroke: rgb(255 255 255 / 13%);
@@ -615,26 +615,26 @@ summary:focus-visible {
 [data-remote-focused="true"] {
   position: relative;
   z-index: 80 !important;
-  outline: 0.38rem solid #67e8f9 !important;
-  outline-offset: 0.48rem !important;
+  outline: 0.3rem solid #f8fafc !important;
+  outline-offset: 0.38rem !important;
   box-shadow:
-    0 0 0 0.18rem #07111f,
-    0 0 0 0.72rem rgb(103 232 249 / 28%),
-    0 0 1.8rem rgb(56 189 248 / 72%) !important;
-  filter: brightness(1.16) saturate(1.08);
-  scale: 1.04;
-  animation: remote-focus-arrive 220ms ease-out;
+    0 0 0 0.16rem #070809,
+    0 0 0 0.62rem rgb(248 250 252 / 16%),
+    0 1.1rem 2.6rem rgb(0 0 0 / 45%) !important;
+  filter: brightness(1.1);
+  scale: 1.035;
+  animation: remote-focus-arrive 160ms ease-out;
 }
 
 @keyframes remote-focus-arrive {
   from {
-    outline-color: #fff;
-    scale: 0.98;
+    opacity: 0.82;
+    scale: 1;
   }
 
   to {
-    outline-color: #67e8f9;
-    scale: 1.04;
+    opacity: 1;
+    scale: 1.035;
   }
 }
 
@@ -643,32 +643,8 @@ summary:focus-visible {
   z-index: -2;
   inset: 0;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 2%), transparent 26rem),
-    #050608;
+  background: #08090b;
   pointer-events: none;
-}
-
-.backdrop-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(8rem);
-}
-
-.backdrop-glow-one {
-  top: -18rem;
-  right: -8rem;
-  width: 52rem;
-  height: 42rem;
-  background: rgb(37 99 235 / 15%);
-}
-
-.backdrop-glow-two {
-  bottom: -24rem;
-  left: -8rem;
-  width: 42rem;
-  height: 42rem;
-  background: rgb(109 40 217 / 11%);
 }
 
 .topbar {
@@ -678,10 +654,10 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  min-height: 5.15rem;
-  padding: 1rem var(--safe-x);
-  background: linear-gradient(180deg, rgb(5 6 8 / 96%), rgb(5 6 8 / 74%), transparent);
-  backdrop-filter: blur(18px);
+  min-height: 4.8rem;
+  padding: 0.78rem var(--safe-x);
+  background: linear-gradient(180deg, rgb(8 9 11 / 98%), rgb(8 9 11 / 82%), transparent);
+  backdrop-filter: blur(10px);
 }
 
 .brand {
@@ -698,15 +674,15 @@ summary:focus-visible {
 .avatar {
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #f8fafc, #cbd5e1);
+  background: #f4f4f5;
   color: #0b0d12;
-  box-shadow: inset 0 1px rgb(255 255 255 / 70%);
+  box-shadow: none;
 }
 
 .brand-mark {
   width: 2.35rem;
   height: 2.35rem;
-  border-radius: 0.72rem;
+  border-radius: 0.58rem;
   font-weight: 950;
 }
 
@@ -714,21 +690,21 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-self: center;
-  gap: 0.15rem;
-  padding: 0.22rem;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 999px;
-  background: rgb(8 10 15 / 58%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
+  gap: 0.45rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .nav-button {
-  padding: 0.68rem 1rem;
-  border-radius: 999px;
+  position: relative;
+  min-height: 2.9rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
   background: transparent;
   color: #aeb6c4;
   font-size: 0.92rem;
-  font-weight: 750;
+  font-weight: 650;
   transition: color 140ms ease, background 140ms ease;
 }
 
@@ -738,8 +714,19 @@ summary:focus-visible {
 }
 
 .nav-current {
-  background: rgb(255 255 255 / 13%);
+  background: transparent;
   color: #fff;
+}
+
+.nav-current::after {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.2rem;
+  left: 0.85rem;
+  height: 0.13rem;
+  border-radius: 999px;
+  background: #fff;
+  content: "";
 }
 
 .topbar-actions {
@@ -757,9 +744,9 @@ summary:focus-visible {
   align-items: center;
   min-height: 2.9rem;
   border: 1px solid var(--stroke);
-  border-radius: 999px;
-  background: rgb(13 15 21 / 84%);
-  backdrop-filter: blur(20px);
+  border-radius: 0.7rem;
+  background: rgb(20 21 24 / 88%);
+  backdrop-filter: blur(10px);
 }
 
 .settings-chip {
@@ -792,18 +779,17 @@ summary:focus-visible {
   min-height: 3.15rem;
   padding: 0;
   place-items: center;
-  border-color: rgb(147 197 253 / 28%);
-  background:
-    linear-gradient(145deg, rgb(30 58 102 / 82%), rgb(17 24 39 / 88%));
-  color: #eef6ff;
-  box-shadow: inset 0 1px rgb(255 255 255 / 9%), 0 0.6rem 1.8rem rgb(15 23 42 / 28%);
+  border-color: var(--stroke);
+  background: rgb(20 21 24 / 92%);
+  color: #f4f4f5;
+  box-shadow: none;
 }
 
 .search-chip svg {
   width: 1.28rem;
   height: 1.28rem;
   fill: none;
-  stroke: #bfdbfe;
+  stroke: currentColor;
   stroke-linecap: round;
   stroke-width: 2;
 }
@@ -811,26 +797,26 @@ summary:focus-visible {
 .remote-invite {
   position: fixed;
   z-index: 46;
-  top: 5.5rem;
+  top: 5.1rem;
   right: var(--safe-x);
   display: flex;
-  width: min(21rem, calc(100vw - (var(--safe-x) * 2)));
+  width: min(17rem, calc(100vw - (var(--safe-x) * 2)));
   align-items: center;
-  gap: 0.95rem;
-  padding: 0.7rem;
-  border: 1px solid rgb(147 197 253 / 30%);
-  border-radius: 1.25rem;
-  background: rgb(7 11 18 / 92%);
-  box-shadow: 0 1.2rem 3.2rem rgb(0 0 0 / 46%);
-  backdrop-filter: blur(24px);
+  gap: 0.8rem;
+  padding: 0.6rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.85rem;
+  background: rgb(12 13 16 / 96%);
+  box-shadow: 0 1rem 2.4rem rgb(0 0 0 / 40%);
+  backdrop-filter: blur(12px);
 }
 
 .remote-invite img {
-  width: 7.6rem;
-  height: 7.6rem;
+  width: 5.6rem;
+  height: 5.6rem;
   flex: 0 0 auto;
-  border: 0.42rem solid #fff;
-  border-radius: 0.9rem;
+  border: 0.3rem solid #fff;
+  border-radius: 0.55rem;
   background: #fff;
 }
 
@@ -1133,100 +1119,81 @@ summary:focus-visible {
 }
 
 .featured {
+  --featured-tint: 82 82 91;
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(24rem, 0.95fr);
-  align-items: center;
-  min-height: clamp(19rem, 38vh, 28rem);
-  margin: -5.15rem calc(var(--safe-x) * -1) 0;
+  display: flex;
+  min-height: clamp(25rem, 56vh, 39rem);
+  margin: -4.8rem calc(var(--safe-x) * -1) 0;
   overflow: hidden;
-  padding: 5.55rem var(--safe-x) 1.45rem;
+  padding: clamp(13rem, 32vh, 21rem) var(--safe-x) 3.1rem;
+  align-items: flex-end;
   background:
-    radial-gradient(circle at 82% 38%, rgb(239 68 68 / 26%), transparent 27rem),
-    linear-gradient(105deg, #090b10 0%, #13121a 47%, #220c12 100%);
+    radial-gradient(circle at 78% 35%, rgb(var(--featured-tint) / 16%), transparent 34rem),
+    #0a0b0d;
 }
 
 .featured[data-service-id="youtube"] {
-  background:
-    radial-gradient(circle at 82% 38%, rgb(255 0 0 / 24%), transparent 27rem),
-    linear-gradient(105deg, #090b10 0%, #171013 50%, #250b0e 100%);
+  --featured-tint: 229 9 20;
 }
 
 .featured[data-service-id="disney-plus"] {
-  background:
-    radial-gradient(circle at 82% 38%, rgb(59 130 246 / 34%), transparent 29rem),
-    linear-gradient(105deg, #060a13 0%, #09172e 52%, #0c2552 100%);
+  --featured-tint: 37 99 235;
 }
 
 .featured[data-service-id="spotify"] {
-  background:
-    radial-gradient(circle at 82% 38%, rgb(29 185 84 / 34%), transparent 29rem),
-    linear-gradient(105deg, #050907 0%, #0a1c11 52%, #0c3820 100%);
+  --featured-tint: 30 215 96;
 }
 
 .featured[data-service-id="shaka-demo"] {
-  background:
-    radial-gradient(circle at 82% 38%, rgb(16 185 129 / 27%), transparent 29rem),
-    linear-gradient(105deg, #060b0a 0%, #0b1e18 52%, #0b3427 100%);
+  --featured-tint: 16 185 129;
 }
 
 .featured[data-service-id="prime-video"] {
-  background: radial-gradient(circle at 82% 38%, rgb(0 168 225 / 32%), transparent 29rem), linear-gradient(105deg, #05090d 0%, #071b27 52%, #07364d 100%);
+  --featured-tint: 0 168 225;
 }
 
 .featured[data-service-id="hulu"] {
-  background: radial-gradient(circle at 82% 38%, rgb(28 231 131 / 28%), transparent 29rem), linear-gradient(105deg, #050a07 0%, #081b12 52%, #0b3a23 100%);
+  --featured-tint: 28 231 131;
 }
 
 .featured[data-service-id="hbo-max"] {
-  background: radial-gradient(circle at 82% 38%, rgb(124 58 237 / 34%), transparent 29rem), linear-gradient(105deg, #08060d 0%, #160d2a 52%, #30135e 100%);
+  --featured-tint: 124 58 237;
 }
 
 .featured[data-service-id="peacock"] {
-  background: radial-gradient(circle at 82% 38%, rgb(250 204 21 / 25%), transparent 27rem), linear-gradient(105deg, #08080a 0%, #17131a 52%, #372d0a 100%);
+  --featured-tint: 250 204 21;
 }
 
 .featured[data-service-id="paramount-plus"] {
-  background: radial-gradient(circle at 82% 38%, rgb(37 99 235 / 36%), transparent 29rem), linear-gradient(105deg, #050810 0%, #07172f 52%, #0b3274 100%);
+  --featured-tint: 37 99 235;
 }
 
 .featured[data-service-id="apple-tv"] {
-  background: radial-gradient(circle at 82% 38%, rgb(148 163 184 / 24%), transparent 29rem), linear-gradient(105deg, #060708 0%, #101216 52%, #222730 100%);
+  --featured-tint: 148 163 184;
 }
 
 .featured[data-service-id="plex"] {
-  background: radial-gradient(circle at 82% 38%, rgb(229 160 13 / 29%), transparent 28rem), linear-gradient(105deg, #080805 0%, #1b1609 52%, #443305 100%);
+  --featured-tint: 229 160 13;
 }
 
 .featured[data-service-id="twitch"] {
-  background: radial-gradient(circle at 82% 38%, rgb(145 70 255 / 35%), transparent 29rem), linear-gradient(105deg, #08060d 0%, #170d2b 52%, #35126b 100%);
+  --featured-tint: 145 70 255;
 }
 
 .featured::after {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgb(5 6 8 / 96%) 0%, rgb(5 6 8 / 45%) 52%, transparent 76%),
-    linear-gradient(0deg, #050608 0%, transparent 25%);
+    linear-gradient(90deg, rgb(7 8 10 / 98%) 0%, rgb(7 8 10 / 88%) 32%, rgb(7 8 10 / 28%) 68%, transparent 100%),
+    linear-gradient(0deg, #08090b 0%, rgb(8 9 11 / 72%) 18%, transparent 56%);
   content: "";
   pointer-events: none;
-}
-
-.featured-wash {
-  position: absolute;
-  inset: 0;
-  opacity: 0.18;
-  background-image:
-    linear-gradient(rgb(255 255 255 / 7%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 7%) 1px, transparent 1px);
-  background-size: 5rem 5rem;
-  mask-image: linear-gradient(90deg, transparent, #000);
 }
 
 .featured-content {
   position: relative;
   z-index: 3;
-  max-width: 47rem;
+  max-width: 44rem;
 }
 
 .eyebrow,
@@ -1242,24 +1209,24 @@ summary:focus-visible {
 .featured-brand {
   display: flex;
   align-items: center;
-  min-height: 2.4rem;
-  margin-top: 0.5rem;
+  min-height: 1.9rem;
+  margin-top: 0.65rem;
   color: #fff;
-  font-size: clamp(1.9rem, 3.2vw, 3.25rem);
-  font-weight: 900;
-  letter-spacing: -0.06em;
+  font-size: clamp(1rem, 1.55vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .featured-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.55rem;
 }
 
 .featured-lockup .service-logo,
 .featured-lockup .service-monogram {
-  width: clamp(2.2rem, 3vw, 3.1rem);
-  height: clamp(2.2rem, 3vw, 3.1rem);
+  width: clamp(1.55rem, 2vw, 2rem);
+  height: clamp(1.55rem, 2vw, 2rem);
 }
 
 .featured-service-name {
@@ -1268,30 +1235,33 @@ summary:focus-visible {
 
 .featured h1 {
   max-width: 43rem;
-  margin: 0.45rem 0 0;
-  font-size: clamp(2.05rem, 3.25vw, 3.45rem);
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  margin: 0.55rem 0 0;
+  font-size: clamp(3rem, 5vw, 5.25rem);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+  line-height: 0.96;
 }
 
 .featured-copy {
   max-width: 38rem;
-  margin: 0.65rem 0 0;
-  color: #c8ced8;
-  font-size: clamp(0.98rem, 1.3vw, 1.18rem);
-  line-height: 1.45;
+  margin: 0.8rem 0 0;
+  color: #d1d3d7;
+  font-size: clamp(1rem, 1.45vw, 1.3rem);
+  line-height: 1.4;
 }
 
 .featured-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 0.95rem;
+  margin-top: 1.25rem;
 }
 
 .featured-actions .primary-action,
 .featured-actions .secondary-action {
-  min-height: 3rem;
+  min-height: 3.4rem;
+  border-radius: 0.55rem;
+  box-shadow: none;
 }
 
 .primary-action,
@@ -1316,55 +1286,53 @@ summary:focus-visible {
 }
 
 .featured-art {
-  position: relative;
-  z-index: 2;
+  position: absolute;
+  z-index: 0;
+  inset: 0;
   display: grid;
-  min-height: 13.5rem;
+  min-height: 0;
   place-items: center;
 }
 
 .featured-icon {
   position: relative;
-  z-index: 2;
+  z-index: 0;
   display: block;
 }
 
 .featured-icon.is-lineup {
-  width: clamp(15rem, 21vw, 20rem);
-  aspect-ratio: 1;
-  transform: rotate(-3deg);
+  position: absolute;
+  top: 50%;
+  right: var(--safe-x);
+  display: grid;
+  width: min(34vw, 29rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  transform: translateY(-42%);
 }
 
 .featured-stack-item {
-  position: absolute;
+  position: relative;
   display: grid;
-  width: 55%;
+  width: 100%;
   aspect-ratio: 1;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 2rem;
-  background: rgb(3 4 7 / 74%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 14%), 0 2rem 5rem rgb(0 0 0 / 42%);
-  backdrop-filter: blur(26px);
+  border-radius: 0.9rem;
+  background: rgb(17 18 21 / 92%);
+  box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 28%);
 }
 
 .featured-stack-item-1 {
-  z-index: 3;
-  bottom: 8%;
-  left: 8%;
+  z-index: 1;
 }
 
 .featured-stack-item-2 {
-  z-index: 2;
-  top: 5%;
-  right: 8%;
-  scale: 0.82;
+  z-index: 1;
 }
 
 .featured-stack-item-3 {
-  right: 1%;
-  bottom: 0;
-  scale: 0.66;
+  z-index: 1;
 }
 
 .featured-stack-item .service-logo,
@@ -1379,37 +1347,29 @@ summary:focus-visible {
 }
 
 .featured-icon.has-artwork {
-  width: clamp(19rem, 32vw, 32rem);
-  aspect-ratio: 16 / 9;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 1.6rem;
+  border: 0;
+  border-radius: 0;
   background: #0b0e14;
-  box-shadow: inset 0 1px rgb(255 255 255 / 14%), 0 2.5rem 7rem rgb(0 0 0 / 52%);
-  transform: perspective(60rem) rotateY(-7deg) rotateZ(1deg);
+  box-shadow: none;
+  transform: none;
 }
 
 .featured-poster {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center 35%;
+  opacity: 0.82;
 }
 
-.featured-orbit {
-  position: absolute;
-  border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 50%;
-}
-
-.featured-orbit-one {
-  width: 20rem;
-  height: 20rem;
-}
-
-.featured-orbit-two {
-  width: 29rem;
-  height: 29rem;
-  opacity: 0.58;
+.featured[data-mode="launch"] .featured-brand,
+.featured[data-mode="empty"] .featured-brand {
+  display: none;
 }
 
 .spotify-home-player {
@@ -1418,33 +1378,19 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(16rem, 1fr) auto auto;
   align-items: center;
-  gap: clamp(1rem, 2vw, 2rem);
-  min-height: 7.5rem;
-  margin-top: -0.15rem;
-  padding: 1rem 1.1rem 1rem 1.25rem;
+  gap: clamp(0.8rem, 1.5vw, 1.4rem);
+  min-height: 5.8rem;
+  margin-top: 1.35rem;
+  padding: 0.75rem 0.9rem;
   overflow: hidden;
-  border: 1px solid rgb(30 215 96 / 25%);
-  border-radius: 1.35rem;
-  background:
-    radial-gradient(circle at 7% 25%, rgb(30 215 96 / 22%), transparent 10rem),
-    linear-gradient(105deg, rgb(10 24 15 / 98%), rgb(13 17 15 / 98%) 52%, rgb(8 10 9 / 98%));
-  box-shadow: inset 0 1px rgb(255 255 255 / 7%), 0 1.4rem 3.5rem rgb(0 0 0 / 26%);
-}
-
-.spotify-home-player::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 62%, rgb(30 215 96 / 5%));
-  content: "";
-  pointer-events: none;
+  border: 1px solid rgb(30 215 96 / 22%);
+  border-radius: 0.85rem;
+  background: #111613;
+  box-shadow: 0 0.9rem 2.4rem rgb(0 0 0 / 22%);
 }
 
 .spotify-home-player[data-active="true"] {
-  border-color: rgb(30 215 96 / 48%);
-  box-shadow:
-    inset 0 1px rgb(255 255 255 / 9%),
-    0 0 0 1px rgb(30 215 96 / 7%),
-    0 1.5rem 4rem rgb(0 0 0 / 32%);
+  border-color: rgb(30 215 96 / 34%);
 }
 
 .spotify-home-brand,
@@ -1457,18 +1403,18 @@ summary:focus-visible {
 
 .spotify-home-brand {
   display: grid;
-  width: 4.75rem;
-  height: 4.75rem;
+  width: 4.15rem;
+  height: 4.15rem;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 9%);
-  border-radius: 1.15rem;
-  background: rgb(0 0 0 / 24%);
+  border-radius: 0.65rem;
+  background: #090b0a;
 }
 
 .spotify-home-brand .service-logo,
 .spotify-home-brand .service-monogram {
-  width: 3.25rem;
-  height: 3.25rem;
+  width: 2.8rem;
+  height: 2.8rem;
 }
 
 .spotify-home-brand img {
@@ -1488,15 +1434,16 @@ summary:focus-visible {
 
 .spotify-home-copy h2 {
   margin: 0.18rem 0 0;
-  font-size: clamp(1.35rem, 2vw, 1.9rem);
-  letter-spacing: -0.035em;
+  font-size: clamp(1.15rem, 1.6vw, 1.5rem);
+  font-weight: 680;
+  letter-spacing: -0.025em;
 }
 
 .spotify-home-copy p:last-child {
   overflow: hidden;
   margin: 0.25rem 0 0;
   color: #aeb8b1;
-  font-size: clamp(0.84rem, 1.05vw, 1rem);
+  font-size: clamp(0.82rem, 1vw, 0.95rem);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1509,8 +1456,8 @@ summary:focus-visible {
 
 .spotify-home-transport button {
   display: grid;
-  width: 3.15rem;
-  height: 3.15rem;
+  width: 2.85rem;
+  height: 2.85rem;
   padding: 0;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 13%);
@@ -1538,12 +1485,12 @@ summary:focus-visible {
 }
 
 .spotify-home-transport .spotify-home-play {
-  width: 4rem;
-  height: 4rem;
+  width: 3.35rem;
+  height: 3.35rem;
   border-color: transparent;
   background: #1ed760;
   color: #061008;
-  box-shadow: 0 0.8rem 2.2rem rgb(30 215 96 / 18%);
+  box-shadow: none;
 }
 
 .spotify-home-transport .spotify-home-play:not(:disabled):hover,
@@ -1562,10 +1509,10 @@ summary:focus-visible {
 }
 
 .spotify-home-open {
-  min-height: 3.2rem;
+  min-height: 2.9rem;
   padding: 0 1.25rem;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 999px;
+  border-radius: 0.55rem;
   background: rgb(255 255 255 / 9%);
   color: #fff;
   font-weight: 850;
@@ -1582,7 +1529,7 @@ summary:focus-visible {
   min-height: 2.7rem;
   padding: 0 1.25rem;
   border: 1px solid rgb(30 215 96 / 35%);
-  border-radius: 999px;
+  border-radius: 0.55rem;
   background: rgb(30 215 96 / 12%);
   color: #dfffea;
   font-weight: 820;
@@ -1613,7 +1560,7 @@ summary:focus-visible {
 .rail {
   position: relative;
   z-index: 1;
-  margin-top: 2.2rem;
+  margin-top: 2.5rem;
 }
 
 .rail:focus-within {
@@ -1625,7 +1572,13 @@ summary:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.section-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 .rail-scroll-controls {
@@ -1662,20 +1615,22 @@ summary:focus-visible {
 
 h2 {
   margin: 0;
-  font-size: clamp(1.35rem, 2vw, 1.9rem);
-  letter-spacing: -0.035em;
+  font-size: clamp(1.65rem, 2.35vw, 2.25rem);
+  font-weight: 680;
+  letter-spacing: -0.03em;
 }
 
 .section-hint,
 .text-action {
-  color: #9fa8b7;
-  font-size: 0.9rem;
-  font-weight: 700;
+  color: #a9adb5;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .text-action {
-  padding: 0.55rem 0.8rem;
-  border-radius: 999px;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
   background: transparent;
 }
 
@@ -1688,7 +1643,7 @@ h2 {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 1rem;
+  gap: 0.9rem;
   width: calc(100% + var(--safe-x));
   overflow-x: auto;
   overflow-y: visible;
@@ -1716,8 +1671,8 @@ h2 {
 
 .continue-card-shell {
   position: relative;
-  width: clamp(19rem, 27vw, 23rem);
-  min-width: clamp(19rem, 27vw, 23rem);
+  width: clamp(21rem, 29vw, 27rem);
+  min-width: clamp(21rem, 29vw, 27rem);
   scroll-snap-align: start;
 }
 
@@ -1731,15 +1686,15 @@ h2 {
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--stroke);
-  border-radius: 1.15rem;
+  border-radius: 0.8rem;
   background: var(--panel);
   text-align: left;
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .continue-placeholder {
-  width: clamp(19rem, 27vw, 23rem);
-  min-width: clamp(19rem, 27vw, 23rem);
+  width: clamp(21rem, 29vw, 27rem);
+  min-width: clamp(21rem, 29vw, 27rem);
   scroll-snap-align: start;
 }
 
@@ -1747,8 +1702,8 @@ h2 {
 .continue-card:focus-visible {
   z-index: 3;
   border-color: rgb(255 255 255 / 38%);
-  box-shadow: 0 1.6rem 3.5rem rgb(0 0 0 / 42%);
-  transform: translateY(-0.28rem) scale(1.018);
+  box-shadow: 0 1.2rem 2.8rem rgb(0 0 0 / 40%);
+  transform: translateY(-0.2rem) scale(1.015);
 }
 
 .continue-art {
@@ -1815,8 +1770,8 @@ h2 {
   min-width: 0;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 4rem 3.85rem 0.78rem 1rem;
-  background: linear-gradient(180deg, transparent 18%, rgb(3 5 9 / 93%) 100%);
+  padding: 4.5rem 3.85rem 0.9rem 1rem;
+  background: linear-gradient(180deg, transparent 18%, rgb(5 6 8 / 94%) 100%);
   pointer-events: none;
   text-shadow: 0 0.12rem 0.5rem rgb(0 0 0 / 72%);
 }
@@ -1824,17 +1779,18 @@ h2 {
 .continue-meta strong {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 1rem;
-  line-height: 1.15;
+  font-size: 1.12rem;
+  font-weight: 650;
+  line-height: 1.2;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   white-space: normal;
 }
 
 .continue-meta small {
   margin-top: 0.28rem;
   color: #d1d5db;
-  font-size: 0.76rem;
+  font-size: 0.84rem;
 }
 
 .continue-meta .continue-detail {
@@ -1848,15 +1804,15 @@ h2 {
   z-index: 4;
   top: 0.65rem;
   right: 0.65rem;
-  min-width: 4.25rem;
-  min-height: 2rem;
+  min-width: 4.8rem;
+  min-height: 2.65rem;
   padding: 0 0.65rem;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 999px;
-  background: rgb(5 8 14 / 72%);
-  color: #cbd5e1;
-  font-size: 0.78rem;
-  font-weight: 850;
+  border-radius: 0.5rem;
+  background: rgb(18 19 22 / 94%);
+  color: #e4e4e7;
+  font-size: 0.84rem;
+  font-weight: 650;
 }
 
 .continue-remove:hover,
@@ -1873,16 +1829,16 @@ h2 {
 .continue-meta .continue-service {
   order: -1;
   margin: 0 0 0.25rem;
-  color: #bfdbfe;
-  font-size: 0.66rem;
-  font-weight: 900;
-  letter-spacing: 0.11em;
+  color: #d4d4d8;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .placeholder-progress {
   width: 100%;
-  height: 0.25rem;
+  height: 0.22rem;
   margin-top: 0.65rem;
   overflow: hidden;
   border-radius: 999px;
@@ -1893,7 +1849,7 @@ h2 {
   display: block;
   width: 24%;
   height: 100%;
-  background: #60a5fa;
+  background: #f4f4f5;
 }
 
 .continue-empty-cue {
@@ -1937,6 +1893,39 @@ h2 {
   justify-content: space-between;
   padding: 1.3rem;
   border-radius: 1.2rem;
+}
+
+.home-view .service-tile {
+  width: clamp(12.5rem, 17vw, 16rem);
+  min-width: clamp(12.5rem, 17vw, 16rem);
+  aspect-ratio: 16 / 9;
+  padding: 0.9rem;
+  border-radius: 0.8rem;
+  background: #141518;
+  box-shadow: none;
+}
+
+.home-view .service-tile::after {
+  display: none;
+}
+
+.home-view .service-tile > .service-logo,
+.home-view .service-tile > .service-monogram {
+  width: 3.9rem;
+  height: 3.9rem;
+}
+
+.home-view .service-tile > .service-wordmark {
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.home-view .service-tile-footer {
+  justify-content: flex-start;
+}
+
+.home-view .service-tile-footer strong {
+  font-size: 0.92rem;
+  font-weight: 620;
 }
 
 .service-tile::after,
@@ -2027,6 +2016,10 @@ h2 {
 .service-tile[data-service-id="twitch"],
 .catalog-card[data-service-id="twitch"] {
   background: radial-gradient(circle at 84% 18%, #9146ff, transparent 10rem), #160b28;
+}
+
+.home-view .service-tile[data-service-id] {
+  background: #141518;
 }
 
 .service-logo {
@@ -3607,7 +3600,11 @@ h2 {
   }
 
   .featured {
-    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+    min-height: clamp(24rem, 56vh, 31rem);
+  }
+
+  .featured-icon.is-lineup {
+    width: min(30vw, 23rem);
   }
 
   .spotify-home-player {
@@ -3641,16 +3638,13 @@ h2 {
 
 @media (max-height: 760px) {
   .featured {
-    min-height: 19rem;
-    padding-bottom: 1.3rem;
-  }
-
-  .featured-art {
-    min-height: 13.5rem;
+    min-height: 23rem;
+    padding-top: 10rem;
+    padding-bottom: 2rem;
   }
 
   .spotify-home-player {
-    min-height: 6.75rem;
+    min-height: 5.4rem;
   }
 
   .rail {

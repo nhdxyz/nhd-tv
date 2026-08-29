@@ -21,6 +21,7 @@ import {
 } from "../main/media-actions";
 import { GamepadInput, type GamepadLike } from "./gamepad-input";
 import { NavigationSounds } from "./navigation-sounds";
+import { presentContinueWatching } from "./content-presentation";
 import { matchContinueWatching } from "./search-history";
 import { createServiceLockup, createServiceMark } from "./service-branding";
 import {
@@ -831,6 +832,7 @@ function playbackTime(seconds: number): string {
 }
 
 function continueCard(item: ContinueWatchingItem): HTMLElement {
+  const presentation = presentContinueWatching(item);
   const shell = document.createElement("article");
   shell.className = "continue-card-shell";
   shell.dataset.serviceId = item.serviceId;
@@ -838,7 +840,7 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   const button = document.createElement("button");
   button.className = "continue-card continue-card-item";
   button.type = "button";
-  button.setAttribute("aria-label", `Resume ${item.title} in ${item.serviceName}`);
+  button.setAttribute("aria-label", `Resume ${presentation.title} in ${item.serviceName}`);
 
   const art = document.createElement("span");
   art.className = "continue-art";
@@ -863,13 +865,13 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   service.className = "continue-service";
   service.textContent = item.serviceName;
   const title = document.createElement("strong");
-  title.textContent = item.title;
+  title.textContent = presentation.title;
   const remaining = Math.max(0, item.durationSeconds - item.positionSeconds);
   const detail = document.createElement("small");
   detail.className = "continue-detail";
-  detail.textContent = item.subtitle === null
+  detail.textContent = presentation.subtitle === null
     ? `${playbackTime(remaining)} left`
-    : `${item.subtitle} · ${playbackTime(remaining)} left`;
+    : `${presentation.subtitle} · ${playbackTime(remaining)} left`;
   const progress = document.createElement("span");
   progress.className = "placeholder-progress";
   progress.setAttribute("aria-hidden", "true");
@@ -879,7 +881,7 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   meta.append(service, title, detail, progress);
   button.append(art, meta);
   button.addEventListener("click", async () => {
-    showFeedback(`Resuming ${item.title} in ${item.serviceName}…`);
+    showFeedback(`Resuming ${presentation.title} in ${item.serviceName}…`);
     try {
       await window.nhd.resumeContinueWatching(item.id);
     } catch (error) {
@@ -892,13 +894,13 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   remove.dataset.navGroup = "continue-remove";
   remove.type = "button";
   remove.textContent = "Remove";
-  remove.setAttribute("aria-label", `Remove ${item.title} from Continue Watching`);
+  remove.setAttribute("aria-label", `Remove ${presentation.title} from Continue Watching`);
   remove.addEventListener("click", async () => {
     remove.disabled = true;
     try {
       const removed = await window.nhd.removeContinueWatching(item.id);
       showFeedback(removed
-        ? `${item.title} removed from Continue Watching.`
+        ? `${presentation.title} removed from Continue Watching.`
         : "That Continue Watching item was already removed.");
     } catch (error) {
       remove.disabled = false;
@@ -1250,13 +1252,14 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
   }
 
   if (recentItem !== undefined) {
+    const presentation = presentContinueWatching(recentItem);
     const remaining = Math.max(0, recentItem.durationSeconds - recentItem.positionSeconds);
     elements.featuredEyebrow.textContent = "Continue watching";
-    elements.featuredTitle.textContent = `Continue ${recentItem.title}`;
-    elements.featuredCopy.textContent = recentItem.subtitle === null
+    elements.featuredTitle.textContent = presentation.title;
+    elements.featuredCopy.textContent = presentation.subtitle === null
       ? `${playbackTime(remaining)} left in ${featured.name}.`
-      : `${recentItem.subtitle} · ${playbackTime(remaining)} left in ${featured.name}.`;
-    elements.heroOpenButton.textContent = "Resume watching";
+      : `${presentation.subtitle} · ${playbackTime(remaining)} left in ${featured.name}.`;
+    elements.heroOpenButton.textContent = "Resume";
   } else {
     elements.featuredEyebrow.textContent = favoriteServiceIds.has(featured.id)
       ? "Your favorite app"

@@ -710,19 +710,26 @@
       <div class="profile-dialog-shell voice-dialog-shell">
         <header class="remote-dialog-header">
           <div>
-            <p class="eyebrow">AI voice control</p>
-            <h2 id="voice-title">Talk to NHD-TV.</h2>
+            <p class="eyebrow">Settings</p>
+            <h2 id="voice-title">Voice setup</h2>
           </div>
           <button class="dialog-close" id="voice-close" type="button" aria-label="Close voice settings">×</button>
         </header>
-        <p class="profile-privacy">Your API key is encrypted with this computer's operating-system credential protection. It is never sent to the phone remote or streaming apps.</p>
+        <p class="profile-privacy">Connect your OpenAI account and choose the region used for where-to-watch results.</p>
         <section class="voice-settings-section" aria-labelledby="voice-key-title">
-          <div>
-            <h3 id="voice-key-title">OpenAI API key</h3>
-            <p id="voice-key-status" role="status" aria-live="polite">Checking secure storage…</p>
+          <div class="voice-settings-section-heading">
+            <div>
+              <h3 id="voice-key-title">OpenAI API key</h3>
+              <p>Your key is encrypted by this computer and is never sent to the phone remote or streaming apps.</p>
+            </div>
+            <div class="voice-key-state" id="voice-key-state" data-state="checking">
+              <span aria-hidden="true"></span>
+              <strong>Checking…</strong>
+            </div>
           </div>
+          <p class="voice-key-status" id="voice-key-status" role="status" aria-live="polite">Checking secure storage…</p>
           <form class="voice-settings-form" id="voice-key-form">
-            <label for="voice-key-input">Replace saved key</label>
+            <label id="voice-key-label" for="voice-key-input">Add API key</label>
             <div>
               <input
                 id="voice-key-input"
@@ -731,18 +738,22 @@
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck="false"
-                placeholder="Paste an OpenAI API key"
+                placeholder="Enter an OpenAI API key"
+                aria-describedby="voice-key-status voice-key-error"
                 required
               />
-              <button class="primary-action" type="submit">Save key</button>
+              <button class="primary-action" id="voice-key-submit" type="submit">Add key</button>
             </div>
           </form>
+          <p class="voice-inline-error" id="voice-key-error" role="alert" hidden></p>
           <button class="danger-secondary-action voice-remove-key" id="voice-remove-key" type="button">Remove saved key</button>
         </section>
         <section class="voice-settings-section" aria-labelledby="voice-region-title">
-          <div>
+          <div class="voice-settings-section-heading">
+            <div>
             <h3 id="voice-region-title">Where-to-watch region</h3>
-            <p>Leave this blank for automatic detection, or enter a two-letter country code such as US, CA, or GB.</p>
+              <p>Leave this blank for automatic detection, or enter a two-letter country code such as US, CA, or GB.</p>
+            </div>
           </div>
           <form class="voice-settings-form" id="voice-region-form">
             <label for="voice-region-input">Country code</label>
@@ -754,12 +765,14 @@
                 autocapitalize="characters"
                 spellcheck="false"
                 placeholder="Auto"
+                aria-describedby="voice-region-error"
               />
               <button class="secondary-action" type="submit">Save region</button>
             </div>
           </form>
+          <p class="voice-inline-error" id="voice-region-error" role="alert" hidden></p>
         </section>
-        <p class="voice-privacy-note">NHD-TV does not save microphone audio or transcripts. OpenAI API usage and data controls are governed by the OpenAI account connected to the saved key.</p>
+        <p class="voice-privacy-note">NHD-TV does not save microphone audio or transcripts. OpenAI API usage and data controls are governed by the OpenAI account connected to this key.</p>
       </div>
     </dialog>
 

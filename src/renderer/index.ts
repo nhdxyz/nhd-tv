@@ -223,13 +223,18 @@ const elements = {
   voiceControlCopy: requireElement<HTMLElement>("#voice-control-copy", "voice-control-copy"),
   voiceControlToggle: requireElement<HTMLButtonElement>("#voice-control-toggle", "voice-control-toggle"),
   voiceDialog: requireElement<HTMLDialogElement>("#voice-dialog", "voice-dialog"),
+  voiceKeyError: requireElement<HTMLElement>("#voice-key-error", "voice-key-error"),
   voiceKeyForm: requireElement<HTMLFormElement>("#voice-key-form", "voice-key-form"),
   voiceKeyInput: requireElement<HTMLInputElement>("#voice-key-input", "voice-key-input"),
+  voiceKeyLabel: requireElement<HTMLLabelElement>("#voice-key-label", "voice-key-label"),
+  voiceKeyState: requireElement<HTMLElement>("#voice-key-state", "voice-key-state"),
   voiceKeyStatus: requireElement<HTMLElement>("#voice-key-status", "voice-key-status"),
+  voiceKeySubmit: requireElement<HTMLButtonElement>("#voice-key-submit", "voice-key-submit"),
   voicePlaybackMode: requireElement<HTMLButtonElement>("#voice-playback-mode", "voice-playback-mode"),
   voicePlaybackModeCopy: requireElement<HTMLElement>("#voice-playback-mode-copy", "voice-playback-mode-copy"),
   voiceRegionButton: requireElement<HTMLButtonElement>("#voice-region-button", "voice-region-button"),
   voiceRegionCopy: requireElement<HTMLElement>("#voice-region-copy", "voice-region-copy"),
+  voiceRegionError: requireElement<HTMLElement>("#voice-region-error", "voice-region-error"),
   voiceRegionForm: requireElement<HTMLFormElement>("#voice-region-form", "voice-region-form"),
   voiceRegionInput: requireElement<HTMLInputElement>("#voice-region-input", "voice-region-input"),
   voiceRemoveKey: requireElement<HTMLButtonElement>("#voice-remove-key", "voice-remove-key"),
@@ -614,10 +619,38 @@ async function refreshStatus(): Promise<void> {
 
 function renderOpenAiCredentialStatus(status: OpenAiCredentialStatus): void {
   openAiCredentialStatus = status;
-  elements.voiceSettingsButton.dataset.connected = String(status.state === "configured");
+  const configured = status.state === "configured";
+  const unavailable = status.state === "unavailable";
+  elements.voiceSettingsButton.dataset.connected = String(configured);
   elements.voiceSettingsCopy.textContent = status.detail;
   elements.voiceKeyStatus.textContent = status.detail;
-  elements.voiceRemoveKey.disabled = status.state !== "configured";
+  elements.voiceKeyState.dataset.state = status.state;
+  const stateLabel = status.state === "configured"
+    ? "Configured"
+    : status.state === "invalid"
+      ? "Needs attention"
+      : status.state === "unavailable"
+        ? "Unavailable"
+        : "Not configured";
+  const stateCopy = elements.voiceKeyState.querySelector<HTMLElement>("strong");
+  if (stateCopy !== null) stateCopy.textContent = stateLabel;
+  elements.voiceKeyLabel.textContent = configured || status.state === "invalid"
+    ? "Replace API key"
+    : "Add API key";
+  elements.voiceKeySubmit.textContent = configured || status.state === "invalid"
+    ? "Replace key"
+    : "Add key";
+  elements.voiceKeyInput.placeholder = configured || status.state === "invalid"
+    ? "Enter a new OpenAI API key"
+    : "Enter an OpenAI API key";
+  elements.voiceKeyInput.disabled = unavailable;
+  elements.voiceKeySubmit.disabled = unavailable;
+  elements.voiceRemoveKey.disabled = status.state === "missing" || unavailable;
+}
+
+function setVoiceInlineError(element: HTMLElement, message: string | null): void {
+  element.textContent = message ?? "";
+  element.hidden = message === null;
 }
 
 function applyLocalAppState(state: LocalAppState): void {
@@ -2304,49 +2337,77 @@ elements.remoteDeny.addEventListener("click", () => {
 
 function closeVoiceDialog(): void {
   elements.voiceKeyInput.value = "";
+  setVoiceInlineError(elements.voiceKeyError, null);
+  setVoiceInlineError(elements.voiceRegionError, null);
   elements.voiceDialog.close();
 }
 
-async function openVoiceDialog(): Promise<void> {
+async function openVoiceDialog(initialFocus: "key" | "region" = "key"): Promise<void> {
   elements.voiceKeyInput.value = "";
   elements.voiceRegionInput.value = localAppState?.devicePreferences.voiceRegion ?? "";
+  setVoiceInlineError(elements.voiceKeyError, null);
+  setVoiceInlineError(elements.voiceRegionError, null);
   if (!elements.voiceDialog.open) {
     elements.voiceDialog.showModal();
   }
   try {
     renderOpenAiCredentialStatus(await window.nhd.getOpenAiCredentialStatus());
   } catch (error) {
-    elements.voiceKeyStatus.textContent = error instanceof Error ? error.message : String(error);
+    renderOpenAiCredentialStatus({
+      detail: "Secure credential storage could not be reached.",
+      state: "unavailable"
+    });
+    setVoiceInlineError(
+      elements.voiceKeyError,
+      error instanceof Error ? error.message : String(error)
+    );
   }
-  elements.voiceKeyInput.focus();
+  if (initialFocus === "region") {
+    elements.voiceRegionInput.focus();
+  } else if (openAiCredentialStatus.state === "unavailable") {
+    elements.voiceClose.focus();
+  } else {
+    elements.voiceKeyInput.focus();
+  }
 }
 
-elements.voiceSettingsButton.addEventListener("click", () => void openVoiceDialog());
-elements.voiceRegionButton.addEventListener("click", () => void openVoiceDialog());
+elements.voiceSettingsButton.addEventListener("click", () => void openVoiceDialog("key"));
+elements.voiceRegionButton.addEventListener("click", () => void openVoiceDialog("region"));
 elements.voiceClose.addEventListener("click", closeVoiceDialog);
 elements.voiceDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   closeVoiceDialog();
 });
 
+elements.voiceKeyInput.addEventListener("input", () => {
+  const value = elements.voiceKeyInput.value.trim();
+  if (value.length >= 20 && value.length <= 512 && !/\s/.test(value)) {
+    setVoiceInlineError(elements.voiceKeyError, null);
+  }
+});
+
 elements.voiceKeyForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const submit = elements.voiceKeyForm.querySelector<HTMLButtonElement>('button[type="submit"]');
   const apiKey = elements.voiceKeyInput.value;
-  elements.voiceKeyInput.value = "";
-  if (submit !== null) submit.disabled = true;
+  setVoiceInlineError(elements.voiceKeyError, null);
+  elements.voiceKeySubmit.disabled = true;
   try {
     renderOpenAiCredentialStatus(await window.nhd.saveOpenAiApiKey(apiKey));
+    elements.voiceKeyInput.value = "";
     showFeedback("OpenAI API key saved securely on this computer.");
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    setVoiceInlineError(
+      elements.voiceKeyError,
+      error instanceof Error ? error.message : String(error)
+    );
+    elements.voiceKeyInput.focus();
   } finally {
-    elements.voiceKeyInput.value = "";
-    if (submit !== null) submit.disabled = false;
+    elements.voiceKeySubmit.disabled = openAiCredentialStatus.state === "unavailable";
   }
 });
 
 elements.voiceRemoveKey.addEventListener("click", async () => {
+  setVoiceInlineError(elements.voiceKeyError, null);
   elements.voiceRemoveKey.disabled = true;
   try {
     renderOpenAiCredentialStatus(await window.nhd.clearOpenAiApiKey());
@@ -2355,9 +2416,20 @@ elements.voiceRemoveKey.addEventListener("click", async () => {
     }
     showFeedback("Saved OpenAI API key removed. Voice control is off.");
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    setVoiceInlineError(
+      elements.voiceKeyError,
+      error instanceof Error ? error.message : String(error)
+    );
   } finally {
-    elements.voiceRemoveKey.disabled = openAiCredentialStatus.state !== "configured";
+    elements.voiceRemoveKey.disabled = openAiCredentialStatus.state === "missing" ||
+      openAiCredentialStatus.state === "unavailable";
+  }
+});
+
+elements.voiceRegionInput.addEventListener("input", () => {
+  const value = elements.voiceRegionInput.value.trim();
+  if (value.length === 0 || /^[A-Za-z]{2}$/.test(value)) {
+    setVoiceInlineError(elements.voiceRegionError, null);
   }
 });
 
@@ -2365,9 +2437,14 @@ elements.voiceRegionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const value = elements.voiceRegionInput.value.trim().toUpperCase();
   if (value.length > 0 && !/^[A-Z]{2}$/.test(value)) {
-    showFeedback("Use a two-letter country code, or leave the region blank for automatic.");
+    setVoiceInlineError(
+      elements.voiceRegionError,
+      "Use a two-letter country code, or leave this blank for automatic detection."
+    );
+    elements.voiceRegionInput.focus();
     return;
   }
+  setVoiceInlineError(elements.voiceRegionError, null);
   try {
     await saveDevicePreferences({ voiceRegion: value.length === 0 ? null : value });
     elements.voiceRegionInput.value = value;
@@ -2375,7 +2452,10 @@ elements.voiceRegionForm.addEventListener("submit", async (event) => {
       ? "Voice availability region set to automatic."
       : `Voice availability region set to ${value}.`);
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    setVoiceInlineError(
+      elements.voiceRegionError,
+      error instanceof Error ? error.message : String(error)
+    );
   }
 });
 

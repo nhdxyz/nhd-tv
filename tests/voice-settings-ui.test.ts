@@ -12,9 +12,41 @@ describe("voice settings UI privacy boundary", () => {
     expect(renderer).not.toContain("getOpenAiApiKey");
   });
 
-  it("clears the password field before and after saving", () => {
+  it("clears the password field only after a successful save", () => {
     const handler = renderer.slice(renderer.indexOf('voiceKeyForm.addEventListener("submit"'));
-    expect(handler.slice(0, 1_500).match(/voiceKeyInput\.value = ""/g)).toHaveLength(2);
+    const saveHandler = handler.slice(0, 1_500);
+    expect(saveHandler.match(/voiceKeyInput\.value = ""/g)).toHaveLength(1);
+    expect(saveHandler.indexOf('await window.nhd.saveOpenAiApiKey(apiKey)'))
+      .toBeLessThan(saveHandler.indexOf('elements.voiceKeyInput.value = ""'));
+    expect(saveHandler).toContain("setVoiceInlineError(");
+    expect(saveHandler).toContain("elements.voiceKeyInput.focus()");
+  });
+
+  it("shows direct configured state and dynamic add or replace actions", () => {
+    expect(html).toContain('id="voice-key-state"');
+    expect(html).toContain('id="voice-key-label"');
+    expect(html).toContain('id="voice-key-submit"');
+    expect(renderer).toContain('? "Configured"');
+    expect(renderer).toContain('? "Replace API key"');
+    expect(renderer).toContain('? "Replace key"');
+    expect(renderer).toContain(': "Add API key"');
+    expect(renderer).toContain(': "Add key"');
+  });
+
+  it("keeps key and region failures inline until the corresponding input is corrected", () => {
+    expect(html).toContain('id="voice-key-error" role="alert" hidden');
+    expect(html).toContain('id="voice-region-error" role="alert" hidden');
+    expect(renderer).toContain('voiceKeyInput.addEventListener("input"');
+    expect(renderer).toContain('voiceRegionInput.addEventListener("input"');
+    expect(renderer).toContain("setVoiceInlineError(elements.voiceKeyError");
+    expect(renderer).toContain("setVoiceInlineError(elements.voiceRegionError");
+  });
+
+  it("focuses the requested setup section", () => {
+    expect(renderer).toContain('openVoiceDialog(initialFocus: "key" | "region" = "key")');
+    expect(renderer).toContain('openVoiceDialog("key")');
+    expect(renderer).toContain('openVoiceDialog("region")');
+    expect(renderer).toContain('initialFocus === "region"');
   });
 
   it("blocks enablement until an encrypted credential is configured", () => {

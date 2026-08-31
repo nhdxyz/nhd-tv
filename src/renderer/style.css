@@ -2994,41 +2994,123 @@ h2 {
   box-shadow: 0 0 0 0.22rem rgb(59 130 246 / 20%);
 }
 
+#voice-dialog {
+  width: min(48rem, calc(100vw - 3rem));
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 0.8rem;
+}
+
+#voice-dialog::backdrop {
+  background: rgb(0 0 0 / 82%);
+  backdrop-filter: none;
+}
+
 .voice-dialog-shell {
-  background:
-    radial-gradient(circle at 90% 0%, rgb(59 130 246 / 20%), transparent 20rem),
-    #10131b;
+  padding: 1.5rem;
+  border-radius: 0.8rem;
+  background: #111216;
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 58%);
+}
+
+.voice-dialog-shell .remote-dialog-header h2 {
+  margin-top: 0.28rem;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+}
+
+.voice-dialog-shell > .profile-privacy {
+  max-width: 40rem;
+  margin-top: 0.75rem;
+  color: #afb3bc;
+  font-size: 0.92rem;
 }
 
 .voice-settings-section {
   display: grid;
   gap: 0.9rem;
-  margin-top: 1.2rem;
-  padding: 1rem;
-  border: 1px solid var(--stroke);
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 4%);
+  margin-top: 1.35rem;
+  padding: 1.25rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--stroke);
+  border-radius: 0;
+  background: transparent;
+}
+
+.voice-settings-section-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .voice-settings-section h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.18rem;
+  font-weight: 680;
 }
 
 .voice-settings-section p,
 .voice-privacy-note {
-  margin: 0.3rem 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
+  margin: 0.35rem 0 0;
+  color: #aeb2bb;
+  font-size: 0.86rem;
   line-height: 1.5;
+}
+
+.voice-key-state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.12rem;
+  color: #c5c8cf;
+  font-size: 0.82rem;
+  font-weight: 660;
+}
+
+.voice-key-state > span {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+  background: #777d88;
+}
+
+.voice-key-state[data-state="configured"] {
+  color: #bbf7d0;
+}
+
+.voice-key-state[data-state="configured"] > span {
+  background: #4ade80;
+}
+
+.voice-key-state[data-state="invalid"] {
+  color: #fde68a;
+}
+
+.voice-key-state[data-state="invalid"] > span {
+  background: #fbbf24;
+}
+
+.voice-key-state[data-state="unavailable"] {
+  color: #fecdd3;
+}
+
+.voice-key-state[data-state="unavailable"] > span {
+  background: #fb7185;
+}
+
+.voice-key-status {
+  margin-top: 0 !important;
+  color: #c7cad1 !important;
+  font-size: 0.9rem !important;
 }
 
 .voice-settings-form label {
   display: block;
   margin-bottom: 0.55rem;
-  color: #d5dbe5;
-  font-size: 0.78rem;
-  font-weight: 800;
+  color: #e0e2e6;
+  font-size: 0.9rem;
+  font-weight: 650;
 }
 
 .voice-settings-form > div {
@@ -3039,15 +3121,20 @@ h2 {
 
 .voice-settings-form input {
   min-width: 0;
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   padding: 0 1rem;
-  border: 1px solid var(--stroke);
-  border-radius: 0.8rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.55rem;
   outline: 0;
-  background: rgb(255 255 255 / 7%);
+  background: #191a1f;
   color: #fff;
   font: inherit;
+  font-size: 0.96rem;
   text-transform: none;
+}
+
+.voice-settings-form input::placeholder {
+  color: #747a85;
 }
 
 #voice-region-input {
@@ -3055,20 +3142,39 @@ h2 {
 }
 
 .voice-settings-form input:focus {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 0.22rem rgb(59 130 246 / 20%);
+  border-color: #fff;
+  box-shadow: 0 0 0 0.16rem #111216, 0 0 0 0.38rem rgb(255 255 255 / 28%);
+}
+
+.voice-settings-form .primary-action,
+.voice-settings-form .secondary-action {
+  min-height: 3.5rem;
+  border-radius: 0.55rem;
+}
+
+.voice-inline-error {
+  margin: 0 !important;
+  padding: 0.7rem 0.85rem;
+  border-left: 0.2rem solid #fb7185;
+  background: #211316;
+  color: #fecdd3 !important;
+  font-size: 0.88rem !important;
 }
 
 .voice-remove-key {
+  min-height: 2.8rem;
   justify-self: start;
+  border-radius: 0.55rem;
 }
 
 .voice-remove-key:disabled {
-  opacity: 0.42;
+  opacity: 0.38;
 }
 
 .voice-privacy-note {
-  margin-top: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--stroke);
 }
 
 .developer-panel {

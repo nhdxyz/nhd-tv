@@ -107,9 +107,19 @@ export const REMOTE_HTML = `<!doctype html>
           </button>
         </div>
 
-        <section class="voice-confirm" id="voice-confirm" role="dialog" aria-modal="false" aria-labelledby="voice-confirm-label" aria-describedby="voice-confirm-copy" hidden>
+        <section class="voice-confirm" id="voice-confirm" role="dialog" aria-modal="false" aria-labelledby="voice-confirm-label" aria-describedby="voice-confirm-copy voice-confirm-expiry" hidden>
           <small id="voice-confirm-label">Confirm voice command</small>
           <strong id="voice-confirm-copy">Play this title?</strong>
+          <p class="voice-confirm-expiry" id="voice-confirm-expiry" role="timer" aria-live="off">Expires in 30 seconds</p>
+          <div
+            class="voice-confirm-progress"
+            id="voice-confirm-progress"
+            role="progressbar"
+            aria-label="Time remaining to confirm voice command"
+            aria-valuemin="0"
+            aria-valuemax="30"
+            aria-valuenow="30"
+          ><span aria-hidden="true"></span></div>
           <div>
             <button id="voice-confirm-cancel" type="button">Cancel</button>
             <button id="voice-confirm-play" type="button">Play</button>
@@ -549,7 +559,29 @@ input {
 .voice-confirm[hidden] { display: none; }
 .voice-confirm small { color: #bdbdb7; font-size: 0.7rem; font-weight: 750; letter-spacing: 0.02em; }
 .voice-confirm strong { font-size: 1rem; line-height: 1.4; }
+.voice-confirm-expiry {
+  margin: 0.05rem 0 0;
+  color: #a7a7a1;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.voice-confirm-progress {
+  height: 0.22rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #343431;
+}
+.voice-confirm-progress span {
+  display: block;
+  width: var(--voice-confirm-progress, 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--voice-warning);
+  transition: width 240ms linear;
+}
 .voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.voice-confirm > .voice-confirm-progress { display: block; }
 .voice-confirm[data-mode="retry"] > div { grid-template-columns: 1fr; }
 .voice-confirm button {
   min-height: 3rem;
@@ -956,6 +988,8 @@ export const REMOTE_JS = `(() => {
   const voiceConfirm = document.querySelector("#voice-confirm");
   const voiceConfirmLabel = document.querySelector("#voice-confirm-label");
   const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
+  const voiceConfirmExpiry = document.querySelector("#voice-confirm-expiry");
+  const voiceConfirmProgress = document.querySelector("#voice-confirm-progress");
   const voiceConfirmCancel = document.querySelector("#voice-confirm-cancel");
   const voiceConfirmPlay = document.querySelector("#voice-confirm-play");
   let controllerToken = sessionStorage.getItem("nhd-controller-token");
@@ -993,6 +1027,7 @@ export const REMOTE_JS = `(() => {
   let activeVoiceRequest = null;
   let pendingVoiceConfirmation = null;
   let voiceConfirmationTimer = null;
+  let voiceConfirmationCountdownTimer = null;
   let activeVoiceConfirmationId = null;
   let pageTerminationPending = false;
   let heartbeatSequence = 0;
@@ -1230,6 +1265,39 @@ export const REMOTE_JS = `(() => {
       clearTimeout(voiceConfirmationTimer);
       voiceConfirmationTimer = null;
     }
+    if (voiceConfirmationCountdownTimer !== null) {
+      clearInterval(voiceConfirmationCountdownTimer);
+      voiceConfirmationCountdownTimer = null;
+    }
+  }
+
+  function renderVoiceConfirmationCountdown(expiresAt, totalMilliseconds, totalSeconds) {
+    const remainingMilliseconds = Math.max(0, expiresAt - Date.now());
+    const remainingSeconds = Math.ceil(remainingMilliseconds / 1_000);
+    const unit = remainingSeconds === 1 ? "second" : "seconds";
+    const label = "Expires in " + remainingSeconds + " " + unit;
+    const progress = Math.max(
+      0,
+      Math.min(100, (remainingMilliseconds / totalMilliseconds) * 100)
+    );
+    voiceConfirmExpiry.textContent = label;
+    voiceConfirmProgress.setAttribute("aria-valuemax", String(totalSeconds));
+    voiceConfirmProgress.setAttribute("aria-valuenow", String(remainingSeconds));
+    voiceConfirmProgress.setAttribute("aria-valuetext", label);
+    voiceConfirmProgress.style.setProperty("--voice-confirm-progress", progress.toFixed(2) + "%");
+  }
+
+  function startVoiceConfirmationCountdown(expiresAt) {
+    const totalMilliseconds = Math.max(1_000, expiresAt - Date.now());
+    const totalSeconds = Math.ceil(totalMilliseconds / 1_000);
+    renderVoiceConfirmationCountdown(expiresAt, totalMilliseconds, totalSeconds);
+    voiceConfirmationCountdownTimer = setInterval(() => {
+      renderVoiceConfirmationCountdown(expiresAt, totalMilliseconds, totalSeconds);
+      if (expiresAt <= Date.now() && voiceConfirmationCountdownTimer !== null) {
+        clearInterval(voiceConfirmationCountdownTimer);
+        voiceConfirmationCountdownTimer = null;
+      }
+    }, 250);
   }
 
   function updateVoiceConfirmationButtons() {
@@ -1274,6 +1342,7 @@ export const REMOTE_JS = `(() => {
     voiceConfirm.hidden = false;
     updateVoiceConfirmationButtons();
     updateVoiceButton();
+    startVoiceConfirmationCountdown(expiresAt);
     voiceConfirmPlay.focus({ preventScroll: true });
     voiceConfirmationTimer = setTimeout(() => {
       if (pendingVoiceConfirmation?.confirmationId !== pending.confirmationId) return;

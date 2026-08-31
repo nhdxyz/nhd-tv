@@ -504,6 +504,33 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("voiceConfirmPlay.focus({ preventScroll: true })");
   });
 
+  it("shows the trusted confirmation expiry and clears both confirmation timers", () => {
+    expect(REMOTE_HTML).toContain('id="voice-confirm-expiry" role="timer" aria-live="off"');
+    expect(REMOTE_HTML).toContain('id="voice-confirm-progress"');
+    expect(REMOTE_HTML).toContain('role="progressbar"');
+    expect(REMOTE_HTML).toContain('aria-label="Time remaining to confirm voice command"');
+    expect(REMOTE_CSS).toContain("--voice-confirm-progress");
+    expect(REMOTE_JS).toContain("function startVoiceConfirmationCountdown(expiresAt)");
+    expect(REMOTE_JS).toContain("const totalMilliseconds = Math.max(1_000, expiresAt - Date.now())");
+    expect(REMOTE_JS).toContain('voiceConfirmProgress.setAttribute("aria-valuenow", String(remainingSeconds))');
+    expect(REMOTE_JS).toContain('voiceConfirmProgress.setAttribute("aria-valuetext", label)');
+    expect(REMOTE_JS).toContain('progress.toFixed(2) + "%"');
+    expect(REMOTE_JS).toContain("}, 250)");
+
+    const clearTimer = REMOTE_JS.slice(
+      REMOTE_JS.indexOf("function clearVoiceConfirmationTimer()"),
+      REMOTE_JS.indexOf("function renderVoiceConfirmationCountdown")
+    );
+    expect(clearTimer).toContain("clearTimeout(voiceConfirmationTimer)");
+    expect(clearTimer).toContain("clearInterval(voiceConfirmationCountdownTimer)");
+    const showConfirmation = REMOTE_JS.slice(
+      REMOTE_JS.indexOf("function showVoiceConfirmation(pending)"),
+      REMOTE_JS.indexOf("async function cancelVoiceConfirmation")
+    );
+    expect(showConfirmation).toContain("startVoiceConfirmationCountdown(expiresAt)");
+    expect(showConfirmation).toContain("Math.max(0, expiresAt - Date.now())");
+  });
+
   it("keeps the remote synchronized with the active service without exposing page data", () => {
     expect(REMOTE_JS).toContain("function renderContext(context)");
     expect(REMOTE_JS).toContain("activeServiceLabel.textContent = serviceName");

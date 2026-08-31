@@ -40,6 +40,37 @@ describe("TV catalog layout", () => {
     expect(css).toContain(".home-view .service-tile[data-service-id]");
   });
 
+  it("makes Apps the consumer destination and keeps Add apps out of primary navigation", () => {
+    const primaryNavigation = html.slice(
+      html.indexOf('<nav class="primary-nav"'),
+      html.indexOf("</nav>", html.indexOf('<nav class="primary-nav"'))
+    );
+
+    expect(primaryNavigation).toContain('data-view-target="home"');
+    expect(primaryNavigation).toContain('data-view-target="apps"');
+    expect(primaryNavigation).not.toContain('data-view-target="store"');
+    expect(primaryNavigation).not.toContain(">Store<");
+    expect(html).toContain('<h1>Your apps</h1>');
+    expect(html).toContain('<h2 id="apps-title">Installed</h2>');
+    expect(html).toContain('id="apps-add-button" data-view-target="store"');
+    expect(html).toContain('<h1>Add apps</h1>');
+    expect(renderer).toContain(
+      '(view === "store" && navButton.dataset.viewTarget === "apps")'
+    );
+    expect(renderer).toContain("function returnToApps(remote = false)");
+    expect(renderer).toContain("focusAddAppsCandidate()");
+  });
+
+  it("keeps custom services and diagnostics available as secondary advanced tools", () => {
+    expect(html).toContain('class="advanced-tools" id="store-advanced-tools"');
+    expect(html).toContain("Custom services & diagnostics");
+    expect(html).toContain('id="utility-store-actions"');
+    expect(html).toContain('id="custom-service-form"');
+    expect(css).toContain(".advanced-tools > summary");
+    expect(css).toContain(".catalog-view .catalog-card[data-service-id]");
+    expect(css).toContain("background: #141518");
+  });
+
   it("keeps destructive Continue Watching controls behind Manage mode", () => {
     expect(renderer).toContain("remove.hidden = !continueManaging");
     expect(renderer).toContain("continueManaging = !continueManaging");
@@ -51,7 +82,7 @@ describe("TV catalog layout", () => {
     expect(html).not.toContain(
       'class="catalog-row horizontal-row" id="experimental-store-actions"'
     );
-    expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr))");
+    expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr))");
     expect(css).toContain(".catalog-grid .catalog-card-shell");
   });
 

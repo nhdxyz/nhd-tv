@@ -88,6 +88,7 @@ const elements = {
   appManageOpen: requireElement<HTMLButtonElement>("#app-manage-open", "app-manage-open"),
   appManageRemove: requireElement<HTMLButtonElement>("#app-manage-remove", "app-manage-remove"),
   appManageStatus: requireElement<HTMLElement>("#app-manage-status", "app-manage-status"),
+  appsAddButton: requireElement<HTMLButtonElement>("#apps-add-button", "apps-add-button"),
   appsActions: requireElement<HTMLDivElement>("#apps-actions", "apps-actions"),
   catalogSearchResults: requireElement<HTMLDivElement>("#catalog-search-results", "catalog-search-results"),
   catalogSearchSection: requireElement<HTMLElement>("#catalog-search-section", "catalog-search-section"),
@@ -213,6 +214,7 @@ const elements = {
   storeSearch: requireElement<HTMLInputElement>("#store-search", "store-search"),
   storeActions: requireElement<HTMLDivElement>("#store-actions", "store-actions"),
   storeUtilitySection: requireElement<HTMLElement>("#store-utility-section", "store-utility-section"),
+  storeView: requireElement<HTMLElement>("#store-view", "store-view"),
   topRemoteButton: requireElement<HTMLButtonElement>("#top-remote-button", "top-remote-button"),
   topRemoteLabel: requireElement<HTMLSpanElement>("#top-remote-label", "top-remote-label"),
   topSearchButton: requireElement<HTMLButtonElement>("#top-search-button", "top-search-button"),
@@ -1188,6 +1190,7 @@ function storeCard(service: ServiceSummary): HTMLElement {
       }
       renderServiceViews();
     }
+    window.requestAnimationFrame(focusAddAppsCandidate);
   });
 
   shell.append(button);
@@ -1268,7 +1271,7 @@ function renderFeatured(enabledServices: readonly ServiceSummary[]): void {
     elements.featuredTitle.textContent = "Add your apps";
     elements.featuredCopy.textContent = "Choose the services you use on this TV.";
     elements.heroOpenButton.disabled = false;
-    elements.heroOpenButton.textContent = "Open Store";
+    elements.heroOpenButton.textContent = "Add apps";
     return;
   }
 
@@ -1366,13 +1369,13 @@ function renderServiceViews(): void {
   if (enabledServices.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-lineup";
-    empty.textContent = "Your lineup is empty. Add a service from the Store.";
+    empty.textContent = "No apps installed yet.";
     elements.serviceActions.append(empty);
 
     const browse = document.createElement("button");
     browse.className = "empty-lineup empty-lineup-action";
     browse.type = "button";
-    browse.textContent = "Your Apps are empty. Browse the Store";
+    browse.textContent = "Add your first app";
     browse.addEventListener("click", () => showView("store"));
     elements.appsActions.append(browse);
   }
@@ -1710,7 +1713,8 @@ function showView(view: AppView): void {
   for (const navButton of document.querySelectorAll<HTMLButtonElement>(
     ".nav-button[data-view-target], .settings-chip[data-view-target]"
   )) {
-    const current = navButton.dataset.viewTarget === view;
+    const current = navButton.dataset.viewTarget === view ||
+      (view === "store" && navButton.dataset.viewTarget === "apps");
     navButton.classList.toggle("nav-current", current);
 
     if (current) {
@@ -1721,7 +1725,23 @@ function showView(view: AppView): void {
   }
 
   window.scrollTo({ behavior: "smooth", top: 0 });
-  window.requestAnimationFrame(updateHorizontalRailControls);
+  window.requestAnimationFrame(() => {
+    updateHorizontalRailControls();
+    if (view === "store") focusAddAppsCandidate();
+  });
+}
+
+function focusAddAppsCandidate(): void {
+  const target = elements.storeView.querySelector<HTMLElement>(
+    ".catalog-card:not(:disabled), summary"
+  );
+  target?.focus({ preventScroll: true });
+}
+
+function returnToApps(remote = false): void {
+  showView("apps");
+  elements.appsAddButton.focus({ preventScroll: true });
+  setRemoteFocusedElement(remote ? elements.appsAddButton : null);
 }
 
 function updateHorizontalRailControls(): void {
@@ -2653,6 +2673,9 @@ document.addEventListener("keydown", (event) => {
   } else if (elements.searchDialog.open) {
     elements.searchDialog.close();
     event.preventDefault();
+  } else if (currentView === "store") {
+    returnToApps();
+    event.preventDefault();
   } else if (currentView !== "home") {
     returnHome();
     event.preventDefault();
@@ -2739,6 +2762,11 @@ function handleShellRemoteAction(action: RemoteAction): void {
 
     if (elements.searchDialog.open) {
       elements.searchDialog.close();
+      return;
+    }
+
+    if (currentView === "store") {
+      returnToApps(true);
       return;
     }
 

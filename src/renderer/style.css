@@ -2222,12 +2222,12 @@ h2 {
 
 .empty-lineup {
   display: grid;
-  min-width: 28rem;
-  min-height: 10rem;
+  min-width: 20rem;
+  min-height: 8rem;
   place-items: center;
-  border: 1px dashed rgb(255 255 255 / 20%);
-  border-radius: 1.2rem;
-  background: rgb(255 255 255 / 3%);
+  border: 1px dashed #34363b;
+  border-radius: 0.85rem;
+  background: #121315;
   color: var(--muted);
   text-align: center;
 }
@@ -2252,26 +2252,56 @@ h2 {
   line-height: 1.6;
 }
 
+.catalog-view .view-heading {
+  padding-top: clamp(2.6rem, 5vh, 4.5rem);
+}
+
+.catalog-view .view-heading h1 {
+  max-width: 44rem;
+  margin-top: 0.35rem;
+  font-size: clamp(2.8rem, 4.8vw, 4.75rem);
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.catalog-view .view-heading > p:last-of-type {
+  max-width: 38rem;
+  margin-top: 0.8rem;
+  color: #aeb1b8;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.view-heading-actions {
+  display: flex;
+  margin-top: 1.4rem;
+}
+
+.view-heading-actions .primary-action {
+  min-height: 3.35rem;
+  padding-inline: 1.25rem;
+  border-radius: 0.7rem;
+}
+
 .store-search {
   display: grid;
-  width: min(100%, 42rem);
-  min-height: 4.4rem;
+  width: min(100%, 38rem);
+  min-height: 3.75rem;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.8rem;
-  margin-top: 1.7rem;
-  padding: 0 1.2rem;
-  border: 1px solid rgb(147 197 253 / 24%);
-  border-radius: 1.15rem;
-  background: rgb(10 14 22 / 88%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
-  color: #93c5fd;
-  font-size: 1.45rem;
+  margin-top: 1.35rem;
+  padding: 0 1rem;
+  border: 1px solid #34363b;
+  border-radius: 0.75rem;
+  background: #141518;
+  color: #d5d7dc;
+  font-size: 1.25rem;
 }
 
 .store-search:focus-within {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 0.24rem rgb(59 130 246 / 18%);
+  border-color: #f7f7f8;
+  box-shadow: 0 0 0 0.2rem rgb(247 247 248 / 14%);
 }
 
 .store-search input {
@@ -2290,18 +2320,18 @@ h2 {
 }
 
 .catalog-view .rail {
-  margin-top: 3.5rem;
+  margin-top: 2.6rem;
 }
 
 .catalog-view .catalog-tier {
-  margin-top: 2.5rem;
+  margin-top: 2.2rem;
 }
 
 .catalog-grid {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 1rem;
   margin: calc(var(--rail-focus-gutter) * -1);
   padding: var(--rail-focus-gutter);
@@ -2317,12 +2347,12 @@ h2 {
 }
 
 .catalog-grid .catalog-card {
-  min-height: 13.5rem;
-  padding: 1.15rem;
+  min-height: 11.75rem;
+  padding: 1rem;
 }
 
 .catalog-grid .catalog-card-top {
-  min-height: 4.4rem;
+  min-height: 3.5rem;
 }
 
 .catalog-grid .catalog-card-top > .service-logo {
@@ -2339,47 +2369,62 @@ h2 {
 }
 
 .catalog-grid .catalog-card-copy small {
-  min-height: 2.8em;
+  min-height: 2.6em;
   -webkit-line-clamp: 2;
 }
 
 .catalog-card {
   display: flex;
   width: 100%;
-  min-height: 16.5rem;
+  min-height: 12.5rem;
   flex-direction: column;
   justify-content: space-between;
-  padding: 1.4rem;
-  border-radius: 1.35rem;
+  padding: 1.05rem;
+  border-radius: 0.9rem;
+  background: #141518;
 }
 
 .catalog-card-shell {
   position: relative;
-  width: clamp(19rem, 25vw, 27rem);
-  min-width: clamp(19rem, 25vw, 27rem);
+  width: clamp(18rem, 22vw, 23rem);
+  min-width: clamp(18rem, 22vw, 23rem);
   scroll-snap-align: start;
+}
+
+.catalog-view .catalog-card[data-service-id] {
+  background: #141518;
+}
+
+.catalog-view .catalog-card::after {
+  display: none;
+}
+
+.catalog-view .catalog-card:hover,
+.catalog-view .catalog-card:focus-visible {
+  border-color: rgb(255 255 255 / 42%);
+  box-shadow: 0 1rem 2.2rem rgb(0 0 0 / 36%);
+  transform: translateY(-0.15rem) scale(1.01);
 }
 
 .app-manage-button {
   position: absolute;
   z-index: 6;
-  top: 0.9rem;
-  left: 0.9rem;
-  min-height: 2.3rem;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  min-height: 2.45rem;
   padding: 0 0.75rem;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 999px;
-  background: rgb(4 7 12 / 74%);
-  color: #e2e8f0;
-  backdrop-filter: blur(10px);
-  font-size: 0.68rem;
-  font-weight: 850;
+  border: 1px solid #3b3d43;
+  border-radius: 0.55rem;
+  background: #232529;
+  color: #f0f1f3;
+  font-size: 0.72rem;
+  font-weight: 760;
 }
 
 .app-manage-button:hover,
 .app-manage-button:focus-visible {
-  border-color: rgb(147 197 253 / 62%);
-  background: rgb(30 58 102 / 92%);
+  border-color: #f7f7f8;
+  background: #303237;
   color: #fff;
 }
 
@@ -2436,31 +2481,29 @@ h2 {
 }
 
 .catalog-card-top {
-  min-height: 5.8rem;
-  justify-content: center;
+  min-height: 3.8rem;
+  justify-content: flex-start;
 }
 
 .catalog-card-top > .service-logo {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 3.2rem;
+  height: 3.2rem;
 }
 
 .catalog-card-top > .service-wordmark {
-  font-size: 2rem;
+  font-size: 1.65rem;
 }
 
 .catalog-status {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 0.38rem 0.58rem;
-  border: 1px solid rgb(255 255 255 / 15%);
-  border-radius: 999px;
-  background: rgb(0 0 0 / 18%);
-  color: #d5dbe5;
-  font-size: 0.62rem;
-  font-weight: 850;
-  letter-spacing: 0.11em;
+  margin-left: auto;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid #3a3c42;
+  border-radius: 0.45rem;
+  background: #202226;
+  color: #c5c7cd;
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -2471,29 +2514,41 @@ h2 {
 
 .catalog-card-copy strong {
   display: block;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
 }
 
 .catalog-card-copy small {
   display: -webkit-box;
-  min-height: 4.2em;
+  min-height: 2.8em;
   margin-top: 0.35rem;
   overflow: hidden;
   color: #b3bcc9;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   line-height: 1.4;
+}
+
+.catalog-card-footer {
+  justify-content: flex-start;
+  margin-top: 0.8rem;
+}
+
+.installed-app-card .catalog-card-footer {
+  padding-right: 5.5rem;
 }
 
 .catalog-action {
   display: grid;
-  min-width: 6.7rem;
-  min-height: 2.8rem;
+  min-width: 0;
+  min-height: 2.4rem;
   place-items: center;
-  border-radius: 0.75rem;
-  background: #fff;
-  color: #0a0c10;
-  font-weight: 850;
+  padding: 0 0.75rem;
+  border: 1px solid #44464c;
+  border-radius: 0.55rem;
+  background: #f7f7f8;
+  color: #111214;
+  font-size: 0.78rem;
+  font-weight: 780;
 }
 
 .catalog-card[data-enabled="true"] .catalog-action {
@@ -2507,12 +2562,12 @@ h2 {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 1.25rem;
-  max-width: 55rem;
-  margin-top: 3.2rem;
-  padding: 1.35rem;
-  border: 1px solid var(--stroke);
-  border-radius: 1.2rem;
-  background: var(--panel);
+  max-width: 58rem;
+  margin-top: 1.5rem;
+  padding: 1.2rem;
+  border: 1px solid #2d2f34;
+  border-radius: 0.85rem;
+  background: #121315;
 }
 
 .store-empty {
@@ -2539,10 +2594,10 @@ h2 {
 }
 
 .store-note-icon {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 1rem;
-  font-size: 1.8rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 0.75rem;
+  font-size: 1.45rem;
 }
 
 .store-note h2 {
@@ -2553,6 +2608,70 @@ h2 {
   margin: 0.45rem 0 0;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.advanced-tools {
+  max-width: 72rem;
+  margin: 2.8rem 0 4rem;
+}
+
+.advanced-tools > summary {
+  display: flex;
+  min-height: 5.4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1.05rem 1.2rem;
+  border: 1px solid #2d2f34;
+  border-radius: 0.85rem;
+  background: #111214;
+  list-style: none;
+}
+
+.advanced-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-tools > summary > span:first-child {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.advanced-tools > summary strong {
+  font-size: 1.15rem;
+}
+
+.advanced-tools > summary small {
+  color: #9da0a8;
+  font-size: 0.84rem;
+}
+
+.advanced-tools-action {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #3b3d43;
+  border-radius: 0.5rem;
+  color: #d7d8dc;
+  font-size: 0.75rem;
+  font-weight: 760;
+}
+
+.advanced-tools[open] .advanced-tools-action {
+  color: transparent;
+  font-size: 0;
+}
+
+.advanced-tools[open] .advanced-tools-action::after {
+  color: #d7d8dc;
+  content: "Close";
+  font-size: 0.75rem;
+}
+
+.advanced-tools-content {
+  padding-top: 0.35rem;
+}
+
+.advanced-tools-content .rail {
+  margin-top: 2rem;
 }
 
 .custom-service-form {

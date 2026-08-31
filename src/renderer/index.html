@@ -23,7 +23,6 @@
           Home
         </button>
         <button class="nav-button" data-view-target="apps" type="button">Apps</button>
-        <button class="nav-button" data-view-target="store" type="button">Store</button>
       </nav>
 
       <div class="topbar-actions" data-nav-group="topbar">
@@ -278,14 +277,19 @@
 
       <section class="app-view catalog-view" id="apps-view" data-view="apps" hidden>
         <header class="view-heading">
-          <p class="eyebrow">Your Apps</p>
-          <h1>Everything you added.</h1>
-          <p>Open an app or use its Manage button to change favorites, order, or local sign-in data.</p>
+          <p class="eyebrow">Apps</p>
+          <h1>Your apps</h1>
+          <p>Open a service or manage how it appears on this TV.</p>
+          <div class="view-heading-actions" data-nav-group="apps-heading-actions">
+            <button class="primary-action" id="apps-add-button" data-view-target="store" type="button">
+              Add apps
+            </button>
+          </div>
         </header>
 
         <section class="rail" aria-labelledby="apps-title">
           <div class="section-heading">
-            <h2 id="apps-title">Installed apps</h2>
+            <h2 id="apps-title">Installed</h2>
             <span class="section-hint" id="lineup-count">Loading apps…</span>
           </div>
           <div class="catalog-row horizontal-row" id="apps-actions" data-nav-group="installed-apps"></div>
@@ -294,57 +298,70 @@
 
       <section class="app-view catalog-view" id="store-view" data-view="store" hidden>
         <header class="view-heading">
-          <p class="eyebrow">App Store</p>
-          <h1>Find your services.</h1>
-          <p>Search apps you have not added yet, then add only the ones you use.</p>
+          <p class="eyebrow">Apps</p>
+          <h1>Add apps</h1>
+          <p>Choose the services available on this TV.</p>
           <label class="store-search" for="store-search">
             <span aria-hidden="true">⌕</span>
-            <input id="store-search" type="search" maxlength="60" autocomplete="off" placeholder="Search available apps" />
+            <input id="store-search" type="search" maxlength="60" autocomplete="off" placeholder="Search apps" />
           </label>
         </header>
 
         <section class="rail" id="store-core-section" aria-labelledby="catalog-title">
           <div class="section-heading">
             <h2 id="catalog-title">Available apps</h2>
-            <span class="section-hint">Ready to add</span>
+            <span class="section-hint">Select an app to add it</span>
           </div>
           <div class="catalog-row horizontal-row" id="store-actions" data-nav-group="store-services"></div>
         </section>
 
         <section class="rail catalog-tier" id="store-experimental-section" aria-labelledby="experimental-catalog-title">
           <div class="section-heading">
-            <h2 id="experimental-catalog-title">More apps to try</h2>
-            <span class="section-hint">Preview integrations · add only what you use</span>
+            <h2 id="experimental-catalog-title">Early access</h2>
+            <span class="section-hint">Experimental integrations</span>
           </div>
           <div class="catalog-grid" id="experimental-store-actions" data-nav-group="experimental-store-services"></div>
         </section>
 
-        <section class="rail catalog-tier" id="store-utility-section" aria-labelledby="utility-catalog-title">
-          <div class="section-heading">
-            <h2 id="utility-catalog-title">Custom & diagnostics</h2>
-            <span class="section-hint">Advanced tools</span>
-          </div>
-          <div class="catalog-row horizontal-row" id="utility-store-actions" data-nav-group="utility-store-services"></div>
-        </section>
-
         <div class="store-empty" id="store-empty" hidden>
           <strong>No available apps match that search.</strong>
-          <span>Try another name, or add a trusted custom app below.</span>
+          <span>Try another app name.</span>
         </div>
 
-        <section class="store-note" aria-label="Custom services">
-          <div class="store-note-icon" aria-hidden="true">＋</div>
-          <div>
-            <p class="eyebrow">Custom app</p>
-            <h2>Add a trusted web service</h2>
-            <p>NHD-TV will allow only the HTTPS origin you enter. Custom services cannot run plugin code or observe playback.</p>
-            <form class="custom-service-form" id="custom-service-form">
-              <input id="custom-service-name" maxlength="32" autocomplete="off" placeholder="Service name" required />
-              <input id="custom-service-url" type="url" inputmode="url" autocomplete="url" placeholder="https://watch.example.com" required />
-              <button class="primary-action" type="submit">Add service</button>
-            </form>
+        <details class="advanced-tools" id="store-advanced-tools">
+          <summary data-nav-group="store-advanced-tools">
+            <span>
+              <span class="eyebrow">Advanced tools</span>
+              <strong>Custom services & diagnostics</strong>
+              <small>Add a trusted website or open integration test tools.</small>
+            </span>
+            <span class="advanced-tools-action" aria-hidden="true">Open</span>
+          </summary>
+
+          <div class="advanced-tools-content">
+            <section class="rail catalog-tier" id="store-utility-section" aria-labelledby="utility-catalog-title">
+              <div class="section-heading">
+                <h2 id="utility-catalog-title">Diagnostics</h2>
+                <span class="section-hint">Integration tools</span>
+              </div>
+              <div class="catalog-row horizontal-row" id="utility-store-actions" data-nav-group="utility-store-services"></div>
+            </section>
+
+            <section class="store-note" aria-label="Custom services">
+              <div class="store-note-icon" aria-hidden="true">＋</div>
+              <div>
+                <p class="eyebrow">Custom service</p>
+                <h2>Add a trusted website</h2>
+                <p>NHD-TV allows only the HTTPS origin you enter. Custom services cannot run plugin code or observe playback.</p>
+                <form class="custom-service-form" id="custom-service-form">
+                  <input id="custom-service-name" maxlength="32" autocomplete="off" placeholder="Service name" required />
+                  <input id="custom-service-url" type="url" inputmode="url" autocomplete="url" placeholder="https://watch.example.com" required />
+                  <button class="primary-action" type="submit">Add service</button>
+                </form>
+              </div>
+            </section>
           </div>
-        </section>
+        </details>
       </section>
 
       <section class="app-view settings-view" id="settings-view" data-view="settings" hidden>

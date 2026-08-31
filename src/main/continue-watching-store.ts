@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ContinueWatchingItem } from "./contracts";
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 const MAX_ITEMS = 18;
 const MAX_TITLE_LENGTH = 180;
 
@@ -48,7 +48,10 @@ function normalizedText(value: unknown): string | null {
   return normalized.length === 0 ? null : normalized.slice(0, MAX_TITLE_LENGTH);
 }
 
-function storedItem(value: unknown): StoredContinueWatchingItem | null {
+function storedItem(
+  value: unknown,
+  preserveCachedArtwork = true
+): StoredContinueWatchingItem | null {
   if (typeof value !== "object" || value === null) {
     return null;
   }
@@ -72,8 +75,8 @@ function storedItem(value: unknown): StoredContinueWatchingItem | null {
   }
 
   return {
-    artworkDataUrl: item.artworkDataUrl,
-    artworkPixelWidth: finiteNonNegative(item.artworkPixelWidth)
+    artworkDataUrl: preserveCachedArtwork ? item.artworkDataUrl : null,
+    artworkPixelWidth: preserveCachedArtwork && finiteNonNegative(item.artworkPixelWidth)
       ? item.artworkPixelWidth
       : 0,
     durationSeconds: item.durationSeconds,
@@ -113,13 +116,17 @@ export class ContinueWatchingStore {
       if (
         typeof parsed === "object" &&
         parsed !== null &&
-        ([1, 2, STORE_VERSION] as readonly unknown[]).includes(
+        ([1, 2, 3, STORE_VERSION] as readonly unknown[]).includes(
           (parsed as Partial<StoredContinueWatchingDocument>).version
         ) &&
         Array.isArray((parsed as Partial<StoredContinueWatchingDocument>).items)
       ) {
+        const storedVersion = (parsed as Partial<StoredContinueWatchingDocument>).version;
         this.#items = (parsed as StoredContinueWatchingDocument).items
-          .map(storedItem)
+          // Versions before 4 did not bind cached artwork to the captured
+          // title. Drop those images once rather than promote an unrelated
+          // tile as the Home hero; resume metadata remains intact.
+          .map((item) => storedItem(item, storedVersion === STORE_VERSION))
           .filter((item): item is StoredContinueWatchingItem => item !== null)
           .sort((left, right) => right.updatedAt - left.updatedAt)
           .slice(0, MAX_ITEMS);

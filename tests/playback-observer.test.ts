@@ -121,6 +121,9 @@ describe("passive playback observer", () => {
     expect(script).toContain("video.played.end(index)");
     expect(script).toContain('readText(["h1"])');
     expect(script).toContain("recentActivation?.artworkUrl");
+    expect(script).toContain('title.replace(/\\s+/g, " ")');
+    expect(script).toContain("normalizedActivationTitle === normalizedTitle");
+    expect(script).toContain("normalizedOpenGraphTitle === normalizedTitle");
     expect(script).toContain('url.hostname.endsWith("." + host)');
     expect(script).toContain('["nflximg.net"].some');
     expect(script).toContain('=== "netflix"');
@@ -150,7 +153,10 @@ describe("passive playback observer", () => {
     expect(script).toContain("sessionStorage.setItem(storageKey");
     expect(script).toContain("rememberVisibleDetail");
     expect(script).toContain("image.naturalWidth * image.naturalHeight");
+    expect(script).toContain("previousTitle !== nextTitle");
     expect(script).toContain("candidate.artworkPixelArea >= state.artworkPixelArea");
+    expect(script).toContain("if (uniqueUrls.size > 1) return null");
+    expect(script).toContain('if (!title) return');
     expect(script).toContain('[class*="tracked-card"]');
     expect(script).toContain('element.querySelectorAll("picture source")');
     expect(script).toContain("candidate.area >= 80 * 45");

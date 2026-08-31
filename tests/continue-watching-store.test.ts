@@ -91,6 +91,40 @@ describe("Continue Watching store", () => {
     expect(store.list()[0]).not.toHaveProperty("artworkPixelWidth");
   });
 
+  it("drops legacy artwork that was not bound to its captured title", async () => {
+    const { filePath } = await testStore();
+    await writeFile(filePath, JSON.stringify({
+      items: [{
+        artworkDataUrl: "data:image/jpeg;base64,dW5yZWxhdGVk",
+        artworkPixelWidth: 1_280,
+        durationSeconds: 6_480,
+        id: "legacy-mismatched-artwork",
+        positionSeconds: 1_200,
+        serviceId: "netflix",
+        serviceName: "Netflix",
+        subtitle: null,
+        title: "2 Fast 2 Furious",
+        updatedAt: 1,
+        watchUrl: "https://www.netflix.com/watch/60027713"
+      }],
+      version: 3
+    }));
+
+    const restored = new ContinueWatchingStore(filePath);
+    await restored.initialize();
+
+    expect(restored.list()).toEqual([expect.objectContaining({
+      artworkDataUrl: null,
+      id: "legacy-mismatched-artwork",
+      positionSeconds: 1_200,
+      title: "2 Fast 2 Furious"
+    })]);
+    expect(restored.resumeTarget("legacy-mismatched-artwork")).toEqual({
+      serviceId: "netflix",
+      watchUrl: "https://www.netflix.com/watch/60027713"
+    });
+  });
+
   it("does not replace a real title with a generic provider title", async () => {
     const { store } = await testStore();
     await store.upsert(checkpoint({ title: "Facing El Chapo" }));

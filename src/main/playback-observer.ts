@@ -306,9 +306,31 @@ export function buildPlaybackSnapshotScript(
       Date.now() - activation.updatedAt <= ${PLAYBACK_ACTIVATION_MAX_AGE_MS}
       ? activation
       : null;
+    const selectorTitle = readText(${titleSelectors});
+    const activationTitle = typeof recentActivation?.title === "string"
+      ? recentActivation.title
+      : "";
+    const title = selectorTitle.trim().toLocaleLowerCase() === ${normalizedServiceName} && activationTitle
+      ? activationTitle
+      : selectorTitle || activationTitle;
+    const normalizedTitle = title.replace(/\\s+/g, " ").trim().toLocaleLowerCase();
+    const normalizedActivationTitle = activationTitle
+      .replace(/\\s+/g, " ")
+      .trim()
+      .toLocaleLowerCase();
+    const openGraphTitle = document.querySelector('meta[property="og:title"]')
+      ?.getAttribute("content") || "";
+    const normalizedOpenGraphTitle = openGraphTitle
+      .replace(/\\s+/g, " ")
+      .trim()
+      .toLocaleLowerCase();
     const artworkCandidates = [
-      recentActivation?.artworkUrl,
-      document.querySelector('meta[property="og:image"]')?.getAttribute("content"),
+      normalizedTitle && normalizedActivationTitle === normalizedTitle
+        ? recentActivation?.artworkUrl
+        : null,
+      normalizedTitle && normalizedOpenGraphTitle === normalizedTitle
+        ? document.querySelector('meta[property="og:image"]')?.getAttribute("content")
+        : null,
       video.poster
     ];
     const artworkUrl = artworkCandidates.find((candidate) => {
@@ -320,13 +342,6 @@ export function buildPlaybackSnapshotScript(
         );
       } catch { return false; }
     });
-    const selectorTitle = readText(${titleSelectors});
-    const activationTitle = typeof recentActivation?.title === "string"
-      ? recentActivation.title
-      : "";
-    const title = selectorTitle.trim().toLocaleLowerCase() === ${normalizedServiceName} && activationTitle
-      ? activationTitle
-      : selectorTitle || activationTitle;
 
     return {
       artworkUrl: artworkUrl ? new URL(artworkUrl, location.href).toString() : null,
@@ -455,8 +470,11 @@ export function buildPlaybackActivationTrackerScript(
           }
         }
 
-        const best = candidates
-          .filter((candidate) => candidate.url !== null && candidate.area >= 80 * 45)
+        const eligible = candidates
+          .filter((candidate) => candidate.url !== null && candidate.area >= 80 * 45);
+        const uniqueUrls = new Set(eligible.map((candidate) => candidate.url));
+        if (uniqueUrls.size > 1) return null;
+        const best = eligible
           .sort((left, right) =>
             Math.max(right.area, right.pixelArea) - Math.max(left.area, left.pixelArea)
           )[0];
@@ -466,6 +484,7 @@ export function buildPlaybackActivationTrackerScript(
             labelled?.getAttribute("title") ||
             best.title ||
             null;
+          if (typeof title !== "string" || title.trim().length === 0) return null;
           return { artworkPixelArea: best.pixelArea, artworkUrl: best.url, title };
         }
         element = element.parentElement;
@@ -477,14 +496,23 @@ export function buildPlaybackActivationTrackerScript(
       if (${pathPrefixes}.some((prefix) => location.pathname.startsWith(prefix))) return;
       const candidate = target instanceof Element ? candidateFrom(target) : null;
       if (candidate === null) return;
-      if (state.artworkUrl === null || candidate.artworkPixelArea >= state.artworkPixelArea) {
-        state.artworkUrl = candidate.artworkUrl;
-        state.artworkPixelArea = candidate.artworkPixelArea;
-      }
       const title = typeof candidate.title === "string"
         ? candidate.title.replace(/\\s+/g, " ").trim().slice(0, ${MAX_METADATA_LENGTH})
         : "";
-      if (title) state.title = title;
+      if (!title) return;
+      const previousTitle = typeof state.title === "string"
+        ? state.title.replace(/\\s+/g, " ").trim().toLocaleLowerCase()
+        : "";
+      const nextTitle = title.toLocaleLowerCase();
+      if (
+        state.artworkUrl === null ||
+        previousTitle !== nextTitle ||
+        candidate.artworkPixelArea >= state.artworkPixelArea
+      ) {
+        state.artworkUrl = candidate.artworkUrl;
+        state.artworkPixelArea = candidate.artworkPixelArea;
+      }
+      state.title = title;
       state.updatedAt = Date.now();
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({

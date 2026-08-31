@@ -14,72 +14,75 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       aside {
         display: grid;
         width: 100%;
-        min-height: 128px;
-        padding: 24px 30px;
-        grid-template-columns: 64px minmax(0, 1fr);
+        min-height: 148px;
+        padding: 26px 32px;
+        grid-template-columns: 58px minmax(0, 1fr);
         align-items: center;
-        gap: 22px;
+        gap: 24px;
         overflow: hidden;
-        border: 1px solid rgb(255 255 255 / 14%);
-        border-radius: 28px;
-        background: rgb(10 12 15 / 94%);
-        box-shadow: 0 22px 70px rgb(0 0 0 / 54%), inset 0 1px rgb(255 255 255 / 8%);
-        color: #f7f7f3;
-        backdrop-filter: blur(24px);
+        border: 1px solid #2b2d31;
+        border-radius: 18px;
+        background: rgb(14 15 17 / 98%);
+        box-shadow: 0 18px 48px rgb(0 0 0 / 48%);
+        color: #f7f7f8;
       }
-      .signal {
-        position: relative;
+      .state-mark {
         display: grid;
-        width: 64px;
-        height: 64px;
-        grid-template-columns: repeat(3, 6px);
+        width: 58px;
+        height: 58px;
         place-content: center;
-        gap: 5px;
-        border-radius: 50%;
-        background: #d7ff55;
-        color: #10120d;
-        box-shadow: 0 0 30px rgb(215 255 85 / 22%);
+        border: 1px solid #34363b;
+        border-radius: 14px;
+        background: #1d1f22;
+        color: #f7f7f8;
       }
-      .signal i { width: 6px; height: 20px; border-radius: 999px; background: currentColor; animation: pulse 820ms ease-in-out infinite alternate; }
-      .signal i:nth-child(2) { height: 34px; animation-delay: -260ms; }
-      .signal i:nth-child(3) { animation-delay: -520ms; }
-      .copy { display: grid; min-width: 0; gap: 5px; }
-      small { color: #d7ff55; font-size: 13px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
-      strong { display: -webkit-box; overflow: hidden; font-size: clamp(24px, 3.4vw, 34px); font-weight: 760; letter-spacing: -.025em; line-height: 1.15; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-      .choices { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+      .levels { display: none; height: 28px; align-items: center; gap: 5px; }
+      .levels i { width: 4px; height: 12px; border-radius: 2px; background: currentColor; animation: level 760ms ease-in-out infinite alternate; }
+      .levels i:nth-child(2) { height: 25px; animation-delay: -240ms; }
+      .levels i:nth-child(3) { height: 17px; animation-delay: -480ms; }
+      .state-icon { display: none; width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }
+      aside[data-phase="listening"] .levels { display: flex; }
+      aside[data-phase="understanding"] .icon-working,
+      aside[data-phase="transcript"] .icon-transcript,
+      aside[data-phase="success"] .icon-success,
+      aside[data-phase="clarification"] .icon-clarification,
+      aside[data-phase="confirmation"] .icon-confirmation,
+      aside[data-phase="error"] .icon-error { display: block; }
+      aside[data-phase="success"] .state-mark { color: #74d99f; }
+      aside[data-phase="confirmation"] .state-mark { color: #f2c66d; }
+      aside[data-phase="error"] .state-mark { color: #ff858f; }
+      .copy { display: grid; min-width: 0; gap: 8px; }
+      .meta { display: flex; min-width: 0; align-items: center; gap: 12px; }
+      small { color: #f7f7f8; font-size: 15px; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+      .phase-label { color: #9b9ea6; font-size: 15px; font-weight: 650; }
+      strong { display: -webkit-box; overflow: hidden; font-size: clamp(30px, 3.1vw, 42px); font-weight: 680; letter-spacing: -.025em; line-height: 1.12; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+      .choices { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
       .choices[hidden] { display: none; }
-      .choices li { display: grid; min-width: 0; padding: 9px 12px; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 12px; border: 1px solid rgb(196 181 253 / 24%); border-radius: 14px; background: rgb(196 181 253 / 7%); }
-      .ordinal { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 12px; background: rgb(196 181 253 / 17%); color: #c4b5fd; font-size: 18px; font-weight: 850; }
-      .labels { display: grid; min-width: 0; gap: 2px; }
+      .choices li { display: grid; min-width: 0; padding: 10px 14px; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 14px; border: 1px solid #303238; border-radius: 12px; background: #191a1d; }
+      .ordinal { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #3b3d43; border-radius: 10px; background: #24262a; color: #f7f7f8; font-size: 19px; font-weight: 760; }
+      .labels { display: grid; min-width: 0; gap: 3px; }
       .primary, .secondary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .primary { font-size: 18px; font-weight: 760; }
-      .secondary { color: #aab5c5; font-size: 14px; font-weight: 560; }
+      .primary { font-size: 22px; font-weight: 700; }
+      .secondary { color: #a9abb2; font-size: 17px; font-weight: 540; }
       aside[data-phase="clarification"] { align-items: start; }
-      aside[data-phase="clarification"] .signal { margin-top: 2px; background: #c4b5fd; }
-      aside[data-phase="success"] .signal { background: #72e6a1; }
-      aside[data-phase="confirmation"] .signal { background: #fbbf24; }
-      aside[data-phase="error"] .signal { background: #ff6577; color: #fff; }
-      aside[data-phase="clarification"] small { color: #c4b5fd; }
-      aside[data-phase="success"] small { color: #72e6a1; }
-      aside[data-phase="confirmation"] small { color: #fbbf24; }
-      aside[data-phase="error"] small { color: #ff8795; }
-      aside[data-phase="success"] .signal i,
-      aside[data-phase="error"] .signal i { height: 18px; animation: none; transform: rotate(45deg); }
-      aside[data-phase="success"] .signal i:first-child { width: 6px; height: 14px; transform: translate(6px, 4px) rotate(-42deg); }
-      aside[data-phase="success"] .signal i:nth-child(2) { width: 6px; height: 25px; transform: translate(-4px, -1px) rotate(42deg); }
-      aside[data-phase="success"] .signal i:last-child { display: none; }
-      aside[data-phase="error"] .signal i:first-child { transform: translate(5px) rotate(45deg); }
-      aside[data-phase="error"] .signal i:nth-child(2) { transform: translate(-4px) rotate(-45deg); }
-      aside[data-phase="error"] .signal i:last-child { display: none; }
-      @keyframes pulse { to { height: 36px; } }
-      @media (prefers-reduced-motion: reduce) { .signal i { animation: none; } }
+      aside[data-phase="clarification"] .state-mark { margin-top: 2px; }
+      @keyframes level { to { height: 27px; } }
+      @media (prefers-reduced-motion: reduce) { .levels i { animation: none; } }
     </style>
   </head>
   <body>
     <aside id="voice" data-phase="listening" role="status" aria-live="polite" aria-atomic="true">
-      <span class="signal" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="state-mark" aria-hidden="true">
+        <span class="levels"><i></i><i></i><i></i></span>
+        <svg class="state-icon icon-working" viewBox="0 0 32 32"><circle cx="7" cy="16" r="1.5"></circle><circle cx="16" cy="16" r="1.5"></circle><circle cx="25" cy="16" r="1.5"></circle></svg>
+        <svg class="state-icon icon-transcript" viewBox="0 0 32 32"><path d="M7 9h18M7 16h15M7 23h11"></path></svg>
+        <svg class="state-icon icon-success" viewBox="0 0 32 32"><path d="m7 17 6 6L26 9"></path></svg>
+        <svg class="state-icon icon-clarification" viewBox="0 0 32 32"><path d="M11.5 11.5a5 5 0 0 1 9.4 2.4c0 4-4.9 4.1-4.9 7.1M16 26h.01"></path></svg>
+        <svg class="state-icon icon-confirmation" viewBox="0 0 32 32"><rect x="9" y="5" width="14" height="22" rx="2.5"></rect><path d="m12.5 17 2.5 2.5 5-5"></path></svg>
+        <svg class="state-icon icon-error" viewBox="0 0 32 32"><path d="M16 7 27 26H5L16 7Z"></path><path d="M16 13v6M16 23h.01"></path></svg>
+      </span>
       <div class="copy">
-        <small id="label">AI Voice</small>
+        <div class="meta"><small id="label">Voice</small><span class="phase-label" id="phase-label">Listening</span></div>
         <strong id="detail">Listening…</strong>
         <ol class="choices" id="choices" aria-label="Choices" role="list" hidden></ol>
       </div>
@@ -119,23 +122,23 @@ export function providerVoiceOverlayBounds(
 
 function overlayCopy(state: VoicePresentationState): { copy: string; label: string } {
   if (state.phase === "transcript") {
-    return { copy: state.transcript ?? "", label: "You said" };
+    return { copy: state.transcript ?? "", label: "Voice" };
   }
   if (state.phase === "success") {
-    return { copy: state.detail ?? "Done", label: "Done" };
+    return { copy: state.detail ?? "Done", label: "Voice" };
   }
   if (state.phase === "clarification") {
-    return { copy: state.detail ?? "Which one did you mean?", label: "Choose one" };
+    return { copy: state.detail ?? "Which one did you mean?", label: "Voice" };
   }
   if (state.phase === "confirmation") {
-    return { copy: state.detail ?? "Confirm on your phone.", label: "Confirm on phone" };
+    return { copy: state.detail ?? "Confirm on your phone.", label: "Voice" };
   }
   if (state.phase === "error") {
-    return { copy: state.detail ?? "Voice control could not finish that", label: "Try again" };
+    return { copy: state.detail ?? "Voice control could not finish that", label: "Voice" };
   }
   return {
     copy: state.detail ?? (state.phase === "listening" ? "Listening…" : "Understanding…"),
-    label: "AI Voice"
+    label: "Voice"
   };
 }
 
@@ -259,11 +262,21 @@ export class ProviderVoiceOverlay {
         const state = ${payload};
         const root = document.querySelector("#voice");
         const label = document.querySelector("#label");
+        const phaseLabel = document.querySelector("#phase-label");
         const detail = document.querySelector("#detail");
         const choices = document.querySelector("#choices");
-        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(detail instanceof HTMLElement) || !(choices instanceof HTMLOListElement)) return;
+        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(phaseLabel instanceof HTMLElement) || !(detail instanceof HTMLElement) || !(choices instanceof HTMLOListElement)) return;
         root.dataset.phase = state.phase;
         label.textContent = state.label;
+        phaseLabel.textContent = ({
+          listening: "Listening",
+          understanding: "Working",
+          transcript: "Heard",
+          success: "Complete",
+          clarification: "Choose one",
+          confirmation: "Confirmation",
+          error: "Needs attention"
+        })[state.phase] ?? "Working";
         detail.textContent = state.copy;
         choices.replaceChildren();
         for (const choice of state.phase === "clarification" ? state.choices : []) {

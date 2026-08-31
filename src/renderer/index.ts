@@ -234,6 +234,7 @@ const elements = {
   voicePresentation: requireElement<HTMLElement>("#voice-presentation", "voice-presentation"),
   voicePresentationChoices: requireElement<HTMLOListElement>("#voice-presentation-choices", "voice-presentation-choices"),
   voicePresentationCopy: requireElement<HTMLElement>("#voice-presentation-copy", "voice-presentation-copy"),
+  voicePresentationDetail: requireElement<HTMLElement>("#voice-presentation-detail", "voice-presentation-detail"),
   voicePresentationLabel: requireElement<HTMLElement>("#voice-presentation-label", "voice-presentation-label"),
   voiceSettingsButton: requireElement<HTMLButtonElement>("#voice-settings-button", "voice-settings-button"),
   voiceSettingsCopy: requireElement<HTMLElement>("#voice-settings-copy", "voice-settings-copy"),
@@ -275,7 +276,10 @@ let continueManaging = false;
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
 let voicePresentationFailsafeTimer: number | null = null;
-const VOICE_PRESENTATION_FAILSAFE_MS = 150_000;
+let voicePresentationLongWaitTimer: number | null = null;
+let voiceUnderstandingStartedAt = 0;
+const VOICE_PRESENTATION_FAILSAFE_MS = 65_000;
+const VOICE_PRESENTATION_LONG_WAIT_MS = 15_000;
 let featuredContinueItemId: string | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
@@ -302,9 +306,14 @@ function showFeedback(message: string): void {
 }
 
 function renderVoicePresentation(presentation: VoicePresentationState): void {
+  const previousPhase = elements.voicePresentation.dataset.phase;
   if (voicePresentationFailsafeTimer !== null) {
     window.clearTimeout(voicePresentationFailsafeTimer);
     voicePresentationFailsafeTimer = null;
+  }
+  if (voicePresentationLongWaitTimer !== null) {
+    window.clearTimeout(voicePresentationLongWaitTimer);
+    voicePresentationLongWaitTimer = null;
   }
 
   const hidden = presentation.phase === "hidden";
@@ -312,6 +321,8 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
   elements.voicePresentation.dataset.phase = presentation.phase;
   elements.voicePresentationLabel.textContent = copy.label;
   elements.voicePresentationCopy.textContent = copy.copy;
+  elements.voicePresentationDetail.textContent = copy.detail ?? "";
+  elements.voicePresentationDetail.hidden = copy.detail === null;
   elements.voicePresentationChoices.replaceChildren();
   const choices = presentation.phase === "clarification"
     ? presentation.choices?.slice(0, 3) ?? []
@@ -342,14 +353,38 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
   elements.voicePresentationChoices.hidden = choices.length === 0;
   elements.voicePresentation.hidden = hidden;
 
+  if (presentation.phase === "understanding") {
+    if (previousPhase !== "understanding" || voiceUnderstandingStartedAt === 0) {
+      voiceUnderstandingStartedAt = Date.now();
+    }
+    const elapsed = Date.now() - voiceUnderstandingStartedAt;
+    const showLongWait = () => {
+      if (elements.voicePresentation.dataset.phase !== "understanding") return;
+      elements.voicePresentationLabel.textContent = "Still working";
+      const stage = copy.detail ?? (presentation.transcript === null ? copy.copy : "");
+      elements.voicePresentationDetail.textContent = stage.length > 0
+        ? `${stage.replace(/…$/, "")} · You can cancel from your phone.`
+        : "You can cancel from your phone.";
+      elements.voicePresentationDetail.hidden = false;
+      voicePresentationLongWaitTimer = null;
+    };
+    const remaining = VOICE_PRESENTATION_LONG_WAIT_MS - elapsed;
+    if (remaining <= 0) showLongWait();
+    else voicePresentationLongWaitTimer = window.setTimeout(showLongWait, remaining);
+  } else {
+    voiceUnderstandingStartedAt = 0;
+  }
+
   if (!hidden) {
     // Main owns the normal phase timing. This renderer-only timeout prevents a
     // stale overlay if the event sequence is interrupted; it stores no transcript.
     voicePresentationFailsafeTimer = window.setTimeout(() => {
       elements.voicePresentation.hidden = true;
       elements.voicePresentation.dataset.phase = "hidden";
-      elements.voicePresentationLabel.textContent = "AI Voice";
+      elements.voicePresentationLabel.textContent = "Voice";
       elements.voicePresentationCopy.textContent = "";
+      elements.voicePresentationDetail.textContent = "";
+      elements.voicePresentationDetail.hidden = true;
       elements.voicePresentationChoices.replaceChildren();
       elements.voicePresentationChoices.hidden = true;
       voicePresentationFailsafeTimer = null;

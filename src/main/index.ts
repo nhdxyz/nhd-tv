@@ -179,7 +179,7 @@ const CATALOG_CACHE_MS = 15 * 60 * 1_000;
 const VOICE_ACTIVITY_TIMEOUT_MS = 22_000;
 const VOICE_CONFIRMATION_DISPLAY_MS = 30_000;
 const VOICE_RESULT_DISPLAY_MS = 4_500;
-const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 1_400;
+const VOICE_TRANSCRIPT_MIN_DISPLAY_MS = 3_000;
 const VOICE_COMMAND_SOFT_TIMEOUT_MS = 50_000;
 const VOICE_CONFIRMATION_SOFT_TIMEOUT_MS = 32_000;
 const VOICE_UNDERSTANDING_TIMEOUT_MS = 52_000;
@@ -229,6 +229,7 @@ let activeVoiceProcessingCommandId: string | null = null;
 let providerVoiceOverlay: ProviderVoiceOverlay | null = null;
 let voicePresentationTimer: NodeJS.Timeout | null = null;
 let voicePresentationVersion = 0;
+let voicePresentationTranscript: string | null = null;
 let voiceTranscriptPresentedAt = 0;
 let serviceHost: ServiceHost | null = null;
 let shellPointerSnapKey: string | null = null;
@@ -696,6 +697,7 @@ function showVoicePresentation(
   const version = ++voicePresentationVersion;
   if (phase === "hidden") {
     currentVoiceCommandId = null;
+    voicePresentationTranscript = null;
   } else if (commandId !== undefined) {
     currentVoiceCommandId = commandId;
   }
@@ -725,6 +727,7 @@ function presentPhoneVoiceActivity(activity: PhoneRemoteVoiceActivity): void {
 
   markAmbientActivity();
   if (activity.phase === "listening") {
+    voicePresentationTranscript = null;
     showVoicePresentation(
       "listening",
       { detail: "Listening…" },
@@ -763,6 +766,7 @@ function voiceResultDetail(result: PhoneRemoteVoiceResult): string {
 function presentPhoneVoiceTranscript(transcript: string): void {
   const commandId = activeVoiceProcessingCommandId;
   if (commandId === null) return;
+  voicePresentationTranscript = transcript;
   showVoicePresentation(
     "transcript",
     { detail: "You said", transcript },
@@ -781,7 +785,7 @@ function presentPhoneVoiceProgress(
     if (activeVoiceProcessingCommandId !== commandId) return;
     showVoicePresentation(
       "understanding",
-      { detail },
+      { detail, transcript: voicePresentationTranscript },
       VOICE_UNDERSTANDING_TIMEOUT_MS,
       commandId
     );

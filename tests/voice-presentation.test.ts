@@ -152,25 +152,44 @@ describe("TV voice presentation", () => {
     };
     expect(voicePresentationCopy(transcript)).toEqual({
       copy: "“Play the latest Cody Ko video”",
+      detail: null,
       label: "You said"
     });
     expect(voicePresentationCopy({
       detail: "Listening…",
       phase: "listening",
       transcript: null
-    })).toEqual({ copy: "Listening…", label: "AI Voice" });
+    })).toEqual({
+      copy: "Listening…",
+      detail: "TV audio is muted until you release.",
+      label: "Voice"
+    });
+    expect(voicePresentationCopy({
+      detail: "Checking your services…",
+      phase: "understanding",
+      transcript: "Play Breaking Bad"
+    })).toEqual({
+      copy: "“Play Breaking Bad”",
+      detail: "Checking your services…",
+      label: "Voice"
+    });
     expect(voicePresentationCopy({
       choices: [{ id: "movie:it-2017", ordinal: 1, primaryLabel: "It" }],
       detail: "Which version of It?",
       phase: "clarification",
       transcript: null
-    })).toEqual({ copy: "Which version of It?", label: "Choose one" });
+    })).toEqual({
+      copy: "Which version of It?",
+      detail: "Say 1, 2, or 3, or choose with your remote.",
+      label: "Choose one"
+    });
     expect(voicePresentationCopy({
       detail: "Confirm on your phone — Play Breaking Bad?",
       phase: "confirmation",
       transcript: null
     })).toEqual({
       copy: "Confirm on your phone — Play Breaking Bad?",
+      detail: "Use the phone remote to continue or cancel.",
       label: "Confirm on phone"
     });
   });
@@ -191,7 +210,11 @@ describe("TV voice presentation", () => {
     expect(render.slice(0, 4_500)).toContain("primary.textContent = choice.primaryLabel");
     expect(render.slice(0, 4_500)).toContain("secondary.textContent = choice.secondaryLabel");
     expect(render.slice(0, 4_500)).not.toContain("innerHTML");
-    expect(renderer).toContain("VOICE_PRESENTATION_FAILSAFE_MS = 150_000");
+    expect(renderer).toContain("VOICE_PRESENTATION_FAILSAFE_MS = 65_000");
+    expect(renderer).toContain("VOICE_PRESENTATION_LONG_WAIT_MS = 15_000");
+    expect(renderer).toContain('elements.voicePresentationLabel.textContent = "Still working"');
+    expect(renderer).toContain("You can cancel from your phone.");
+    expect(renderer).toContain("voicePresentationDetail.textContent = copy.detail");
   });
 
   it("provides a non-blocking accessible TV surface", () => {
@@ -203,8 +226,10 @@ describe("TV voice presentation", () => {
     expect(css).toContain(".voice-presentation");
     expect(css).toContain("pointer-events: none");
     expect(css).toContain("-webkit-line-clamp: 3");
-    expect(css).toContain("grid-template-columns: 3.7rem minmax(0, 1fr)");
-    expect(css).toContain("font-size: clamp(1.18rem, 2vw, 1.5rem)");
+    expect(html).toContain('id="voice-presentation-detail"');
+    expect(css).toContain("grid-template-columns: 4rem minmax(0, 1fr)");
+    expect(css).toContain("font-size: clamp(1.45rem, 2.35vw, 2rem)");
+    expect(css).toContain("background: var(--voice-surface)");
     expect(css).toContain('.voice-presentation[data-phase="listening"]');
     expect(css).toContain('.voice-presentation[data-phase="clarification"]');
     expect(css).toContain('.voice-presentation[data-phase="confirmation"]');

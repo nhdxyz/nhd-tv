@@ -79,8 +79,9 @@
         <i></i><i></i><i></i>
       </span>
       <div class="voice-presentation-content">
-        <small id="voice-presentation-label">AI Voice</small>
+        <small id="voice-presentation-label">Voice</small>
         <strong id="voice-presentation-copy">Listening…</strong>
+        <span class="voice-presentation-detail" id="voice-presentation-detail"></span>
         <ol
           class="voice-presentation-choices"
           id="voice-presentation-choices"
@@ -348,155 +349,185 @@
 
       <section class="app-view settings-view" id="settings-view" data-view="settings" hidden>
         <header class="view-heading">
-          <p class="eyebrow">NHD-TV Settings</p>
-          <h1>Make the room yours.</h1>
-          <p>Input, privacy, and host controls stay on this computer.</p>
+          <p class="eyebrow">Settings</p>
+          <h1>Settings</h1>
+          <p>Manage voice, remotes, playback, and this television.</p>
         </header>
 
-        <section class="settings-row horizontal-row" aria-label="Primary settings" data-nav-group="settings-primary">
-          <button class="settings-card settings-card-accent" id="settings-remote-button" type="button">
-            <span class="settings-icon" aria-hidden="true">⌁</span>
-            <span>
-              <strong>Phone remote</strong>
-              <small id="settings-remote-copy">Pair on your trusted local network</small>
-            </span>
-          </button>
-          <button class="settings-card" id="remote-auto-connect-toggle" type="button" aria-pressed="true">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">AUTO</span>
-            <span>
-              <strong>Auto-connect first remote</strong>
-              <small id="remote-auto-connect-copy">On · first scan connects when no remote is active</small>
-            </span>
-          </button>
-          <button class="settings-card" id="sound-toggle" type="button" aria-pressed="true">
-            <span class="settings-icon" aria-hidden="true">♪</span>
-            <span>
-              <strong>Navigation sound</strong>
-              <small id="sound-toggle-copy">On</small>
-            </span>
-          </button>
-          <button class="settings-card" id="gamepad-card" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">PAD</span>
-            <span>
-              <strong>Game controller</strong>
-              <small id="gamepad-copy">Connect an Xbox-style controller</small>
-            </span>
-          </button>
-          <button class="settings-card" id="profile-card" type="button">
-            <span class="settings-icon" aria-hidden="true">◎</span>
-            <span>
-              <strong>Local profile</strong>
-              <small id="profile-card-copy">Separate lineup and viewing history</small>
-            </span>
-          </button>
-        </section>
+        <div class="settings-categories">
+          <section class="settings-category" aria-labelledby="settings-remote-title">
+            <header class="settings-category-heading">
+              <p class="eyebrow">01</p>
+              <h2 id="settings-remote-title">Remote & profiles</h2>
+              <p>Connect the controls and people who use this TV.</p>
+            </header>
+            <div class="settings-list" data-nav-group="settings-primary">
+              <button class="settings-card settings-card-accent" id="settings-remote-button" type="button">
+                <span class="settings-icon" aria-hidden="true">⌁</span>
+                <span>
+                  <strong>Phone remote</strong>
+                  <small id="settings-remote-copy">Pair on your trusted local network</small>
+                </span>
+              </button>
+              <button class="settings-card" id="remote-auto-connect-toggle" type="button" aria-pressed="true">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">AUTO</span>
+                <span>
+                  <strong>Auto-connect first remote</strong>
+                  <small id="remote-auto-connect-copy">On · first scan connects when no remote is active</small>
+                </span>
+              </button>
+              <button class="settings-card" id="sound-toggle" type="button" aria-pressed="true">
+                <span class="settings-icon" aria-hidden="true">♪</span>
+                <span>
+                  <strong>Navigation sound</strong>
+                  <small id="sound-toggle-copy">On</small>
+                </span>
+              </button>
+              <button class="settings-card" id="gamepad-card" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">PAD</span>
+                <span>
+                  <strong>Game controller</strong>
+                  <small id="gamepad-copy">Connect and test a controller</small>
+                </span>
+              </button>
+              <button class="settings-card" id="profile-card" type="button">
+                <span class="settings-icon" aria-hidden="true">◎</span>
+                <span>
+                  <strong>Profiles</strong>
+                  <small id="profile-card-copy">Choose viewing history and apps</small>
+                </span>
+              </button>
+            </div>
+          </section>
 
-        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Voice control settings" data-nav-group="settings-voice">
-          <button class="settings-card settings-card-accent" id="voice-settings-button" type="button">
-            <span class="settings-icon" aria-hidden="true">◉</span>
-            <span>
-              <strong>AI voice setup</strong>
-              <small id="voice-settings-copy">Add an OpenAI API key to use voice control</small>
-            </span>
-          </button>
-          <button class="settings-card" id="voice-control-toggle" type="button" aria-pressed="false">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">VOICE</span>
-            <span>
-              <strong>Voice control</strong>
-              <small id="voice-control-copy">Off</small>
-            </span>
-          </button>
-          <button class="settings-card" id="voice-playback-mode" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">PLAY</span>
-            <span>
-              <strong>Voice playback</strong>
-              <small id="voice-playback-mode-copy">Confirm before playing</small>
-            </span>
-          </button>
-          <button class="settings-card" id="voice-region-button" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">AREA</span>
-            <span>
-              <strong>Availability region</strong>
-              <small id="voice-region-copy">Automatic detection</small>
-            </span>
-          </button>
-        </section>
+          <section class="settings-category" aria-labelledby="settings-voice-title">
+            <header class="settings-category-heading">
+              <p class="eyebrow">02</p>
+              <h2 id="settings-voice-title">Voice</h2>
+              <p>Choose how spoken requests are understood and played.</p>
+            </header>
+            <div class="settings-list" data-nav-group="settings-voice">
+              <button class="settings-card settings-card-accent" id="voice-settings-button" type="button">
+                <span class="settings-icon" aria-hidden="true">◉</span>
+                <span>
+                  <strong>Voice setup</strong>
+                  <small id="voice-settings-copy">Add an OpenAI API key to use voice control</small>
+                </span>
+              </button>
+              <button class="settings-card" id="voice-control-toggle" type="button" aria-pressed="false">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">VOICE</span>
+                <span>
+                  <strong>Voice control</strong>
+                  <small id="voice-control-copy">Off</small>
+                </span>
+              </button>
+              <button class="settings-card" id="voice-playback-mode" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">PLAY</span>
+                <span>
+                  <strong>Playback behavior</strong>
+                  <small id="voice-playback-mode-copy">Confirm before playing</small>
+                </span>
+              </button>
+              <button class="settings-card" id="voice-region-button" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">AREA</span>
+                <span>
+                  <strong>Availability region</strong>
+                  <small id="voice-region-copy">Automatic detection</small>
+                </span>
+              </button>
+            </div>
+          </section>
 
-        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Television settings" data-nav-group="settings-television">
-          <button class="settings-card" id="display-card" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">TV</span>
-            <span>
-              <strong>Television display</strong>
-              <small id="display-copy">Checking connected displays</small>
-            </span>
-          </button>
-          <button class="settings-card" id="fullscreen-toggle" type="button" aria-pressed="true">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">FULL</span>
-            <span>
-              <strong>Open fullscreen</strong>
-              <small id="fullscreen-copy">On</small>
-            </span>
-          </button>
-          <button class="settings-card" id="safe-area-toggle" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">SAFE</span>
-            <span>
-              <strong>Screen margins</strong>
-              <small id="safe-area-copy">Standard</small>
-            </span>
-          </button>
-          <button class="settings-card" id="motion-toggle" type="button" aria-pressed="false">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">FX</span>
-            <span>
-              <strong>Reduce motion</strong>
-              <small id="motion-copy">Off</small>
-            </span>
-          </button>
-          <button class="settings-card settings-card-accent" id="youtube-tv-toggle" type="button" aria-pressed="true">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">YT</span>
-            <span>
-              <strong>YouTube TV Mode</strong>
-              <small id="youtube-tv-copy">On · remote-friendly layout</small>
-            </span>
-          </button>
-          <button class="settings-card" id="youtube-tv-scale" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">SIZE</span>
-            <span>
-              <strong>YouTube interface size</strong>
-              <small id="youtube-tv-scale-copy">Standard</small>
-            </span>
-          </button>
-        </section>
+          <section class="settings-category" aria-labelledby="settings-display-title">
+            <header class="settings-category-heading">
+              <p class="eyebrow">03</p>
+              <h2 id="settings-display-title">Display & playback</h2>
+              <p>Set the screen, sizing, motion, and YouTube layout.</p>
+            </header>
+            <div class="settings-list" data-nav-group="settings-television">
+              <button class="settings-card" id="display-card" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">TV</span>
+                <span>
+                  <strong>Television display</strong>
+                  <small id="display-copy">Checking connected displays</small>
+                </span>
+              </button>
+              <button class="settings-card" id="fullscreen-toggle" type="button" aria-pressed="true">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">FULL</span>
+                <span>
+                  <strong>Open fullscreen</strong>
+                  <small id="fullscreen-copy">On</small>
+                </span>
+              </button>
+              <button class="settings-card" id="safe-area-toggle" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">SAFE</span>
+                <span>
+                  <strong>Screen margins</strong>
+                  <small id="safe-area-copy">Standard</small>
+                </span>
+              </button>
+              <button class="settings-card" id="motion-toggle" type="button" aria-pressed="false">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">FX</span>
+                <span>
+                  <strong>Reduce motion</strong>
+                  <small id="motion-copy">Off</small>
+                </span>
+              </button>
+              <button class="settings-card settings-card-accent" id="youtube-tv-toggle" type="button" aria-pressed="true">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">YT</span>
+                <span>
+                  <strong>YouTube TV Mode</strong>
+                  <small id="youtube-tv-copy">On · remote-friendly layout</small>
+                </span>
+              </button>
+              <button class="settings-card" id="youtube-tv-scale" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">SIZE</span>
+                <span>
+                  <strong>YouTube interface size</strong>
+                  <small id="youtube-tv-scale-copy">Standard</small>
+                </span>
+              </button>
+            </div>
+          </section>
 
-        <section class="settings-row settings-row-secondary horizontal-row" aria-label="Ambient display settings" data-nav-group="settings-ambient">
-          <button class="settings-card settings-card-accent" id="ambient-display-toggle" type="button" aria-pressed="true">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">TIME</span>
-            <span>
-              <strong>Ambient display</strong>
-              <small id="ambient-display-copy">On · starts after 10 minutes</small>
-            </span>
-          </button>
-          <button class="settings-card" id="ambient-clock-style" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">STYLE</span>
-            <span>
-              <strong>Clock theme</strong>
-              <small id="ambient-clock-style-copy">Digital</small>
-            </span>
-          </button>
-          <button class="settings-card" id="ambient-display-delay" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">WAIT</span>
-            <span>
-              <strong>Starts after</strong>
-              <small id="ambient-display-delay-copy">10 minutes</small>
-            </span>
-          </button>
-          <button class="settings-card" id="ambient-display-preview" type="button">
-            <span class="settings-icon settings-icon-text" aria-hidden="true">VIEW</span>
-            <span>
-              <strong>Preview clock</strong>
-              <small>Wake it with any remote or input</small>
-            </span>
-          </button>
-        </section>
+          <section class="settings-category" aria-labelledby="settings-ambient-title">
+            <header class="settings-category-heading">
+              <p class="eyebrow">04</p>
+              <h2 id="settings-ambient-title">Ambient display</h2>
+              <p>Show a clock when the TV is idle.</p>
+            </header>
+            <div class="settings-list" data-nav-group="settings-ambient">
+              <button class="settings-card settings-card-accent" id="ambient-display-toggle" type="button" aria-pressed="true">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">TIME</span>
+                <span>
+                  <strong>Ambient display</strong>
+                  <small id="ambient-display-copy">On · starts after 10 minutes</small>
+                </span>
+              </button>
+              <button class="settings-card" id="ambient-clock-style" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">STYLE</span>
+                <span>
+                  <strong>Clock theme</strong>
+                  <small id="ambient-clock-style-copy">Digital</small>
+                </span>
+              </button>
+              <button class="settings-card" id="ambient-display-delay" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">WAIT</span>
+                <span>
+                  <strong>Starts after</strong>
+                  <small id="ambient-display-delay-copy">10 minutes</small>
+                </span>
+              </button>
+              <button class="settings-card" id="ambient-display-preview" type="button">
+                <span class="settings-icon settings-icon-text" aria-hidden="true">VIEW</span>
+                <span>
+                  <strong>Preview clock</strong>
+                  <small>Wake it with any remote or input</small>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
 
         <section class="settings-details">
           <article class="privacy-card">

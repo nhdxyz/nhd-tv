@@ -67,9 +67,30 @@ describe("provider voice overlay", () => {
     expect(overlaySource).toContain('state.phase === "clarification"');
     expect(overlaySource).toContain('aria-label="Choices"');
     expect(overlaySource).toContain("-webkit-line-clamp: 3");
-    expect(overlaySource).toContain("grid-template-columns: 64px minmax(0, 1fr)");
-    expect(overlaySource).toContain("font-size: clamp(24px, 3.4vw, 34px)");
+    expect(overlaySource).toContain("grid-template-columns: 58px minmax(0, 1fr)");
+    expect(overlaySource).toContain("font-size: clamp(30px, 3.1vw, 42px)");
     expect(overlaySource).not.toContain("innerHTML");
+  });
+
+  it("uses a restrained provider-neutral command tray with explicit voice states", () => {
+    const overlaySource = readFileSync(
+      new URL("../src/main/voice/provider-voice-overlay.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(overlaySource).toContain('background: rgb(14 15 17 / 98%)');
+    expect(overlaySource).toContain('<small id="label">Voice</small>');
+    expect(overlaySource).toContain('id="phase-label">Listening</span>');
+    expect(overlaySource).toContain('aside[data-phase="listening"] .levels { display: flex; }');
+    expect(overlaySource).toContain('class="state-icon icon-success"');
+    expect(overlaySource).toContain('class="state-icon icon-confirmation"');
+    expect(overlaySource).toContain('class="state-icon icon-error"');
+    expect(overlaySource).toContain('success: "Complete"');
+    expect(overlaySource).toContain('confirmation: "Confirmation"');
+    expect(overlaySource).toContain('error: "Needs attention"');
+    expect(overlaySource).not.toContain("AI Voice");
+    expect(overlaySource).not.toContain("#d7ff55");
+    expect(overlaySource).not.toContain("backdrop-filter");
   });
 
   it("replaces a finalized transcript with truthful execution progress", () => {

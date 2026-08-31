@@ -327,6 +327,7 @@ input {
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.2;
+  overflow-wrap: anywhere;
   text-align: right;
 }
 #connection-state span {
@@ -490,11 +491,8 @@ input {
 }
 .voice-button:disabled { background: #282826; color: #74746f; box-shadow: inset 0 0 0 1px #333330; }
 .voice-cancel {
-  position: absolute;
-  z-index: 2;
-  top: 1.15rem;
-  right: 1.15rem;
-  min-width: 5.25rem;
+  position: static;
+  width: 100%;
   min-height: 3rem;
   border: 1px solid #ff687c;
   border-radius: 0.65rem;
@@ -528,6 +526,7 @@ input {
   font-size: 0.78rem;
   font-weight: 750;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .voice-help {
   margin: 0;
@@ -549,8 +548,12 @@ input {
   left: 0.8rem;
   top: 6.5rem;
   display: grid;
+  max-height: calc(100% - 7.3rem);
   padding: 1rem;
   gap: 0.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, #30302d);
   border-radius: 0.85rem;
   background: #1b1b1a;
@@ -558,7 +561,7 @@ input {
 }
 .voice-confirm[hidden] { display: none; }
 .voice-confirm small { color: #bdbdb7; font-size: 0.7rem; font-weight: 750; letter-spacing: 0.02em; }
-.voice-confirm strong { font-size: 1rem; line-height: 1.4; }
+.voice-confirm strong { font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
 .voice-confirm-expiry {
   margin: 0.05rem 0 0;
   color: #a7a7a1;
@@ -582,6 +585,12 @@ input {
 }
 .voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .voice-confirm > .voice-confirm-progress { display: block; }
+.voice-confirm > div:last-child {
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.2rem;
+  background: #1b1b1a;
+}
 .voice-confirm[data-mode="retry"] > div { grid-template-columns: 1fr; }
 .voice-confirm button {
   min-height: 3rem;
@@ -625,7 +634,7 @@ input {
 .dpad {
   position: relative;
   display: grid;
-  width: var(--navigation-size);
+  width: min(var(--navigation-size), 100%);
   aspect-ratio: 1;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   grid-template-areas: ". up ." "left select right" ". down .";
@@ -694,7 +703,7 @@ input {
 .precision-pad {
   position: relative;
   display: grid;
-  width: var(--navigation-size);
+  width: min(var(--navigation-size), 100%);
   aspect-ratio: 1;
   margin: 0 auto;
   place-content: center;
@@ -960,7 +969,11 @@ body.is-connected .footnote { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 `;
 

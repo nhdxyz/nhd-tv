@@ -32,6 +32,8 @@ import { voicePresentationCopy } from "./voice-presentation";
 
 type AppView = "apps" | "home" | "settings" | "store";
 
+const REMOTE_ONBOARDING_STORAGE_KEY = "nhd-phone-remote-onboarding-v1";
+
 const AMBIENT_CLOCK_LABELS: Record<AmbientClockStyle, string> = {
   analog: "Analog",
   digital: "Digital",
@@ -160,6 +162,7 @@ const elements = {
   remoteDialog: requireElement<HTMLDialogElement>("#remote-dialog", "remote-dialog"),
   remoteExpiry: requireElement<HTMLParagraphElement>("#remote-expiry", "remote-expiry"),
   remoteInvite: requireElement<HTMLElement>("#remote-invite", "remote-invite"),
+  remoteInviteDismiss: requireElement<HTMLButtonElement>("#remote-invite-dismiss", "remote-invite-dismiss"),
   remoteInviteQr: requireElement<HTMLImageElement>("#remote-invite-qr", "remote-invite-qr"),
   remotePairingView: requireElement<HTMLDivElement>("#remote-pairing-view", "remote-pairing-view"),
   remoteQr: requireElement<HTMLImageElement>("#remote-qr", "remote-qr"),
@@ -254,6 +257,7 @@ const elements = {
 
 const navigationSounds = new NavigationSounds();
 let currentRemoteStatus: RemoteStatus | null = null;
+let dismissedRemoteInviteQr: string | null = null;
 let openAiCredentialStatus: OpenAiCredentialStatus = {
   detail: "Checking secure storage…",
   state: "missing"
@@ -2249,7 +2253,8 @@ function renderRemoteStatus(status: RemoteStatus): void {
   currentRemoteStatus = status;
   const showInvite = status.connectedControllers === 0
     && status.state === "pairing"
-    && status.qrDataUrl !== null;
+    && status.qrDataUrl !== null
+    && status.qrDataUrl !== dismissedRemoteInviteQr;
   elements.remoteDetail.textContent = status.detail;
   elements.remoteInvite.hidden = !showInvite;
   elements.remotePairingView.hidden = status.state !== "pairing" || status.qrDataUrl === null;
@@ -2266,12 +2271,15 @@ function renderRemoteStatus(status: RemoteStatus): void {
     : `${status.connectedControllers} phone remotes connected for this session.`;
   elements.remoteExpiry.textContent = remoteExpiryCopy(status.expiresAt);
   elements.topRemoteButton.dataset.state = status.state;
-  elements.topRemoteButton.hidden = status.state === "ready";
   elements.topRemoteLabel.textContent = status.state === "awaiting-approval"
     ? "Approve phone"
     : status.state === "pairing"
       ? "Pairing code ready"
-      : "Pair a phone";
+      : status.state === "ready"
+        ? status.connectedControllers === 1
+          ? "1 remote"
+          : `${status.connectedControllers} remotes`
+        : "Pair a phone";
   elements.settingsRemoteCopy.textContent = status.state === "ready"
     ? `${status.connectedControllers} connected for this session`
     : status.state === "awaiting-approval"
@@ -2296,6 +2304,38 @@ function showRemoteError(error: unknown): void {
 
 async function refreshRemoteStatus(): Promise<void> {
   renderRemoteStatus(await window.nhd.getRemoteStatus());
+}
+
+function hasShownRemoteOnboarding(): boolean {
+  try {
+    return localStorage.getItem(REMOTE_ONBOARDING_STORAGE_KEY) === "shown";
+  } catch {
+    return false;
+  }
+}
+
+function rememberRemoteOnboarding(): void {
+  try {
+    localStorage.setItem(REMOTE_ONBOARDING_STORAGE_KEY, "shown");
+  } catch {
+    // Pairing remains available from the header when storage is unavailable.
+  }
+}
+
+async function initializeRemoteStatus(): Promise<void> {
+  try {
+    await refreshRemoteStatus();
+    if (
+      currentRemoteStatus?.state === "inactive"
+      && currentRemoteStatus.connectedControllers === 0
+      && !hasShownRemoteOnboarding()
+    ) {
+      renderRemoteStatus(await window.nhd.startRemotePairing());
+      rememberRemoteOnboarding();
+    }
+  } catch (error) {
+    showRemoteError(error);
+  }
 }
 
 async function startRemotePairing(): Promise<void> {
@@ -2326,6 +2366,11 @@ function openRemoteDialog(): void {
 
 elements.topRemoteButton.addEventListener("click", openRemoteDialog);
 elements.settingsRemoteButton.addEventListener("click", openRemoteDialog);
+elements.remoteInviteDismiss.addEventListener("click", () => {
+  dismissedRemoteInviteQr = currentRemoteStatus?.qrDataUrl ?? null;
+  elements.remoteInvite.hidden = true;
+  elements.topRemoteButton.focus();
+});
 elements.remoteStart.addEventListener("click", () => void startRemotePairing());
 elements.remoteClose.addEventListener("click", () => elements.remoteDialog.close());
 elements.remoteApprove.addEventListener("click", () => {
@@ -3053,7 +3098,7 @@ void window.nhd.getSpotifyPlayback()
   .catch(() => undefined);
 void initializeContinueWatching();
 void initializeServices();
-void refreshRemoteStatus();
+void initializeRemoteStatus();
 window.setInterval(() => void refreshStatus().catch(() => undefined), 5_000);
 window.setInterval(() => {
   if (!elements.remoteDialog.open || currentRemoteStatus === null) {

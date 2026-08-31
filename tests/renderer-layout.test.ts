@@ -9,6 +9,13 @@ describe("TV catalog layout", () => {
   it("keeps phone pairing visible and the home controls purpose-built", () => {
     expect(html).toContain('class="remote-invite" id="remote-invite"');
     expect(html).toContain('id="remote-invite-qr"');
+    expect(html).toContain('id="remote-invite-dismiss"');
+    expect(renderer).toContain('status.connectedControllers === 1');
+    expect(renderer).toContain('? "1 remote"');
+    expect(renderer).not.toContain('elements.topRemoteButton.hidden = status.state === "ready"');
+    expect(renderer).toContain('const REMOTE_ONBOARDING_STORAGE_KEY');
+    expect(renderer).toContain('void initializeRemoteStatus()');
+    expect(css).toContain(".remote-invite-dismiss");
     expect(html).not.toContain("Edit lineup");
     expect(html).toContain('id="top-search-button"');
     expect(html).not.toContain("<span>Search</span>");

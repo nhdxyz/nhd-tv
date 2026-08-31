@@ -51,12 +51,20 @@
       </div>
     </header>
 
-    <aside class="remote-invite" id="remote-invite" aria-live="polite" hidden>
+    <aside class="remote-invite" id="remote-invite" aria-label="Pair a phone remote" aria-live="polite" hidden>
       <img id="remote-invite-qr" alt="Pair an NHD-TV phone remote" />
       <span>
         <strong>Use your phone</strong>
         <small>Scan to connect a remote</small>
       </span>
+      <button
+        class="remote-invite-dismiss"
+        id="remote-invite-dismiss"
+        type="button"
+        aria-label="Dismiss phone pairing suggestion"
+      >
+        ×
+      </button>
     </aside>
 
     <aside class="network-banner" id="network-banner" role="status" aria-live="polite" hidden>

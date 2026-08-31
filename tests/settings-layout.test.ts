@@ -53,6 +53,8 @@ describe("TV settings layout", () => {
     expect(css).toContain(".settings-list {");
     expect(css).toContain('.settings-card[aria-pressed]::before');
     expect(css).toContain('.settings-card[aria-pressed="true"]::after');
-    expect(css).toContain("font-size: 0.88rem");
+    expect(css).toContain("font-size: 0.94rem");
+    expect(settingsMarkup).not.toContain("settings-icon-text");
+    expect(settingsMarkup).not.toContain('<p class="eyebrow">01</p>');
   });
 });

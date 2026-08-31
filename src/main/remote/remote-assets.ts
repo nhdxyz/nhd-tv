@@ -779,6 +779,11 @@ input {
   background: #deded8;
   color: #111110;
 }
+.playback-controls button.media-primary:disabled {
+  border-color: #30302d;
+  background: var(--panel-raised);
+  color: #cacac5;
+}
 .playback-controls button:not(:disabled).is-pressed,
 .playback-controls button:not(:disabled):active,
 .volume-controls button:not(:disabled).is-pressed,

@@ -495,6 +495,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_CSS).not.toMatch(
       /body\[data-active-service="(?:youtube|netflix|disney-plus|spotify)"\]\s*\{[^}]*--accent:/s
     );
+    expect(REMOTE_CSS).toContain(".playback-controls button.media-primary:disabled");
     expect(REMOTE_JS).toContain('voiceButtonCopy.textContent = "Release to send"');
     expect(REMOTE_JS).toContain('"TV audio is muted while you speak."');
     expect(REMOTE_JS).toContain('const transcript = cleanVoiceCopy(result.transcript');

@@ -1445,30 +1445,72 @@ function renderCatalogSearchResults(
     const actions = document.createElement("div");
     actions.className = "catalog-search-actions";
     actions.dataset.navGroup = "catalog-result-" + result.id;
-    for (const service of searchable) {
-      const button = document.createElement("button");
-      button.className = "catalog-result-provider";
-      button.type = "button";
-      button.setAttribute("aria-label", "Search " + service.name + " for " + result.title);
-      button.append(createServiceMark(service.id, service.name));
-      const label = document.createElement("span");
-      label.textContent = service.searchMode === "query"
-        ? "Search " + service.name
-        : "Open " + service.name + " search";
-      button.append(label);
-      button.addEventListener("click", () => void openProviderSearch(service, result.title));
-      actions.append(button);
-    }
     if (searchable.length === 0) {
       const browse = document.createElement("button");
-      browse.className = "catalog-result-provider";
+      browse.className = "catalog-result-primary";
       browse.type = "button";
-      browse.textContent = "Add a searchable app";
+      browse.textContent = "Add an app";
       browse.addEventListener("click", () => {
         elements.searchDialog.close();
         showView("store");
       });
       actions.append(browse);
+    } else if (searchable.length === 1) {
+      const service = searchable[0]!;
+      const search = document.createElement("button");
+      search.className = "catalog-result-primary";
+      search.type = "button";
+      search.textContent = service.searchMode === "query"
+        ? `Search ${service.name}`
+        : `Open ${service.name}`;
+      search.setAttribute("aria-label", `Search ${service.name} for ${result.title}`);
+      search.addEventListener("click", () => void openProviderSearch(service, result.title));
+      actions.append(search);
+    } else {
+      const choose = document.createElement("button");
+      choose.className = "catalog-result-primary";
+      choose.type = "button";
+      choose.textContent = "Choose an app";
+      choose.setAttribute("aria-expanded", "false");
+
+      const providers = document.createElement("div");
+      providers.className = "catalog-result-providers";
+      providers.hidden = true;
+      for (const service of searchable) {
+        const button = document.createElement("button");
+        button.className = "catalog-result-provider";
+        button.type = "button";
+        button.setAttribute("aria-label", "Search " + service.name + " for " + result.title);
+        button.append(createServiceMark(service.id, service.name));
+        const label = document.createElement("span");
+        label.textContent = service.searchMode === "query"
+          ? "Search " + service.name
+          : "Open " + service.name;
+        button.append(label);
+        button.addEventListener("click", () => void openProviderSearch(service, result.title));
+        providers.append(button);
+      }
+      choose.addEventListener("click", () => {
+        const opening = providers.hidden;
+        const remote = choose.dataset.remoteFocused === "true";
+        for (const other of elements.catalogSearchResults.querySelectorAll<HTMLElement>(
+          ".catalog-result-providers"
+        )) {
+          other.hidden = true;
+          other.previousElementSibling?.setAttribute("aria-expanded", "false");
+        }
+        providers.hidden = !opening;
+        choose.setAttribute("aria-expanded", String(opening));
+        if (opening) {
+          const firstProvider = providers.querySelector<HTMLButtonElement>("button");
+          firstProvider?.focus({ preventScroll: true });
+          setRemoteFocusedElement(remote ? firstProvider : null);
+        } else {
+          choose.focus({ preventScroll: true });
+          setRemoteFocusedElement(remote ? choose : null);
+        }
+      });
+      actions.append(choose, providers);
     }
     copy.append(title, meta, summary, source, actions);
     card.append(art, copy);
@@ -1476,8 +1518,8 @@ function renderCatalogSearchResults(
   });
   elements.catalogSearchResults.replaceChildren(...cards);
   elements.catalogSearchStatus.textContent = cards.length === 0
-    ? "No TV-show matches · try another title"
-    : String(cards.length) + " TV-show results · data and posters: TVmaze.com";
+    ? "No matches · try another title"
+    : String(cards.length) + " results · data and posters: TVmaze";
   elements.catalogSearchSection.hidden = false;
 
   if (cards.length === 0 && query.length >= 2) {
@@ -1571,20 +1613,20 @@ function renderSearchResults(rawQuery: string): void {
     return button;
   });
   elements.searchHistoryResults.replaceChildren(...historyButtons);
-  elements.searchHistorySection.hidden = false;
+  elements.searchHistorySection.hidden = query.length > 0 && historyButtons.length === 0;
   elements.searchHistoryTitle.textContent = query.length === 0
-    ? "Pick up where you left off"
-    : "Matches on this TV";
+    ? "Continue watching"
+    : "On this TV";
   elements.searchHistoryCount.textContent = historyButtons.length === 0
     ? ""
     : `${historyButtons.length} ${historyButtons.length === 1 ? "title" : "titles"}`;
-  elements.searchEmptyState.hidden = historyButtons.length > 0;
+  elements.searchEmptyState.hidden = query.length > 0 || historyButtons.length > 0;
   elements.searchEmptyTitle.textContent = query.length === 0
-    ? "Your search starts here"
-    : `No local match for “${query}”`;
+    ? "Search across your TV"
+    : `No match on this TV for “${query}”`;
   elements.searchEmptyCopy.textContent = query.length === 0
-    ? "Start watching in one of your apps and NHD-TV will make that local history searchable."
-    : "No saved local match. Online TV-show results appear above, with app search shortcuts below.";
+    ? "Enter a title, person, genre, or topic. Recent viewing will also appear here."
+    : "TV-show matches and app search remain available below.";
 
   if (query.length === 0) {
     elements.searchProviderSection.hidden = true;
@@ -1624,8 +1666,8 @@ function renderSearchResults(rawQuery: string): void {
   elements.searchResults.replaceChildren(...buttons);
   elements.searchProviderSection.hidden = false;
   elements.searchResultCount.textContent = buttons.length === 0
-    ? "Add Netflix, YouTube, Disney+, or Spotify from Apps"
-    : "The selected app owns its catalog and availability";
+    ? "Add a searchable app first"
+    : `${buttons.length} ${buttons.length === 1 ? "app" : "apps"} available`;
 }
 
 function openSearchDialog(query = "", remote = false): void {
@@ -1636,8 +1678,8 @@ function openSearchDialog(query = "", remote = false): void {
   elements.searchInput.value = query;
   renderSearchResults(query);
   if (remote && query.length > 0) {
-    const firstResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
-      ?? elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+    const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+      ?? elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
       ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
     firstResult?.focus({ preventScroll: true });
     setRemoteFocusedElement(firstResult ?? null);
@@ -1651,8 +1693,8 @@ elements.searchClose.addEventListener("click", () => elements.searchDialog.close
 elements.searchForm.addEventListener("submit", (event) => {
   event.preventDefault();
   renderSearchResults(elements.searchInput.value);
-  const firstResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
-    ?? elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+  const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
+    ?? elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
     ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
   firstResult?.focus();
 });

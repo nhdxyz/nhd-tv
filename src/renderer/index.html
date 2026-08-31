@@ -766,55 +766,65 @@
     <dialog class="search-dialog" id="search-dialog" aria-labelledby="search-title">
       <div class="search-dialog-shell">
         <header class="search-dialog-header">
-          <div>
-            <p class="eyebrow">NHD-TV Search</p>
-            <h2 id="search-title">Find something to watch.</h2>
-          </div>
-          <button class="dialog-close" id="search-close" type="button" aria-label="Close search">×</button>
-        </header>
-        <form class="tv-search-form" id="search-form">
-          <label for="search-input">Title, person, genre, or topic</label>
-          <div>
-            <span aria-hidden="true">⌕</span>
-            <input
-              id="search-input"
-              type="search"
-              maxlength="120"
-              autocomplete="off"
-              enterkeyhint="search"
-              placeholder="Try a title, actor, genre, or topic"
-            />
-          </div>
-        </form>
-        <p class="search-privacy">For queries of 2 or more characters, the text is sent to TVmaze to retrieve TV-show results and is not saved by NHD-TV. App searches are sent only after you choose an app.</p>
-        <section class="search-results catalog-search-section" id="catalog-search-section" aria-labelledby="catalog-search-title" hidden>
-          <div class="section-heading">
-            <h2 id="catalog-search-title">Shows matching your search</h2>
-            <span class="section-hint" id="catalog-search-status">Show data and posters: TVmaze.com</span>
-          </div>
-          <div class="catalog-search-grid" id="catalog-search-results" data-nav-group="catalog-search"></div>
-        </section>
-        <section class="search-results search-history-section" id="search-history-section" aria-labelledby="search-history-title">
-          <div class="section-heading">
-            <h2 id="search-history-title">Pick up where you left off</h2>
-            <span class="section-hint" id="search-history-count"></span>
-          </div>
-          <div class="search-result-row" id="search-history-results" data-nav-group="search-history"></div>
-          <div class="search-empty-state" id="search-empty-state" hidden>
-            <span aria-hidden="true">⌕</span>
+          <div class="search-dialog-titlebar">
             <div>
-              <strong id="search-empty-title">Your search starts here</strong>
-              <p id="search-empty-copy">Start watching in one of your apps and NHD-TV will make that local history searchable.</p>
+              <p class="eyebrow">NHD-TV</p>
+              <h2 id="search-title">Search</h2>
             </div>
+            <button class="dialog-close search-close" id="search-close" type="button" aria-label="Close search">
+              <span aria-hidden="true">←</span>
+              Close
+            </button>
           </div>
-        </section>
-        <section class="search-results search-provider-section" id="search-provider-section" aria-labelledby="search-results-title" hidden>
-          <div class="section-heading">
-            <h2 id="search-results-title">Search in your apps</h2>
-            <span class="section-hint" id="search-result-count">The app owns its catalog and results</span>
-          </div>
-          <div class="search-result-row" id="search-results" data-nav-group="search-results"></div>
-        </section>
+          <form class="tv-search-form" id="search-form">
+            <label for="search-input">What do you want to watch?</label>
+            <div>
+              <span aria-hidden="true">⌕</span>
+              <input
+                id="search-input"
+                type="search"
+                maxlength="120"
+                autocomplete="off"
+                enterkeyhint="search"
+                placeholder="Title, person, genre, or topic"
+              />
+            </div>
+          </form>
+          <p class="search-privacy">
+            <strong>Private search</strong>
+            <span>Queries of 2 or more characters go to TVmaze for TV-show matches and are not saved by NHD-TV. An app receives a query only after you choose it.</span>
+          </p>
+        </header>
+        <div class="search-dialog-results">
+          <section class="search-results search-history-section" id="search-history-section" aria-labelledby="search-history-title">
+            <div class="section-heading">
+              <h2 id="search-history-title">Continue watching</h2>
+              <span class="section-hint" id="search-history-count"></span>
+            </div>
+            <div class="search-result-row" id="search-history-results" data-nav-group="search-history"></div>
+            <div class="search-empty-state" id="search-empty-state" hidden>
+              <span aria-hidden="true">⌕</span>
+              <div>
+                <strong id="search-empty-title">Search across your TV</strong>
+                <p id="search-empty-copy">Enter a title, person, genre, or topic. Recent viewing will also appear here.</p>
+              </div>
+            </div>
+          </section>
+          <section class="search-results catalog-search-section" id="catalog-search-section" aria-labelledby="catalog-search-title" hidden>
+            <div class="section-heading">
+              <h2 id="catalog-search-title">TV-show matches</h2>
+              <span class="section-hint" id="catalog-search-status">Data and posters: TVmaze</span>
+            </div>
+            <div class="catalog-search-grid" id="catalog-search-results" data-nav-group="catalog-search"></div>
+          </section>
+          <section class="search-results search-provider-section" id="search-provider-section" aria-labelledby="search-results-title" hidden>
+            <div class="section-heading">
+              <h2 id="search-results-title">Search this exact phrase</h2>
+              <span class="section-hint" id="search-result-count">Choose an app</span>
+            </div>
+            <div class="search-result-row" id="search-results" data-nav-group="search-results"></div>
+          </section>
+        </div>
       </div>
     </dialog>
 

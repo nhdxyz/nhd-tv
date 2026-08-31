@@ -277,6 +277,7 @@ let currentSpotifyPlayback: SpotifyPlaybackPresentation = {
 let continueWatchingItems: readonly ContinueWatchingItem[] = [];
 let catalogSearchTimer: number | null = null;
 let catalogSearchVersion = 0;
+let promoteRemoteCatalogSearchFocus = false;
 let ambientAnchorTimer: number | null = null;
 let ambientClockTimer: number | null = null;
 let ambientShownAt = 0;
@@ -292,6 +293,9 @@ let voicePresentationLongWaitTimer: number | null = null;
 let voiceUnderstandingStartedAt = 0;
 const VOICE_PRESENTATION_FAILSAFE_MS = 65_000;
 const VOICE_PRESENTATION_LONG_WAIT_MS = 15_000;
+const CATALOG_SEARCH_TIMEOUT_MS = 10_000;
+const PAIRING_OPERATION_TIMEOUT_MS = 12_000;
+const RECOVERY_OPERATION_TIMEOUT_MS = 20_000;
 let featuredContinueItemId: string | null = null;
 let featuredServiceId: string | null = null;
 let favoriteServiceIds = new Set<string>();
@@ -317,6 +321,26 @@ function showFeedback(message: string): void {
     elements.feedback.textContent = "";
     feedbackTimer = null;
   }, 4_000);
+}
+
+function withUiDeadline<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    operation.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function renderVoicePresentation(presentation: VoicePresentationState): void {
@@ -547,14 +571,23 @@ function setRecoveryActionsDisabled(disabled: boolean): void {
 async function runServiceRecovery(mode: ServiceRecoveryMode): Promise<void> {
   const recovery = currentServiceRecovery;
   setRecoveryActionsDisabled(true);
-  if (elements.recoveryDialog.open) elements.recoveryDialog.close();
+  elements.recoveryCopy.textContent = mode === "home"
+    ? "Returning to NHD-TV Home…"
+    : mode === "reload"
+      ? "Reloading the app…"
+      : "Trying the app again…";
 
   try {
-    const handled = await window.nhd.recoverService(mode);
+    const handled = await withUiDeadline(
+      window.nhd.recoverService(mode),
+      RECOVERY_OPERATION_TIMEOUT_MS,
+      "That app is taking too long to recover. Try again or return Home."
+    );
     if (!handled && mode !== "home") {
       throw new Error("That app no longer has a recovery session.");
     }
     currentServiceRecovery = null;
+    if (elements.recoveryDialog.open) elements.recoveryDialog.close();
     if (mode === "home") {
       returnHome(true);
       showFeedback("Returned to NHD-TV Home.");
@@ -1660,6 +1693,38 @@ function renderCatalogSearchResults(
     empty.textContent = "No online TV-show results for “" + query + "”.";
     elements.catalogSearchResults.append(empty);
   }
+
+  if (promoteRemoteCatalogSearchFocus && cards.length > 0 && elements.searchDialog.open) {
+    const firstCatalogResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>(
+      "button"
+    );
+    firstCatalogResult?.focus({ preventScroll: true });
+    setRemoteFocusedElement(firstCatalogResult ?? null);
+  }
+  promoteRemoteCatalogSearchFocus = false;
+}
+
+function renderCatalogSearchFailure(query: string, error: unknown): void {
+  const timedOut = error instanceof Error && error.message.includes("taking too long");
+  elements.catalogSearchStatus.textContent = timedOut
+    ? "Show search took too long"
+    : "Show search is temporarily unavailable";
+  const unavailable = document.createElement("div");
+  unavailable.className = "catalog-search-empty is-retry";
+  const title = document.createElement("strong");
+  title.textContent = timedOut ? "The show search timed out" : "The show search is unavailable";
+  const detail = document.createElement("p");
+  detail.textContent = "Local history and searches inside your apps still work below.";
+  const retry = document.createElement("button");
+  retry.className = "secondary-action";
+  retry.type = "button";
+  retry.textContent = "Try show search again";
+  retry.addEventListener("click", () => {
+    promoteRemoteCatalogSearchFocus = retry.dataset.remoteFocused === "true";
+    scheduleCatalogSearch(query);
+  });
+  unavailable.append(title, detail, retry);
+  elements.catalogSearchResults.replaceChildren(unavailable);
 }
 
 function scheduleCatalogSearch(query: string): void {
@@ -1680,7 +1745,11 @@ function scheduleCatalogSearch(query: string): void {
   elements.catalogSearchResults.replaceChildren();
   catalogSearchTimer = window.setTimeout(() => {
     catalogSearchTimer = null;
-    void window.nhd.searchCatalog(query)
+    void withUiDeadline(
+      window.nhd.searchCatalog(query),
+      CATALOG_SEARCH_TIMEOUT_MS,
+      "Show search is taking too long."
+    )
       .then((results) => {
         if (version === catalogSearchVersion) {
           renderCatalogSearchResults(results, query);
@@ -1690,13 +1759,7 @@ function scheduleCatalogSearch(query: string): void {
         if (version !== catalogSearchVersion) {
           return;
         }
-        elements.catalogSearchStatus.textContent = error instanceof Error
-          ? error.message
-          : "Show search is temporarily unavailable.";
-        const unavailable = document.createElement("div");
-        unavailable.className = "catalog-search-empty";
-        unavailable.textContent = "Local history and app search are still available below.";
-        elements.catalogSearchResults.replaceChildren(unavailable);
+        renderCatalogSearchFailure(query, error);
       });
   }, 450);
 }
@@ -1810,12 +1873,17 @@ function openSearchDialog(query = "", remote = false): void {
   elements.searchInput.value = query;
   renderSearchResults(query);
   if (remote && query.length > 0) {
-    const firstResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button")
-      ?? elements.catalogSearchResults.querySelector<HTMLButtonElement>("button")
-      ?? elements.searchResults.querySelector<HTMLButtonElement>("button");
+    const historyResult = elements.searchHistoryResults.querySelector<HTMLButtonElement>("button");
+    const catalogResult = elements.catalogSearchResults.querySelector<HTMLButtonElement>("button");
+    const providerResult = elements.searchResults.querySelector<HTMLButtonElement>("button");
+    const firstResult = historyResult ?? catalogResult ?? providerResult;
+    promoteRemoteCatalogSearchFocus = historyResult === null
+      && catalogResult === null
+      && providerResult !== null;
     firstResult?.focus({ preventScroll: true });
     setRemoteFocusedElement(firstResult ?? null);
   } else {
+    promoteRemoteCatalogSearchFocus = false;
     elements.searchInput.focus();
   }
 }
@@ -1834,6 +1902,14 @@ elements.searchInput.addEventListener("input", () => renderSearchResults(element
 elements.searchDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   elements.searchDialog.close();
+});
+elements.searchDialog.addEventListener("close", () => {
+  catalogSearchVersion += 1;
+  promoteRemoteCatalogSearchFocus = false;
+  if (catalogSearchTimer !== null) {
+    window.clearTimeout(catalogSearchTimer);
+    catalogSearchTimer = null;
+  }
 });
 
 async function initializeServices(): Promise<void> {
@@ -2419,7 +2495,11 @@ function showRemoteError(error: unknown): void {
 }
 
 async function refreshRemoteStatus(): Promise<void> {
-  renderRemoteStatus(await window.nhd.getRemoteStatus());
+  renderRemoteStatus(await withUiDeadline(
+    window.nhd.getRemoteStatus(),
+    PAIRING_OPERATION_TIMEOUT_MS,
+    "Phone remote status took too long to load."
+  ));
 }
 
 function hasShownRemoteOnboarding(): boolean {
@@ -2446,7 +2526,11 @@ async function initializeRemoteStatus(): Promise<void> {
       && currentRemoteStatus.connectedControllers === 0
       && !hasShownRemoteOnboarding()
     ) {
-      renderRemoteStatus(await window.nhd.startRemotePairing());
+      renderRemoteStatus(await withUiDeadline(
+        window.nhd.startRemotePairing(),
+        PAIRING_OPERATION_TIMEOUT_MS,
+        "Pairing took too long. Try again."
+      ));
       rememberRemoteOnboarding();
     }
   } catch (error) {
@@ -2459,7 +2543,11 @@ async function startRemotePairing(): Promise<void> {
   elements.remoteDetail.textContent = "Creating a private, short-lived pairing code…";
 
   try {
-    renderRemoteStatus(await window.nhd.startRemotePairing());
+    renderRemoteStatus(await withUiDeadline(
+      window.nhd.startRemotePairing(),
+      PAIRING_OPERATION_TIMEOUT_MS,
+      "Pairing took too long. Try again."
+    ));
   } catch (error) {
     showRemoteError(error);
   } finally {
@@ -2982,11 +3070,13 @@ function handleShellRemoteAction(action: RemoteAction): void {
   }
 
   if (action === "up" || action === "down" || action === "left" || action === "right") {
+    if (elements.searchDialog.open) promoteRemoteCatalogSearchFocus = false;
     moveSpatialFocus(action, true);
     return;
   }
 
   if (action === "select") {
+    if (elements.searchDialog.open) promoteRemoteCatalogSearchFocus = false;
     const focused = document.activeElement;
 
     if (focused instanceof HTMLElement && visibleNavigationCandidates().includes(focused)) {

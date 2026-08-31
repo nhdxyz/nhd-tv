@@ -4060,6 +4060,28 @@ h2 {
   font-size: 0.95rem;
 }
 
+.catalog-search-empty.is-retry {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
+.catalog-search-empty.is-retry strong {
+  color: #f4f4f5;
+  font-size: 1.05rem;
+}
+
+.catalog-search-empty.is-retry p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.catalog-search-empty.is-retry .secondary-action {
+  min-height: 3rem;
+  margin-top: 0.25rem;
+  border-radius: 0.55rem;
+}
+
 .search-history-section .search-result-row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;

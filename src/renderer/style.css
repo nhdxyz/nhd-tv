@@ -2254,6 +2254,37 @@ h2 {
   text-align: center;
 }
 
+.service-load-state {
+  display: grid;
+  min-width: min(24rem, calc(100vw - (var(--safe-x) * 2)));
+  min-height: 9rem;
+  align-content: center;
+  gap: 0.55rem;
+  padding: 1.25rem;
+  border: 1px solid #303238;
+  border-radius: 0.85rem;
+  background: #121315;
+}
+
+.service-load-state strong {
+  font-size: 1.08rem;
+}
+
+.service-load-state p {
+  max-width: 28rem;
+  margin: 0;
+  color: #aeb2bb;
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.service-load-state .secondary-action {
+  min-height: 3rem;
+  justify-self: start;
+  margin-top: 0.35rem;
+  border-radius: 0.55rem;
+}
+
 .view-heading {
   padding: clamp(3rem, 7vh, 6.5rem) 0 0;
 }

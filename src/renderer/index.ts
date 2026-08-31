@@ -284,6 +284,7 @@ let ambientIdleVisible = false;
 let spotifyNowPlayingOpen = false;
 let currentView: AppView = "home";
 let continueManaging = false;
+let continueWatchingLoadFailed = false;
 let enabledServiceIds = new Set<string>();
 let feedbackTimer: number | null = null;
 let voicePresentationFailsafeTimer: number | null = null;
@@ -301,6 +302,8 @@ let pendingServiceAction: "clear" | "remove-custom" = "clear";
 let remoteFocusedElement: HTMLElement | null = null;
 let serviceOrder: string[] = [];
 let services: readonly ServiceSummary[] = [];
+let servicesLoadFailed = false;
+let servicesLoading = false;
 let connectedGamepads: readonly GamepadLike[] = [];
 
 function showFeedback(message: string): void {
@@ -1017,24 +1020,32 @@ function renderContinueWatching(): void {
   art.setAttribute("aria-hidden", "true");
   const play = document.createElement("span");
   play.className = "continue-play";
-  play.textContent = "▶";
+  play.textContent = continueWatchingLoadFailed ? "↻" : "▶";
   art.append(play);
   const meta = document.createElement("span");
   meta.className = "continue-meta";
   const title = document.createElement("strong");
-  title.textContent = "Start watching in one of your apps";
+  title.textContent = continueWatchingLoadFailed
+    ? "Continue Watching is unavailable"
+    : "Start watching in one of your apps";
   const detail = document.createElement("small");
-  detail.textContent = "Long-form playback will appear here automatically";
+  detail.textContent = continueWatchingLoadFailed
+    ? "Your history is still safe. Try loading it again."
+    : "Long-form playback will appear here automatically";
   const cue = document.createElement("span");
   cue.className = "continue-empty-cue";
   cue.setAttribute("aria-hidden", "true");
-  cue.append("Choose an app ");
+  cue.append(continueWatchingLoadFailed ? "Try again " : "Choose an app ");
   const arrow = document.createElement("span");
   arrow.textContent = "→";
   cue.append(arrow);
   meta.append(title, detail, cue);
   placeholder.append(art, meta);
   placeholder.addEventListener("click", () => {
+    if (continueWatchingLoadFailed) {
+      void initializeContinueWatching();
+      return;
+    }
     const firstService = services.find((service) => enabledServiceIds.has(service.id));
     if (firstService === undefined) {
       showView("store");
@@ -1052,9 +1063,15 @@ elements.continueManage.addEventListener("click", () => {
 });
 
 async function initializeContinueWatching(): Promise<void> {
-  continueWatchingItems = await window.nhd.getContinueWatching();
-  if (services.length > 0) {
-    renderFeatured(orderedEnabledServices());
+  continueWatchingLoadFailed = false;
+  try {
+    continueWatchingItems = await window.nhd.getContinueWatching();
+    if (services.length > 0) {
+      renderFeatured(orderedEnabledServices());
+    }
+  } catch {
+    continueWatchingItems = [];
+    continueWatchingLoadFailed = true;
   }
   renderContinueWatching();
 }
@@ -1425,6 +1442,84 @@ function renderServiceViews(): void {
   }
 }
 
+function serviceLoadState(
+  title: string,
+  detail: string,
+  retry: boolean
+): HTMLElement {
+  const state = document.createElement("article");
+  state.className = "service-load-state";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const copy = document.createElement("p");
+  copy.textContent = detail;
+  state.append(heading, copy);
+
+  if (retry) {
+    const action = document.createElement("button");
+    action.className = "secondary-action";
+    action.type = "button";
+    action.textContent = "Try again";
+    action.addEventListener("click", () => void initializeServices());
+    state.append(action);
+  }
+
+  return state;
+}
+
+function resetFeaturedForServiceLoad(): void {
+  featuredContinueItemId = null;
+  featuredServiceId = null;
+  delete elements.featuredSection.dataset.serviceId;
+  elements.featuredBrand.replaceChildren();
+  elements.featuredIcon.className = "featured-icon is-lineup";
+  elements.featuredIcon.replaceChildren();
+}
+
+function renderServicesLoading(): void {
+  servicesLoadFailed = false;
+  resetFeaturedForServiceLoad();
+  elements.featuredSection.dataset.mode = "loading";
+  elements.featuredEyebrow.textContent = "Home";
+  elements.featuredTitle.textContent = "Loading your apps";
+  elements.featuredCopy.textContent = "This should only take a moment.";
+  elements.heroOpenButton.disabled = true;
+  elements.heroOpenButton.textContent = "Loading apps…";
+  elements.lineupCount.textContent = "Loading apps…";
+  elements.serviceActions.replaceChildren(
+    serviceLoadState("Loading apps…", "Reading the lineup saved on this TV.", false)
+  );
+  elements.appsActions.replaceChildren(
+    serviceLoadState("Loading apps…", "Reading the lineup saved on this TV.", false)
+  );
+}
+
+function renderServiceLoadFailure(): void {
+  servicesLoadFailed = true;
+  resetFeaturedForServiceLoad();
+  elements.featuredSection.dataset.mode = "error";
+  elements.featuredEyebrow.textContent = "Home";
+  elements.featuredTitle.textContent = "Apps couldn’t load";
+  elements.featuredCopy.textContent = "NHD-TV couldn’t read the app lineup. Try again.";
+  elements.heroOpenButton.disabled = false;
+  elements.heroOpenButton.textContent = "Try again";
+  elements.lineupCount.textContent = "Couldn’t load apps";
+  elements.serviceActions.replaceChildren(
+    serviceLoadState(
+      "Apps are unavailable",
+      "Your lineup is still saved on this TV.",
+      true
+    )
+  );
+  elements.appsActions.replaceChildren(
+    serviceLoadState(
+      "Apps are unavailable",
+      "Your lineup is still saved on this TV.",
+      true
+    )
+  );
+}
+
 function enabledSearchServices(): ServiceSummary[] {
   return services.filter(
     (service) => enabledServiceIds.has(service.id) && service.searchMode !== "none"
@@ -1742,15 +1837,31 @@ elements.searchDialog.addEventListener("cancel", (event) => {
 });
 
 async function initializeServices(): Promise<void> {
-  const [availableServices, state, credentialStatus] = await Promise.all([
-    window.nhd.getServices(),
-    window.nhd.getLocalAppState(),
-    window.nhd.getOpenAiCredentialStatus()
-  ]);
-  services = availableServices;
-  applyLocalAppState(state);
-  renderOpenAiCredentialStatus(credentialStatus);
-  renderServiceViews();
+  if (servicesLoading) return;
+  servicesLoading = true;
+  renderServicesLoading();
+
+  void window.nhd.getOpenAiCredentialStatus()
+    .then(renderOpenAiCredentialStatus)
+    .catch(() => renderOpenAiCredentialStatus({
+      detail: "Secure credential storage is unavailable right now.",
+      state: "unavailable"
+    }));
+
+  try {
+    const [availableServices, state] = await Promise.all([
+      window.nhd.getServices(),
+      window.nhd.getLocalAppState()
+    ]);
+    services = availableServices;
+    applyLocalAppState(state);
+    servicesLoadFailed = false;
+    renderServiceViews();
+  } catch {
+    renderServiceLoadFailure();
+  } finally {
+    servicesLoading = false;
+  }
 }
 
 elements.storeSearch.addEventListener("input", renderServiceViews);
@@ -1939,6 +2050,11 @@ for (const target of document.querySelectorAll<HTMLButtonElement>("[data-view-ta
 }
 
 elements.heroOpenButton.addEventListener("click", () => {
+  if (servicesLoadFailed) {
+    void initializeServices();
+    return;
+  }
+
   if (featuredContinueItemId !== null) {
     const item = continueWatchingItems.find(({ id }) => id === featuredContinueItemId);
     if (item !== undefined) {
@@ -2690,7 +2806,9 @@ function activeNavigationScope(): ParentNode {
 
 function visibleNavigationCandidates(): HTMLElement[] {
   return Array.from(
-    activeNavigationScope().querySelectorAll<HTMLElement>("button:not(:disabled), summary")
+    activeNavigationScope().querySelectorAll<HTMLElement>(
+      "button:not(:disabled), input:not(:disabled), summary"
+    )
   ).filter((candidate) => candidate.getClientRects().length > 0);
 }
 

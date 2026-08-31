@@ -11,6 +11,12 @@ const searchMarkup = html.slice(
 );
 
 describe("TV search layout", () => {
+  it("keeps text fields in the phone and gamepad focus graph", () => {
+    expect(renderer).toContain(
+      '"button:not(:disabled), input:not(:disabled), summary"'
+    );
+  });
+
   it("uses a full-screen route with a fixed query header and ordered results", () => {
     expect(searchMarkup).toContain('class="search-dialog-titlebar"');
     expect(searchMarkup).toContain('class="search-dialog-results"');

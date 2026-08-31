@@ -245,7 +245,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("VOICE_CONFIRMATION_REPLAY_TTL_MS");
     expect(REMOTE_JS).toContain("VOICE_CANCELLATION_REQUEST_TIMEOUT_MS");
     expect(REMOTE_JS).toContain("JSON.stringify({ operationId: request.operationId })");
-    expect(REMOTE_JS).toContain('setState("Cancelled — hold to correct"');
+    expect(REMOTE_JS).toContain('setVoiceState("Hold the microphone to correct the command."');
     expect(REMOTE_JS).toContain('error.code === "voice_cancelled"');
     expect(REMOTE_JS).toContain("status >= 500 && status !== 504");
     expect(REMOTE_JS).toContain('voiceConfirmPlay.textContent = retry ? "Check result" : "Play"');
@@ -364,7 +364,7 @@ describe("phone remote boundary", () => {
     expect(authorityCaptureCancellation).toContain("#publishVoiceCancellation(");
   });
 
-  it("uses a minimalist circular directional surface without selectable arrow copy", () => {
+  it("uses a minimalist circular directional surface with an explicit center action", () => {
     expect(REMOTE_HTML).toContain('class="up" data-action="up"');
     expect(REMOTE_HTML).toContain('class="left" data-action="left"');
     expect(REMOTE_HTML).toContain('class="right" data-action="right"');
@@ -373,7 +373,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_CSS).toContain(".dpad {");
     expect(REMOTE_CSS).toContain("border-radius: 50%;");
     expect(REMOTE_HTML).not.toContain("Living room");
-    expect(REMOTE_HTML).not.toContain(">OK<");
+    expect(REMOTE_HTML).toContain('aria-label="Select"><span aria-hidden="true">OK</span>');
     expect(REMOTE_HTML).not.toContain("↩");
     expect(REMOTE_HTML).not.toContain("⌂");
   });
@@ -460,7 +460,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('event.target.closest("input") === null');
   });
 
-  it("makes push-to-talk the thumb-zone hero and removes the app launcher", () => {
+  it("makes push-to-talk a stateful thumb-zone control and removes the app launcher", () => {
     const navigationIndex = REMOTE_HTML.indexOf('class="control-surface"');
     const voiceIndex = REMOTE_HTML.indexOf('class="voice-control"');
     const playbackIndex = REMOTE_HTML.indexOf('class="playback-controls"');
@@ -468,18 +468,39 @@ describe("phone remote boundary", () => {
     expect(navigationIndex).toBeGreaterThan(-1);
     expect(voiceIndex).toBeGreaterThan(navigationIndex);
     expect(playbackIndex).toBeGreaterThan(voiceIndex);
-    expect(REMOTE_HTML).toContain('class="voice-control" aria-label="AI voice control"');
+    expect(REMOTE_HTML).toContain('class="voice-control" id="voice-control" data-state="idle" aria-label="Voice control"');
     expect(REMOTE_HTML).toContain('id="voice-button-copy">Hold to talk<');
-    expect(REMOTE_HTML).toContain("<small>Ask NHD-TV</small>");
+    expect(REMOTE_HTML).toContain("<small>Voice</small>");
+    expect(REMOTE_HTML).toContain('id="voice-status-title">Voice unavailable<');
+    expect(REMOTE_HTML).toContain('class="voice-status" role="status" aria-live="polite" aria-atomic="true"');
     expect(REMOTE_HTML).toContain('id="control-mode-copy">Pointer<');
     expect(REMOTE_HTML).toContain('id="search-toggle-copy">Search<');
-    expect(REMOTE_CSS).toContain("min-height: 4.5rem;");
+    expect(REMOTE_CSS).toContain("min-height: 4.25rem;");
+    expect(REMOTE_CSS).toContain('.voice-control[data-state="listening"]');
+    expect(REMOTE_CSS).toContain('.voice-control[data-state="processing"]');
     expect(REMOTE_CSS).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
     expect(REMOTE_HTML).not.toContain("quick-launch");
     expect(REMOTE_HTML).not.toContain(">Apps<");
     expect(REMOTE_JS).not.toContain('jsonRequest("/api/apps"');
     expect(REMOTE_JS).not.toContain('jsonRequest("/api/launch"');
     expect(REMOTE_JS).not.toContain("startUrl");
+  });
+
+  it("keeps provider branding separate from voice state and makes capture feedback explicit", () => {
+    expect(REMOTE_CSS).toContain("--service-accent: #d7ff55;");
+    expect(REMOTE_CSS).toContain("--voice-active: #ff5268;");
+    expect(REMOTE_CSS).toMatch(
+      /body\[data-active-service="netflix"\]\s*\{\s*--service-accent:/
+    );
+    expect(REMOTE_CSS).not.toMatch(
+      /body\[data-active-service="(?:youtube|netflix|disney-plus|spotify)"\]\s*\{[^}]*--accent:/s
+    );
+    expect(REMOTE_JS).toContain('voiceButtonCopy.textContent = "Release to send"');
+    expect(REMOTE_JS).toContain('"TV audio is muted while you speak."');
+    expect(REMOTE_JS).toContain('const transcript = cleanVoiceCopy(result.transcript');
+    expect(REMOTE_JS).toContain('setVoiceState("You can cancel if this takes too long."');
+    expect(REMOTE_HTML).toContain('role="dialog" aria-modal="false"');
+    expect(REMOTE_JS).toContain("voiceConfirmPlay.focus({ preventScroll: true })");
   });
 
   it("keeps the remote synchronized with the active service without exposing page data", () => {

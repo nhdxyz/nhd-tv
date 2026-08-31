@@ -107,7 +107,7 @@ export const REMOTE_HTML = `<!doctype html>
           </button>
         </div>
 
-        <section class="voice-confirm" id="voice-confirm" aria-live="polite" hidden>
+        <section class="voice-confirm" id="voice-confirm" role="dialog" aria-modal="false" aria-labelledby="voice-confirm-label" aria-describedby="voice-confirm-copy" hidden>
           <small id="voice-confirm-label">Confirm voice command</small>
           <strong id="voice-confirm-copy">Play this title?</strong>
           <div>
@@ -120,7 +120,7 @@ export const REMOTE_HTML = `<!doctype html>
           <div class="dpad" aria-label="Directional pad">
             <button class="up" data-action="up" data-repeat="true" type="button" disabled aria-label="Up"><span aria-hidden="true"></span></button>
             <button class="left" data-action="left" data-repeat="true" type="button" disabled aria-label="Left"><span aria-hidden="true"></span></button>
-            <button class="select" data-action="select" type="button" disabled aria-label="Select"><span aria-hidden="true"></span></button>
+            <button class="select" data-action="select" type="button" disabled aria-label="Select"><span aria-hidden="true">OK</span></button>
             <button class="right" data-action="right" data-repeat="true" type="button" disabled aria-label="Right"><span aria-hidden="true"></span></button>
             <button class="down" data-action="down" data-repeat="true" type="button" disabled aria-label="Down"><span aria-hidden="true"></span></button>
           </div>
@@ -130,14 +130,20 @@ export const REMOTE_HTML = `<!doctype html>
           </div>
         </div>
 
-        <section class="voice-control" aria-label="AI voice control">
+        <section class="voice-control" id="voice-control" data-state="idle" aria-label="Voice control">
           <button class="voice-button" id="voice-button" type="button" disabled aria-label="Hold to speak a voice command" aria-describedby="voice-help">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
             <span id="voice-button-copy">Hold to talk</span>
-            <small>Ask NHD-TV</small>
+            <small>Voice</small>
           </button>
           <button class="voice-cancel" id="voice-cancel" type="button" aria-label="Cancel the active voice command" hidden>Cancel</button>
-          <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
+          <div class="voice-status" role="status" aria-live="polite" aria-atomic="true">
+            <span class="voice-status-dot" aria-hidden="true"></span>
+            <div>
+              <strong id="voice-status-title">Voice unavailable</strong>
+              <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
+            </div>
+          </div>
         </section>
 
         <div class="playback-controls" aria-label="Playback controls">
@@ -201,10 +207,14 @@ export const REMOTE_HTML = `<!doctype html>
 </html>`;
 
 export const REMOTE_CSS = `:root {
-  --accent: #d7ff55;
-  --accent-ink: #11120e;
-  --panel: #171716;
-  --panel-raised: #222220;
+  --accent: #f0f0eb;
+  --accent-ink: #11110f;
+  --service-accent: #d7ff55;
+  --voice-active: #ff5268;
+  --voice-success: #75c58b;
+  --voice-warning: #dfb965;
+  --panel: #161615;
+  --panel-raised: #20201f;
   --navigation-size: clamp(11rem, 30dvh, 15.75rem);
   --touch-target: 3rem;
   color: #f2f2ee;
@@ -226,38 +236,22 @@ body {
     max(0.8rem, env(safe-area-inset-left));
   overflow: hidden;
   background: #090909;
-  background: radial-gradient(circle at 50% -12%, #25251f 0, #11110f 28%, #090909 58%);
-}
-
-body::before {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 0.18rem;
-  background: var(--accent);
-  content: "";
-  opacity: 0.9;
 }
 
 body[data-active-service="youtube"] {
-  --accent: #ff2642;
-  --accent-ink: #fff;
+  --service-accent: #ff2642;
 }
 
 body[data-active-service="netflix"] {
-  --accent: #e50914;
-  --accent-ink: #fff;
+  --service-accent: #e50914;
 }
 
 body[data-active-service="disney-plus"] {
-  --accent: #88a6ff;
-  --accent-ink: #071023;
+  --service-accent: #88a6ff;
 }
 
 body[data-active-service="spotify"] {
-  --accent: #1ed760;
-  --accent-ink: #07140b;
+  --service-accent: #1ed760;
 }
 
 html,
@@ -320,7 +314,7 @@ input {
   justify-content: flex-end;
   gap: 0.38rem;
   color: #d8b56c;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.2;
   text-align: right;
@@ -345,9 +339,9 @@ input {
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid #30302d;
-  border-radius: 1.8rem;
-  background: rgb(21 21 20 / 96%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 4%), 0 1.4rem 3.2rem rgb(0 0 0 / 44%);
+  border-radius: 1.35rem;
+  background: #141413;
+  box-shadow: inset 0 1px rgb(255 255 255 / 3%);
 }
 
 .remote-context {
@@ -362,7 +356,7 @@ input {
 .remote-context > span {
   grid-column: 1;
   color: #74746f;
-  font-size: 0.5rem;
+  font-size: 0.65rem;
   font-weight: 850;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -383,8 +377,8 @@ input {
   padding: 0;
   align-items: center;
   gap: 0.35rem;
-  color: var(--accent);
-  font-size: 0.52rem;
+  color: #b9b9b3;
+  font-size: 0.64rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -393,7 +387,7 @@ input {
   width: 0.38rem;
   height: 0.38rem;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--service-accent);
   content: "";
 }
 
@@ -420,23 +414,27 @@ input {
   position: relative;
   display: grid;
   flex: 0 0 auto;
-  gap: 0.35rem;
-  margin-bottom: 0.62rem;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid #2d2d2a;
+  border-radius: 1rem;
+  background: #191918;
 }
 .voice-button {
   display: grid;
   width: 100%;
-  min-height: 4.5rem;
-  padding: 0.72rem 1rem;
+  min-height: 4.25rem;
+  padding: 0.68rem 0.9rem;
   grid-template-columns: 2.55rem 1fr;
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 0.82rem;
-  border: 0;
-  border-radius: 1.35rem;
+  border: 1px solid #e0e0da;
+  border-radius: 0.8rem;
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 0.7rem 1.6rem color-mix(in srgb, var(--accent) 14%, transparent), inset 0 1px rgb(255 255 255 / 20%);
+  box-shadow: none;
   text-align: left;
   touch-action: none;
 }
@@ -454,37 +452,42 @@ input {
 }
 .voice-button span {
   align-self: end;
-  font-size: 1rem;
-  font-weight: 900;
+  font-size: 1.05rem;
+  font-weight: 820;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
 .voice-button small {
   align-self: start;
-  font-size: 0.57rem;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-  opacity: 0.68;
-  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.62;
 }
 .voice-button:not(:disabled):active,
 .voice-button.is-recording { transform: scale(0.975); }
 .voice-button.is-recording {
-  background: #ff465f;
+  border-color: var(--voice-active);
+  background: var(--voice-active);
   color: #fff;
-  animation: voice-pulse 1s ease-in-out infinite;
+  animation: voice-pulse 1.1s ease-in-out infinite;
 }
-.voice-button.is-processing { animation: voice-pulse 0.7s ease-in-out infinite; }
+.voice-button.is-processing {
+  border-color: #5e5e58;
+  background: #282826;
+  color: #f4f4ef;
+  animation: voice-processing 1.2s ease-in-out infinite;
+}
 .voice-button:disabled { background: #282826; color: #74746f; box-shadow: inset 0 0 0 1px #333330; }
 .voice-cancel {
   position: absolute;
   z-index: 2;
-  top: 0.75rem;
-  right: 0.75rem;
+  top: 1.15rem;
+  right: 1.15rem;
   min-width: 5.25rem;
   min-height: 3rem;
   border: 1px solid #ff687c;
-  border-radius: 999px;
+  border-radius: 0.65rem;
   background: #32171c;
   color: #fff;
   font: inherit;
@@ -494,34 +497,58 @@ input {
 }
 .voice-cancel[hidden] { display: none; }
 .voice-cancel:not(:disabled):active { transform: scale(0.96); }
-.voice-help {
-  min-height: 0.8rem;
-  margin: 0;
-  overflow: hidden;
-  color: #85857e;
-  font-size: 0.58rem;
-  line-height: 1.25;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.voice-status {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 0.55rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.58rem;
+  padding: 0 0.2rem 0.08rem;
 }
+.voice-status-dot {
+  width: 0.48rem;
+  height: 0.48rem;
+  margin-top: 0.28rem;
+  border-radius: 50%;
+  background: #777771;
+}
+.voice-status > div { display: grid; min-width: 0; gap: 0.12rem; }
+.voice-status strong {
+  color: #eeeeea;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.voice-help {
+  margin: 0;
+  color: #a4a49e;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.voice-control[data-state="listening"] .voice-status-dot { background: var(--voice-active); }
+.voice-control[data-state="processing"] .voice-status-dot { background: var(--accent); animation: voice-dot 1.1s ease-in-out infinite; }
+.voice-control[data-state="confirmation"] .voice-status-dot { background: var(--voice-warning); }
+.voice-control[data-state="success"] .voice-status-dot { background: var(--voice-success); }
+.voice-control[data-state="error"] .voice-status-dot { background: var(--voice-active); }
+.voice-control[data-state="transcript"] .voice-status-dot { background: #b8a7f0; }
 .voice-confirm {
   position: absolute;
   z-index: 5;
   right: 0.8rem;
   left: 0.8rem;
-  top: 6.9rem;
+  top: 6.5rem;
   display: grid;
   padding: 1rem;
   gap: 0.5rem;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, #30302d);
-  border-radius: 1rem;
-  background: rgb(25 25 23 / 98%);
-  box-shadow: 0 1.2rem 2.5rem rgb(0 0 0 / 62%);
+  border-radius: 0.85rem;
+  background: #1b1b1a;
+  box-shadow: 0 1rem 2rem rgb(0 0 0 / 48%);
 }
 .voice-confirm[hidden] { display: none; }
-.voice-confirm small { color: var(--accent); font-size: 0.55rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
-.voice-confirm strong { font-size: 0.9rem; line-height: 1.35; }
+.voice-confirm small { color: #bdbdb7; font-size: 0.7rem; font-weight: 750; letter-spacing: 0.02em; }
+.voice-confirm strong { font-size: 1rem; line-height: 1.4; }
 .voice-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .voice-confirm[data-mode="retry"] > div { grid-template-columns: 1fr; }
 .voice-confirm button {
@@ -535,7 +562,9 @@ input {
   font-weight: 850;
 }
 #voice-confirm-play { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-@keyframes voice-pulse { 50% { box-shadow: 0 0 0 0.4rem rgb(255 70 95 / 13%), 0 0.8rem 1.8rem rgb(255 70 95 / 14%); } }
+@keyframes voice-pulse { 50% { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 18%); } }
+@keyframes voice-processing { 50% { border-color: #a7a7a0; } }
+@keyframes voice-dot { 50% { opacity: 0.35; } }
 .remote-icon-button svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -614,6 +643,10 @@ input {
   border-radius: 50%;
   background: #111110;
   box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 0.7rem 1.5rem rgb(0 0 0 / 34%);
+  color: #f0f0eb;
+  font-size: 0.78rem;
+  font-weight: 820;
+  letter-spacing: 0.04em;
 }
 
 .dpad button:not(:disabled).is-pressed span,
@@ -909,10 +942,12 @@ export const REMOTE_JS = `(() => {
   const activeServiceLabel = document.querySelector("#active-service-label");
   const controlModeCopy = document.querySelector("#control-mode-copy");
   const searchToggleCopy = document.querySelector("#search-toggle-copy");
+  const voiceControl = document.querySelector("#voice-control");
   const voiceButton = document.querySelector("#voice-button");
   const voiceButtonCopy = document.querySelector("#voice-button-copy");
   const voiceCancel = document.querySelector("#voice-cancel");
   const voiceHelp = document.querySelector("#voice-help");
+  const voiceStatusTitle = document.querySelector("#voice-status-title");
   const voiceConfirm = document.querySelector("#voice-confirm");
   const voiceConfirmLabel = document.querySelector("#voice-confirm-label");
   const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
@@ -937,6 +972,7 @@ export const REMOTE_JS = `(() => {
   let remoteEnabled = false;
   let voiceAvailable = false;
   let voiceBusy = false;
+  let voiceStatusKind = "availability";
   let voiceAvailabilityDetail = "Voice control is still checking.";
   let voiceRecorder = null;
   let voiceCommandId = null;
@@ -992,6 +1028,29 @@ export const REMOTE_JS = `(() => {
     state.className = kind || "";
   }
 
+  function cleanVoiceCopy(value, fallback, maximumLength = 240) {
+    return typeof value === "string"
+      ? value.replace(/\\s+/g, " ").trim().slice(0, maximumLength) || fallback
+      : fallback;
+  }
+
+  function setVoiceState(message, kind = "idle", title) {
+    const titles = {
+      availability: "Voice unavailable",
+      confirmation: "Confirm playback",
+      error: "Voice needs attention",
+      idle: "Voice ready",
+      listening: "Listening",
+      processing: "Working on it",
+      success: "Done",
+      transcript: "You said"
+    };
+    voiceStatusKind = kind;
+    voiceControl.dataset.state = kind;
+    voiceStatusTitle.textContent = cleanVoiceCopy(title, titles[kind] || "Voice", 120);
+    voiceHelp.textContent = cleanVoiceCopy(message, "Hold the microphone to speak.");
+  }
+
   function updateVoiceButton() {
     const browserReady = window.isSecureContext &&
       navigator.mediaDevices &&
@@ -1004,7 +1063,7 @@ export const REMOTE_JS = `(() => {
     voiceButton.classList.toggle("is-processing", voiceProcessing);
     voiceCancel.hidden = !voiceProcessing || activeVoiceRequest === null;
     voiceCancel.disabled = !remoteEnabled || voiceCancelling || activeVoiceRequest === null;
-    voiceHelp.textContent = awaitingSubmittedResult
+    const availabilityDetail = awaitingSubmittedResult
       ? "Check the playback result before starting another voice command."
       : awaitingConfirmation
         ? "Say yes or no, or tap Play or Cancel."
@@ -1015,6 +1074,17 @@ export const REMOTE_JS = `(() => {
       : supportedVoiceMimeType === null
         ? "This browser cannot record a supported voice format."
         : voiceAvailabilityDetail;
+    if (
+      voiceStatusKind === "idle" ||
+      voiceStatusKind === "availability" ||
+      (voiceBusy && !voiceStarting && voiceRecorder === null && !voiceProcessing)
+    ) {
+      setVoiceState(
+        availabilityDetail,
+        ready && !voiceBusy ? "idle" : "availability",
+        voiceBusy ? "Voice in use" : ready ? "Voice ready" : "Voice unavailable"
+      );
+    }
   }
 
   function renderVoiceStatus(status) {
@@ -1024,6 +1094,11 @@ export const REMOTE_JS = `(() => {
     voiceAvailabilityDetail = status && typeof status.detail === "string"
       ? status.detail.replace(/\\s+/g, " ").trim().slice(0, 160)
       : "Voice control is unavailable.";
+    if (!voiceAvailable && voiceRecorder === null && !voiceProcessing) {
+      voiceStatusKind = "availability";
+    } else if (voiceAvailable && voiceStatusKind === "availability" && !voiceBusy) {
+      voiceStatusKind = "idle";
+    }
     updateVoiceButton();
   }
 
@@ -1059,6 +1134,7 @@ export const REMOTE_JS = `(() => {
     if (!enabled) {
       closeVoiceConfirmation();
       resetTextEntry();
+      setVoiceState("Connect this phone to enable voice control.", "availability", "Voice unavailable");
     }
   }
 
@@ -1180,7 +1256,7 @@ export const REMOTE_JS = `(() => {
       : Date.now() + VOICE_CONFIRMATION_TTL_MS;
     if (expiresAt <= Date.now()) {
       closeVoiceConfirmation();
-      setState("Voice confirmation expired — hold the microphone and try again", "error");
+      setVoiceState("Hold the microphone and try the command again.", "error", "Confirmation expired");
       return false;
     }
     pending.expiresAt = expiresAt;
@@ -1193,17 +1269,18 @@ export const REMOTE_JS = `(() => {
     voiceConfirm.hidden = false;
     updateVoiceConfirmationButtons();
     updateVoiceButton();
+    voiceConfirmPlay.focus({ preventScroll: true });
     voiceConfirmationTimer = setTimeout(() => {
       if (pendingVoiceConfirmation?.confirmationId !== pending.confirmationId) return;
       closeVoiceConfirmation();
-      setState("Voice confirmation expired — hold the microphone and try again", "error");
+      setVoiceState("Hold the microphone and try the command again.", "error", "Confirmation expired");
     }, Math.max(0, expiresAt - Date.now()));
     return true;
   }
 
   async function cancelVoiceConfirmation(pending, showStatus) {
     if (!controllerToken || pending === null) return;
-    if (showStatus) setState("Voice command cancelled", "connected");
+    if (showStatus) setVoiceState("Hold the microphone when you want to try again.", "success", "Command cancelled");
     const requestController = new AbortController();
     const requestTimeout = setTimeout(
       () => requestController.abort(),
@@ -1222,13 +1299,14 @@ export const REMOTE_JS = `(() => {
       });
     } catch (error) {
       if (showStatus) {
-        setState(
+        setVoiceState(
           error && error.status === 410
-            ? "Voice confirmation already expired"
+            ? "Hold the microphone and try the command again."
             : error && error.name === "AbortError"
               ? "The TV did not respond to Cancel"
               : error instanceof Error ? error.message : "Could not cancel voice command",
-          error && error.status === 410 ? "connected" : "error"
+          error && error.status === 410 ? "success" : "error",
+          error && error.status === 410 ? "Confirmation expired" : "Cancel failed"
         );
       }
     } finally {
@@ -1294,7 +1372,7 @@ export const REMOTE_JS = `(() => {
     request.cancelRequested = true;
     voiceCancelling = true;
     voiceButtonCopy.textContent = "Cancelling";
-    setState("Cancelling voice command…");
+    setVoiceState("Waiting for the TV to stop the active request.", "processing", "Cancelling");
     updateVoiceButton();
     const cancelController = new AbortController();
     const cancelTimeout = setTimeout(
@@ -1316,7 +1394,7 @@ export const REMOTE_JS = `(() => {
       request.controller.abort();
       voiceBusy = result.ready !== true;
       finishActiveVoiceRequest(request);
-      setState("Cancelled — hold to correct", "connected");
+      setVoiceState("Hold the microphone to correct the command.", "success", "Cancelled");
       voiceButton.focus({ preventScroll: true });
       if (navigator.vibrate) navigator.vibrate([12, 35, 12]);
     } catch (error) {
@@ -1330,13 +1408,14 @@ export const REMOTE_JS = `(() => {
         finishActiveVoiceRequest(request);
       } else {
         voiceButtonCopy.textContent = "Understanding";
-        setState(
+        setVoiceState(
           error && error.status === 409
             ? "That command already finished"
             : error && error.name === "AbortError"
               ? "The TV did not respond to Cancel — command still working"
               : "Could not cancel — command still working",
-          "error"
+          "error",
+          "Cancel failed"
         );
         updateVoiceButton();
       }
@@ -1348,7 +1427,7 @@ export const REMOTE_JS = `(() => {
   async function uploadVoiceRecording(blob, durationMs, commandId, confirmationId) {
     if (!controllerToken || !commandId) return;
     voiceButtonCopy.textContent = "Understanding";
-    setState("Understanding voice command…");
+    setVoiceState("You can cancel if this takes too long.", "processing", "Understanding your request");
     const requestController = new AbortController();
     const request = beginActiveVoiceRequest(commandId, commandId, requestController);
     const requestTimeout = setTimeout(
@@ -1371,6 +1450,8 @@ export const REMOTE_JS = `(() => {
         signal: requestController.signal
       });
       applyOrDeferVoiceResponse(request, () => {
+        const transcript = cleanVoiceCopy(result.transcript, "", 160);
+        const transcriptTitle = transcript ? "“" + transcript + "”" : undefined;
         if (
           result.outcome === "confirmation-required" &&
           typeof result.confirmationId === "string"
@@ -1390,14 +1471,19 @@ export const REMOTE_JS = `(() => {
             expiresAt
           });
           if (shown) {
-            setState("Confirm on your phone", "connected");
+            setVoiceState(
+              "Say yes or no, or use the buttons above.",
+              "confirmation",
+              transcriptTitle || "Confirm playback"
+            );
             if (navigator.vibrate) navigator.vibrate([14, 40, 14]);
           }
         } else {
           closeVoiceConfirmation();
-          setState(
+          setVoiceState(
             typeof result.detail === "string" ? result.detail : "Voice command sent",
-            result.outcome === "failed" ? "error" : "connected"
+            result.outcome === "failed" ? "error" : "success",
+            transcriptTitle || (result.outcome === "failed" ? "That didn't work" : "Command complete")
           );
           if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
         }
@@ -1408,7 +1494,7 @@ export const REMOTE_JS = `(() => {
         if (error && error.code === "voice_cancelled") {
           request.cancelAccepted = true;
           finishActiveVoiceRequest(request);
-          setState("Cancelled — hold to correct", "connected");
+          setVoiceState("Hold the microphone to correct the command.", "success", "Cancelled");
           return;
         }
         // Sanitized command failures and server deadlines have already published
@@ -1416,11 +1502,12 @@ export const REMOTE_JS = `(() => {
         if (!error || (error.status !== 422 && error.status !== 504)) {
           sendVoiceActivity("cancelled", false, commandId);
         }
-        setState(
+        setVoiceState(
           error && error.name === "AbortError"
             ? "The TV did not finish the voice command — hold the microphone and try again"
             : error instanceof Error ? error.message : "Voice command failed",
-          "error"
+          "error",
+          "Voice command failed"
         );
       });
     } finally {
@@ -1462,7 +1549,7 @@ export const REMOTE_JS = `(() => {
     updateVoiceConfirmationButtons();
     voiceReleaseRequested = false;
     voiceDiscardRequested = false;
-    setState("Connecting to the TV…");
+    setVoiceState("Checking that voice control is ready.", "processing", "Connecting to the TV");
     try {
       const commandId = voiceCommandId;
       if (!commandId) throw new Error("Voice command correlation was lost");
@@ -1470,10 +1557,10 @@ export const REMOTE_JS = `(() => {
       if (voiceReleaseRequested) {
         voiceCommandId = null;
         sendVoiceActivity("cancelled", false, commandId);
-        setState("Hold the microphone to speak", "connected");
+        setVoiceState("Press and hold the microphone to speak.", "idle", "Voice ready");
         return;
       }
-      setState("Starting microphone…");
+      setVoiceState("Keep holding while the microphone starts.", "processing", "Starting microphone");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           autoGainControl: true,
@@ -1487,7 +1574,7 @@ export const REMOTE_JS = `(() => {
         voiceCommandId = null;
         stopVoiceStream();
         sendVoiceActivity("cancelled", false, commandId);
-        setState("Microphone ready — hold again to speak", "connected");
+        setVoiceState("Hold the microphone again to speak.", "idle", "Microphone ready");
         return;
       }
 
@@ -1496,7 +1583,7 @@ export const REMOTE_JS = `(() => {
         voiceCommandId = null;
         stopVoiceStream();
         sendVoiceActivity("cancelled", false, commandId);
-        setState("Microphone ready — hold again to speak", "connected");
+        setVoiceState("Hold the microphone again to speak.", "idle", "Microphone ready");
         return;
       }
       const recorder = new MediaRecorder(stream, {
@@ -1522,14 +1609,14 @@ export const REMOTE_JS = `(() => {
         if (voiceDiscardRequested) {
           voiceDiscardRequested = false;
           recordedChunks.length = 0;
-          setState("Voice command cancelled", "connected");
+          setVoiceState("Hold the microphone when you want to try again.", "success", "Command cancelled");
           updateVoiceButton();
           return;
         }
         if (durationMs < 150 || recordedChunks.length === 0) {
           recordedChunks.length = 0;
           sendVoiceActivity("cancelled", false, commandId);
-          setState("Hold the microphone a little longer", "error");
+          setVoiceState("Keep holding until you finish speaking, then release to send.", "error", "I didn't catch that");
           updateVoiceButton();
           return;
         }
@@ -1542,8 +1629,8 @@ export const REMOTE_JS = `(() => {
       voiceRecorder = recorder;
       updateVoiceConfirmationButtons();
       voiceButton.classList.add("is-recording");
-      voiceButtonCopy.textContent = "Listening";
-      setState("Listening…", "connected");
+      voiceButtonCopy.textContent = "Release to send";
+      setVoiceState("TV audio is muted while you speak.", "listening", "Listening");
       if (navigator.vibrate) navigator.vibrate(12);
       voiceStopTimer = setTimeout(() => {
         finishVoiceRecording();
@@ -1562,27 +1649,28 @@ export const REMOTE_JS = `(() => {
       voiceButtonCopy.textContent = "Hold to talk";
       sendVoiceActivity("cancelled", false, commandId);
       if (releasedBeforeRecording) {
-        setState("Hold the microphone to speak", "connected");
+        setVoiceState("Press and hold the microphone to speak.", "idle", "Voice ready");
         return;
       }
       const denied = error && typeof error === "object" && error.name === "NotAllowedError";
       const remoteError = error && typeof error === "object" && "status" in error;
       if (remoteError && error.status === 409) {
         voiceBusy = true;
-        setState("Another phone is using voice control", "connected");
+        setVoiceState("Wait for the other command to finish, then try again.", "availability", "Voice in use");
         void sendHeartbeat();
         return;
       }
-      setState(
+      setVoiceState(
         denied
-          ? "Allow microphone access in Safari to use voice"
+          ? "Allow microphone access in your browser settings to use voice."
           : remoteError && error instanceof Error
             ? error.message
           : error instanceof Error &&
               (error.message.includes("voice check") || error.message.includes("reservation"))
               ? error.message
               : "The microphone is unavailable",
-        "error"
+        "error",
+        denied ? "Microphone permission needed" : "Microphone unavailable"
       );
     } finally {
       voiceStarting = false;
@@ -1600,7 +1688,7 @@ export const REMOTE_JS = `(() => {
       : Date.now() + VOICE_CONFIRMATION_REPLAY_TTL_MS;
     closeVoiceConfirmation();
     activeVoiceConfirmationId = confirmationId;
-    setState("Starting playback…");
+    setVoiceState("Waiting for the TV to verify playback.", "processing", "Starting playback");
     const requestController = new AbortController();
     const request = beginActiveVoiceRequest(
       confirmationId,
@@ -1623,7 +1711,7 @@ export const REMOTE_JS = `(() => {
         signal: requestController.signal
       });
       applyOrDeferVoiceResponse(request, () => {
-        setState(result.detail || "Voice command confirmed", "connected");
+        setVoiceState(result.detail || "Voice command confirmed", "success", "Playback ready");
         if (navigator.vibrate) navigator.vibrate(18);
       });
     } catch (error) {
@@ -1647,21 +1735,27 @@ export const REMOTE_JS = `(() => {
           remoteEnabled &&
           showVoiceConfirmation(retryPending)
         ) {
-          setState(
+          setVoiceState(
             status === 409
               ? "Another command is active — tap Play again"
               : error && error.name === "AbortError"
                 ? "Response timed out — check the result"
                 : "Connection interrupted — check the result",
-            "error"
+            "error",
+            status === 409 ? "Voice in use" : "Check the TV before retrying"
           );
         } else if (status === 401) {
           controllerToken = null;
           sessionStorage.removeItem("nhd-controller-token");
           setEnabled(false);
           setState("Remote session expired — rescan the TV code", "error");
+          setVoiceState("Reconnect the phone remote before trying again.", "error", "Remote disconnected");
         } else if (status !== null || !retryable) {
-          setState(error instanceof Error ? error.message : "Voice confirmation failed", "error");
+          setVoiceState(
+            error instanceof Error ? error.message : "Voice confirmation failed",
+            "error",
+            "Playback confirmation failed"
+          );
         }
       });
     } finally {
@@ -2267,11 +2361,12 @@ export const REMOTE_JS = `(() => {
     controllerToken = sessionStorage.getItem("nhd-controller-token");
     if (pendingVoiceConfirmation?.expiresAt <= Date.now()) {
       closeVoiceConfirmation();
-      setState("Voice confirmation expired — hold the microphone and try again", "error");
+      setVoiceState("Hold the microphone and try the command again.", "error", "Confirmation expired");
     }
     if (controllerToken === null) {
       setEnabled(false);
       setState("Remote session ended — rescan the TV code", "error");
+      setVoiceState("Reconnect the phone remote before trying again.", "error", "Remote disconnected");
       return;
     }
     setState("Reconnecting…");

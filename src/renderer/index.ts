@@ -13,7 +13,8 @@ import {
   type ServiceRecoveryRequest,
   type ServiceSummary,
   type SpotifyPlaybackPresentation,
-  type VoicePresentationState
+  type VoicePresentationState,
+  type VoiceSetupDiagnostic
 } from "../main/contracts";
 import {
   isMediaAction,
@@ -254,6 +255,10 @@ const elements = {
   voicePresentationLabel: requireElement<HTMLElement>("#voice-presentation-label", "voice-presentation-label"),
   voiceSettingsButton: requireElement<HTMLButtonElement>("#voice-settings-button", "voice-settings-button"),
   voiceSettingsCopy: requireElement<HTMLElement>("#voice-settings-copy", "voice-settings-copy"),
+  voiceTestButton: requireElement<HTMLButtonElement>("#voice-test-button", "voice-test-button"),
+  voiceTestCredential: requireElement<HTMLElement>("#voice-test-credential", "voice-test-credential"),
+  voiceTestInterpretation: requireElement<HTMLElement>("#voice-test-interpretation", "voice-test-interpretation"),
+  voiceTestSummary: requireElement<HTMLElement>("#voice-test-summary", "voice-test-summary"),
   widevineStatus: requireElement<HTMLParagraphElement>("#widevine-status", "widevine-status"),
   youtubeTvCopy: requireElement<HTMLElement>("#youtube-tv-copy", "youtube-tv-copy"),
   youtubeTvScale: requireElement<HTMLButtonElement>("#youtube-tv-scale", "youtube-tv-scale"),
@@ -753,6 +758,17 @@ function renderOpenAiCredentialStatus(status: OpenAiCredentialStatus): void {
 function setVoiceInlineError(element: HTMLElement, message: string | null): void {
   element.textContent = message ?? "";
   element.hidden = message === null;
+}
+
+function renderVoiceSetupDiagnostic(diagnostic: VoiceSetupDiagnostic): void {
+  elements.voiceTestCredential.dataset.state = diagnostic.credential;
+  elements.voiceTestInterpretation.dataset.state = diagnostic.interpretation;
+  elements.voiceTestSummary.textContent = diagnostic.latencyMs === null
+    ? diagnostic.detail
+    : `${diagnostic.detail} · ${diagnostic.latencyMs} ms`;
+  elements.voiceTestButton.textContent = diagnostic.interpretation === "passed"
+    ? "Run again"
+    : "Retry connection test";
 }
 
 function applyLocalAppState(state: LocalAppState): void {
@@ -2718,6 +2734,25 @@ async function openVoiceDialog(initialFocus: "key" | "region" = "key"): Promise<
 
 elements.voiceSettingsButton.addEventListener("click", () => void openVoiceDialog("key"));
 elements.voiceRegionButton.addEventListener("click", () => void openVoiceDialog("region"));
+elements.voiceTestButton.addEventListener("click", () => {
+  elements.voiceTestButton.disabled = true;
+  elements.voiceTestButton.textContent = "Testing…";
+  elements.voiceTestCredential.dataset.state = "pending";
+  elements.voiceTestInterpretation.dataset.state = "pending";
+  elements.voiceTestSummary.textContent = "Checking the saved key and voice understanding…";
+  void window.nhd.testOpenAiVoiceSetup()
+    .then(renderVoiceSetupDiagnostic)
+    .catch((error: unknown) => renderVoiceSetupDiagnostic({
+      checkedAt: Date.now(),
+      credential: "pending",
+      detail: error instanceof Error ? error.message : "Voice setup could not be tested.",
+      interpretation: "failed",
+      latencyMs: null
+    }))
+    .finally(() => {
+      elements.voiceTestButton.disabled = false;
+    });
+});
 elements.voiceClose.addEventListener("click", closeVoiceDialog);
 elements.voiceDialog.addEventListener("cancel", (event) => {
   event.preventDefault();

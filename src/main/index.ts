@@ -37,6 +37,7 @@ import {
   type VoicePresentationChoice,
   type VoicePresentationPhase,
   type VoicePresentationState,
+  type VoiceSetupDiagnostic,
   type WidevineState
 } from "./contracts";
 import {
@@ -106,6 +107,7 @@ import type {
   VoiceServiceId
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
+import type { VoiceIntent } from "./voice/voice-intent";
 import {
   VoiceContextStore,
   type VoiceLiveMediaSnapshot,
@@ -216,6 +218,7 @@ let googleWatchCache: GoogleWatchCache | null = null;
 let googleWatchResolver: GoogleWatchResolver | null = null;
 let localStateStore: LocalStateStore | null = null;
 let openAiCredentialStore: OpenAiCredentialStore | null = null;
+let openAiVoiceClient: OpenAiVoiceClient | null = null;
 let phoneRemote: PhoneRemoteServer | null = null;
 let tailscaleSecureRemote: TailscaleSecureRemote | null = null;
 let voiceCommandSession: VoiceCommandSession | null = null;
@@ -2161,6 +2164,63 @@ function voiceFailure(error: unknown): PhoneRemoteVoiceResult {
   };
 }
 
+async function testOpenAiVoiceSetup(): Promise<VoiceSetupDiagnostic> {
+  const checkedAt = Date.now();
+  const credentialStatus = openAiCredentialStore?.status();
+  if (credentialStatus?.state !== "configured") {
+    return {
+      checkedAt,
+      credential: "failed",
+      detail: credentialStatus?.detail ?? "Secure credential storage is not ready.",
+      interpretation: "pending",
+      latencyMs: null
+    };
+  }
+  const client = openAiVoiceClient;
+  if (client === null) {
+    return {
+      checkedAt,
+      credential: "passed",
+      detail: "Voice understanding is still starting.",
+      interpretation: "pending",
+      latencyMs: null
+    };
+  }
+
+  const startedAt = Date.now();
+  try {
+    const intent = await client.interpret("pause");
+    const latencyMs = Math.max(0, Date.now() - startedAt);
+    if (intent.kind !== "control" || intent.action !== "pause") {
+      return {
+        checkedAt,
+        credential: "passed",
+        detail: "OpenAI responded, but the voice intent check returned an unexpected result.",
+        interpretation: "failed",
+        latencyMs
+      };
+    }
+    return {
+      checkedAt,
+      credential: "passed",
+      detail: "The saved key and voice understanding model are ready.",
+      interpretation: "passed",
+      latencyMs
+    };
+  } catch (error) {
+    const detail = error instanceof OpenAiVoiceError
+      ? error.message
+      : "The voice setup check could not reach OpenAI.";
+    return {
+      checkedAt,
+      credential: detail.includes("API key was rejected") ? "failed" : "passed",
+      detail,
+      interpretation: "failed",
+      latencyMs: Math.max(0, Date.now() - startedAt)
+    };
+  }
+}
+
 async function handleRemoteVoice(
   clip: VoiceAudioClip,
   commandId: string,
@@ -2200,6 +2260,73 @@ async function handleRemoteVoice(
     if (signal.aborted) return result;
     presentPhoneVoiceResult(result, commandId);
     return result;
+  } finally {
+    if (activeVoiceProcessingCommandId === commandId) {
+      activeVoiceProcessingCommandId = null;
+    }
+  }
+}
+
+function voiceTestIntentDescription(intent: VoiceIntent): string {
+  switch (intent.kind) {
+    case "app":
+      return `an app request for ${intent.title}`;
+    case "confirmation":
+      return "a playback confirmation";
+    case "control":
+      return `the ${intent.action.replaceAll("-", " ")} control`;
+    case "current-media":
+      return "a question about what is playing";
+    case "media":
+      return `a media request for ${intent.title}`;
+    case "media-reference":
+      return "a follow-up media choice";
+    case "provider-destination":
+      return `a request to open ${intent.destination}`;
+    case "semantic-control":
+      return `the ${intent.action.replaceAll("-", " ")} playback control`;
+    case "unknown":
+      return "speech, but not a supported TV command";
+  }
+}
+
+async function handleRemoteVoiceTest(
+  clip: VoiceAudioClip,
+  commandId: string,
+  signal: AbortSignal
+): Promise<PhoneRemoteVoiceResult> {
+  const client = openAiVoiceClient;
+  if (!remoteVoiceStatus().available || client === null) {
+    const result: PhoneRemoteVoiceResult = {
+      detail: remoteVoiceStatus().detail,
+      outcome: "failed"
+    };
+    presentPhoneVoiceResult(result, commandId);
+    return result;
+  }
+
+  activeVoiceProcessingCommandId = commandId;
+  presentPhoneVoiceProgress("Testing microphone and transcription…", commandId);
+  try {
+    const result = await runVoiceStageWithDeadline(
+      (stageSignal) => client.understand(clip, stageSignal, presentPhoneVoiceTranscript),
+      {
+        signal,
+        timeoutMessage: "The voice test took too long. Try again.",
+        timeoutMs: VOICE_COMMAND_SOFT_TIMEOUT_MS
+      }
+    );
+    const response: PhoneRemoteVoiceResult = {
+      detail: `Microphone, transcription, and AI understanding passed. I recognized ${voiceTestIntentDescription(result.intent)}. No command was run.`,
+      outcome: "completed",
+      transcript: result.transcript
+    };
+    presentPhoneVoiceResult(response, commandId);
+    return response;
+  } catch (error) {
+    const response = voiceFailure(error);
+    if (!signal.aborted) presentPhoneVoiceResult(response, commandId);
+    return response;
   } finally {
     if (activeVoiceProcessingCommandId === commandId) {
       activeVoiceProcessingCommandId = null;
@@ -2455,6 +2582,11 @@ function registerIpc(): void {
       throw new Error("OpenAI credential storage is not ready.");
     }
     return openAiCredentialStore.status();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.testOpenAiVoiceSetup, (event) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    return testOpenAiVoiceSetup();
   });
 
   ipcMain.handle(IPC_CHANNELS.saveOpenAiApiKey, (event, apiKey: unknown) => {
@@ -2867,6 +2999,7 @@ async function createMainWindow(): Promise<void> {
     onConfirmVoice: confirmRemoteVoice,
     onVoiceActivity: handlePhoneVoiceActivity,
     onVoice: handleRemoteVoice,
+    onVoiceTest: handleRemoteVoiceTest,
     onVoiceTimeout: presentRemoteVoiceTimeout,
     shouldAutoApproveFirstRemote: () =>
       localStateStore?.snapshot().devicePreferences.autoApproveFirstRemote ?? true
@@ -2967,7 +3100,7 @@ app.whenReady().then(async () => {
     electronCredentialCipher()
   );
   await openAiCredentialStore.initialize();
-  const openAiVoiceClient = new OpenAiVoiceClient({
+  openAiVoiceClient = new OpenAiVoiceClient({
     getApiKey: () => {
       if (openAiCredentialStore === null) {
         throw new Error("The OpenAI credential store is unavailable.");
@@ -3000,7 +3133,7 @@ app.whenReady().then(async () => {
     getContext: voiceCommandContext,
     onTranscript: presentPhoneVoiceTranscript,
     understand: (clip, signal, onTranscript) =>
-      understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)
+      understandVoiceCommandWithContext(openAiVoiceClient!, clip, signal, onTranscript)
   });
   voiceProfilePreferenceCoordinator = new VoiceProfilePreferenceCoordinator({
     beginServiceBarrier: () => serviceHost?.beginOperation(),

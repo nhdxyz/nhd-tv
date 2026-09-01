@@ -13,11 +13,13 @@ describe("OpenAI credential IPC boundary", () => {
     expect(IPC_CHANNELS.getOpenAiCredentialStatus).toBe("nhd:openai:credential:status");
     expect(IPC_CHANNELS.saveOpenAiApiKey).toBe("nhd:openai:credential:save");
     expect(IPC_CHANNELS.clearOpenAiApiKey).toBe("nhd:openai:credential:clear");
+    expect(IPC_CHANNELS.testOpenAiVoiceSetup).toBe("nhd:openai:voice:test");
   });
 
   it("protects every credential handler with the trusted shell sender policy", () => {
     for (const channel of [
       "getOpenAiCredentialStatus",
+      "testOpenAiVoiceSetup",
       "saveOpenAiApiKey",
       "clearOpenAiApiKey"
     ]) {

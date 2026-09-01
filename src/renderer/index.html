@@ -752,6 +752,19 @@
           </form>
           <p class="voice-inline-error" id="voice-key-error" role="alert" hidden></p>
           <button class="danger-secondary-action voice-remove-key" id="voice-remove-key" type="button">Remove saved key</button>
+          <section class="voice-setup-check" aria-labelledby="voice-test-title">
+            <div>
+              <h4 id="voice-test-title">Test voice connection</h4>
+              <p id="voice-test-summary" role="status" aria-live="polite">Check the saved key and voice understanding before using the phone microphone.</p>
+            </div>
+            <div class="voice-check-list" aria-label="Voice setup checks">
+              <span id="voice-test-credential" data-state="pending"><i aria-hidden="true"></i>Saved key</span>
+              <span id="voice-test-interpretation" data-state="pending"><i aria-hidden="true"></i>AI understanding</span>
+              <span data-state="phone"><i aria-hidden="true"></i>Phone microphone</span>
+            </div>
+            <button class="secondary-action" id="voice-test-button" type="button">Run connection test</button>
+            <small>Microphone and transcription are tested separately from the paired phone remote, without running the command.</small>
+          </section>
         </section>
         <section class="voice-settings-section" aria-labelledby="voice-region-title">
           <div class="voice-settings-section-heading">

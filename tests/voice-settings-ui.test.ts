@@ -54,6 +54,15 @@ describe("voice settings UI privacy boundary", () => {
     expect(renderer).toContain("Add an OpenAI API key before enabling voice control.");
   });
 
+  it("tests the saved key and intent model without pretending the TV owns the phone microphone", () => {
+    expect(html).toContain('id="voice-test-button"');
+    expect(html).toContain('id="voice-test-credential"');
+    expect(html).toContain('id="voice-test-interpretation"');
+    expect(html).toContain("Microphone and transcription are tested separately from the paired phone remote");
+    expect(renderer).toContain("window.nhd.testOpenAiVoiceSetup()");
+    expect(renderer).toContain("renderVoiceSetupDiagnostic");
+  });
+
   it("states the transient audio and transcript policy", () => {
     expect(html).toContain("does not save microphone audio or transcripts");
     expect(html).toContain("a short recording and its transcript are sent to OpenAI");

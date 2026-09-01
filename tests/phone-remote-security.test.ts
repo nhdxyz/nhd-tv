@@ -238,7 +238,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).toContain('id="voice-confirm-play"');
     expect(REMOTE_JS).toContain("navigator.mediaDevices.getUserMedia");
     expect(REMOTE_JS).toContain("new MediaRecorder(stream");
-    expect(REMOTE_JS).toContain('jsonRequest("/api/voice"');
+    expect(REMOTE_JS).toContain('diagnostic ? "/api/voice/test" : "/api/voice"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/cancel"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm"');
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/confirm/cancel"');
@@ -272,7 +272,7 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain("JSON.stringify({ commandId, phase })");
     expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Command-Id": commandId');
     expect(REMOTE_JS).toContain('"X-NHD-TV-Voice-Confirmation-Id": confirmationId');
-    expect(REMOTE_JS).toContain("const spokenConfirmationId = pendingVoiceConfirmation?.submitted === true");
+    expect(REMOTE_JS).toContain("const spokenConfirmationId = diagnostic || pendingVoiceConfirmation?.submitted === true");
     expect(REMOTE_JS).toContain('return requestVoiceActivity(commandId, "listening")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("understanding")');
     expect(REMOTE_JS).toContain('sendVoiceActivity("cancelled"');
@@ -502,9 +502,18 @@ describe("phone remote boundary", () => {
     expect(REMOTE_JS).toContain('voiceButtonCopy.textContent = "Release to send"');
     expect(REMOTE_JS).toContain('"TV audio is muted while you speak."');
     expect(REMOTE_JS).toContain('const transcript = cleanVoiceCopy(result.transcript');
-    expect(REMOTE_JS).toContain('setVoiceState("You can cancel if this takes too long."');
+    expect(REMOTE_JS).toContain('diagnostic ? "Testing voice setup" : "Understanding your request"');
     expect(REMOTE_HTML).toContain('role="dialog" aria-modal="false"');
     expect(REMOTE_JS).toContain("voiceConfirmPlay.focus({ preventScroll: true })");
+  });
+
+  it("tests phone microphone and transcription without executing the spoken command", () => {
+    expect(REMOTE_HTML).toContain('id="voice-test-button"');
+    expect(REMOTE_JS).toContain('voiceTestMode = true');
+    expect(REMOTE_JS).toContain('diagnostic ? "/api/voice/test" : "/api/voice"');
+    expect(REMOTE_JS).toContain("The test will not control the TV.");
+    expect(serverSource).toContain('url.pathname === "/api/voice/test"');
+    expect(serverSource).toContain("this.#onVoiceTest?.(clip");
   });
 
   it("shows the trusted confirmation expiry and clears both confirmation timers", () => {

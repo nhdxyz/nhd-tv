@@ -14,7 +14,8 @@ import type {
   ServiceQuitRequest,
   ServiceSummary,
   SpotifyPlaybackPresentation,
-  VoicePresentationState
+  VoicePresentationState,
+  VoiceSetupDiagnostic
 } from "./contracts";
 
 // Sandboxed preloads receive a restricted `require` implementation and must not
@@ -61,6 +62,7 @@ const IPC_CHANNELS = {
   serviceQuitRequested: "nhd:service:quit:requested",
   spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
+  testOpenAiVoiceSetup: "nhd:openai:voice:test",
   updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update",
   voicePresentationChanged: "nhd:voice:presentation:changed"
@@ -271,6 +273,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.selectProfile, profileId),
   startRemotePairing: (): Promise<RemoteStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.startRemotePairing),
+  testOpenAiVoiceSetup: (): Promise<VoiceSetupDiagnostic> =>
+    ipcRenderer.invoke(IPC_CHANNELS.testOpenAiVoiceSetup),
   updateProfilePreferences: (preferences: ProfilePreferences): Promise<LocalAppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.updateProfilePreferences, preferences),
   updateDevicePreferences: (preferences: Partial<DevicePreferences>): Promise<LocalAppState> =>

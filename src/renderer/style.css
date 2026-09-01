@@ -3204,6 +3204,80 @@ h2 {
   opacity: 0.38;
 }
 
+.voice-setup-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem 1rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.65rem;
+  background: #17181d;
+}
+
+.voice-setup-check h4 {
+  margin: 0;
+  color: #f4f4f5;
+  font-size: 0.98rem;
+}
+
+.voice-setup-check > div > p {
+  margin-top: 0.25rem;
+}
+
+.voice-setup-check > small {
+  grid-column: 1 / -1;
+  color: #8f949e;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.voice-check-list {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.voice-check-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.4rem 0.58rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 999px;
+  color: #b9bdc6;
+  font-size: 0.76rem;
+  font-weight: 640;
+}
+
+.voice-check-list i {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #777d88;
+}
+
+.voice-check-list span[data-state="passed"] {
+  color: #bbf7d0;
+}
+
+.voice-check-list span[data-state="passed"] i {
+  background: #4ade80;
+}
+
+.voice-check-list span[data-state="failed"] {
+  color: #fecdd3;
+}
+
+.voice-check-list span[data-state="failed"] i {
+  background: #fb7185;
+}
+
+.voice-check-list span[data-state="phone"] i {
+  background: #60a5fa;
+}
+
 .voice-privacy-note {
   margin-top: 1.25rem;
   padding-top: 1rem;

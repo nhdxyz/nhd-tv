@@ -39,6 +39,7 @@ export const IPC_CHANNELS = {
   serviceQuitRequested: "nhd:service:quit:requested",
   spotifyPlaybackChanged: "nhd:spotify:playback:changed",
   startRemotePairing: "nhd:remote:pairing:start",
+  testOpenAiVoiceSetup: "nhd:openai:voice:test",
   updateDevicePreferences: "nhd:device:preferences:update",
   updateProfilePreferences: "nhd:profile:preferences:update",
   voicePresentationChanged: "nhd:voice:presentation:changed"
@@ -230,6 +231,17 @@ export type OpenAiCredentialState =
 export interface OpenAiCredentialStatus {
   detail: string;
   state: OpenAiCredentialState;
+}
+
+export type VoiceSetupCheckState = "failed" | "passed" | "pending";
+
+/** A renderer-safe diagnostic. It never contains a credential or model response body. */
+export interface VoiceSetupDiagnostic {
+  checkedAt: number;
+  credential: VoiceSetupCheckState;
+  detail: string;
+  interpretation: VoiceSetupCheckState;
+  latencyMs: number | null;
 }
 
 export type VoicePresentationPhase =

@@ -155,6 +155,7 @@ export const REMOTE_HTML = `<!doctype html>
             </div>
           </div>
           <ol class="voice-choices" id="voice-choices" aria-label="Voice choices" hidden></ol>
+          <button class="voice-test-button" id="voice-test-button" type="button" disabled>Test voice setup</button>
         </section>
 
         <div class="playback-controls" aria-label="Playback controls">
@@ -554,6 +555,23 @@ input {
   border: 1px solid #343431;
   border-radius: 0.58rem;
   background: #20201e;
+}
+
+.voice-test-button {
+  justify-self: start;
+  min-height: 2rem;
+  padding: 0.3rem 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: #aeb4be;
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.voice-test-button:disabled {
+  opacity: 0.38;
 }
 .voice-choice-ordinal {
   display: grid;
@@ -1040,6 +1058,7 @@ export const REMOTE_JS = `(() => {
   const voiceChoices = document.querySelector("#voice-choices");
   const voiceHelp = document.querySelector("#voice-help");
   const voiceStatusTitle = document.querySelector("#voice-status-title");
+  const voiceTestButton = document.querySelector("#voice-test-button");
   const voiceConfirm = document.querySelector("#voice-confirm");
   const voiceConfirmLabel = document.querySelector("#voice-confirm-label");
   const voiceConfirmCopy = document.querySelector("#voice-confirm-copy");
@@ -1075,6 +1094,7 @@ export const REMOTE_JS = `(() => {
   let voiceStartedAt = 0;
   let voiceStopTimer = null;
   let voiceStarting = false;
+  let voiceTestMode = false;
   let voiceReleaseRequested = false;
   let voiceDiscardRequested = false;
   let voiceProcessing = false;
@@ -1204,6 +1224,8 @@ export const REMOTE_JS = `(() => {
     const awaitingConfirmation = pendingVoiceConfirmation !== null;
     const awaitingSubmittedResult = pendingVoiceConfirmation?.submitted === true;
     voiceButton.disabled = !ready || voiceBusy || voiceProcessing || awaitingSubmittedResult;
+    voiceTestButton.disabled = !ready || voiceBusy || voiceProcessing || voiceStarting;
+    voiceTestButton.textContent = voiceTestMode ? "Cancel voice test" : "Test voice setup";
     voiceButton.classList.toggle("is-processing", voiceProcessing);
     voiceCancel.hidden = !voiceProcessing || activeVoiceRequest === null;
     voiceCancel.disabled = !remoteEnabled || voiceCancelling || activeVoiceRequest === null;
@@ -1602,10 +1624,14 @@ export const REMOTE_JS = `(() => {
     }
   }
 
-  async function uploadVoiceRecording(blob, durationMs, commandId, confirmationId) {
+  async function uploadVoiceRecording(blob, durationMs, commandId, confirmationId, diagnostic) {
     if (!controllerToken || !commandId) return;
     voiceButtonCopy.textContent = "Understanding";
-    setVoiceState("You can cancel if this takes too long.", "processing", "Understanding your request");
+    setVoiceState(
+      "You can cancel if this takes too long.",
+      "processing",
+      diagnostic ? "Testing voice setup" : "Understanding your request"
+    );
     const requestController = new AbortController();
     const request = beginActiveVoiceRequest(commandId, commandId, requestController);
     const requestTimeout = setTimeout(
@@ -1613,7 +1639,7 @@ export const REMOTE_JS = `(() => {
       VOICE_COMMAND_REQUEST_TIMEOUT_MS
     );
     try {
-      const result = await jsonRequest("/api/voice", {
+      const result = await jsonRequest(diagnostic ? "/api/voice/test" : "/api/voice", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + controllerToken,
@@ -1630,7 +1656,16 @@ export const REMOTE_JS = `(() => {
       applyOrDeferVoiceResponse(request, () => {
         const transcript = cleanVoiceCopy(result.transcript, "", 160);
         const transcriptTitle = transcript ? "“" + transcript + "”" : undefined;
-        if (
+        if (diagnostic) {
+          closeVoiceConfirmation();
+          renderVoiceChoices([]);
+          setVoiceState(
+            typeof result.detail === "string" ? result.detail : "Voice setup passed.",
+            result.outcome === "failed" ? "error" : "success",
+            result.outcome === "failed" ? "Voice test failed" : "Voice test passed"
+          );
+          if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate([12, 32, 12]);
+        } else if (
           result.outcome === "confirmation-required" &&
           typeof result.confirmationId === "string"
         ) {
@@ -1700,6 +1735,7 @@ export const REMOTE_JS = `(() => {
         );
       });
     } finally {
+      if (diagnostic) voiceTestMode = false;
       clearTimeout(requestTimeout);
       request.networkSettled = true;
       if (!request.cancelRequested) finishActiveVoiceRequest(request);
@@ -1716,6 +1752,7 @@ export const REMOTE_JS = `(() => {
   function cancelVoiceRecording() {
     voiceReleaseRequested = true;
     voiceDiscardRequested = true;
+    voiceTestMode = false;
     sendVoiceActivity("cancelled", true);
     const recorder = voiceRecorder;
     if (recorder !== null && recorder.state !== "inactive") recorder.stop();
@@ -1730,7 +1767,8 @@ export const REMOTE_JS = `(() => {
       supportedVoiceMimeType === null
     ) return;
 
-    const spokenConfirmationId = pendingVoiceConfirmation?.submitted === true
+    const diagnostic = voiceTestMode;
+    const spokenConfirmationId = diagnostic || pendingVoiceConfirmation?.submitted === true
       ? null
       : pendingVoiceConfirmation?.confirmationId ?? null;
     voiceCommandId = createVoiceCommandId();
@@ -1811,7 +1849,7 @@ export const REMOTE_JS = `(() => {
         }
         const blob = new Blob(recordedChunks, { type: mimeType });
         recordedChunks.length = 0;
-        void uploadVoiceRecording(blob, durationMs, commandId, spokenConfirmationId);
+        void uploadVoiceRecording(blob, durationMs, commandId, spokenConfirmationId, diagnostic);
       }, { once: true });
       voiceStartedAt = performance.now();
       recorder.start(250);
@@ -1819,7 +1857,13 @@ export const REMOTE_JS = `(() => {
       updateVoiceConfirmationButtons();
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Release to send";
-      setVoiceState("TV audio is muted while you speak.", "listening", "Listening");
+      setVoiceState(
+        diagnostic
+          ? "Say a short command. Nothing will be executed."
+          : "TV audio is muted while you speak.",
+        "listening",
+        diagnostic ? "Voice test listening" : "Listening"
+      );
       if (navigator.vibrate) navigator.vibrate(12);
       voiceStopTimer = setTimeout(() => {
         finishVoiceRecording();
@@ -2445,6 +2489,23 @@ export const REMOTE_JS = `(() => {
     }
   });
   voiceButton.addEventListener("click", (event) => event.preventDefault());
+  voiceTestButton.addEventListener("click", () => {
+    if (voiceTestMode) {
+      voiceTestMode = false;
+      setVoiceState("Hold the microphone whenever you want to speak.", "idle", "Voice ready");
+    } else {
+      closeVoiceConfirmation();
+      renderVoiceChoices([]);
+      voiceTestMode = true;
+      setVoiceState(
+        "Hold the microphone and say a short command. The test will not control the TV.",
+        "idle",
+        "Ready to test"
+      );
+      voiceButton.focus({ preventScroll: true });
+    }
+    updateVoiceButton();
+  });
   voiceCancel.addEventListener("click", () => void cancelActiveVoiceCommand());
   voiceConfirmCancel.addEventListener("click", () => {
     const pending = closeVoiceConfirmation();

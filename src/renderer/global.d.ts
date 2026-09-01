@@ -13,7 +13,8 @@ import type {
   ServiceQuitRequest,
   ServiceSummary,
   SpotifyPlaybackPresentation,
-  VoicePresentationState
+  VoicePresentationState,
+  VoiceSetupDiagnostic
 } from "../main/contracts";
 
 declare global {
@@ -68,6 +69,7 @@ declare global {
       saveOpenAiApiKey: (apiKey: string) => Promise<OpenAiCredentialStatus>;
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;
+      testOpenAiVoiceSetup: () => Promise<VoiceSetupDiagnostic>;
       updateProfilePreferences: (preferences: ProfilePreferences) => Promise<LocalAppState>;
       updateDevicePreferences: (preferences: Partial<DevicePreferences>) => Promise<LocalAppState>;
     };

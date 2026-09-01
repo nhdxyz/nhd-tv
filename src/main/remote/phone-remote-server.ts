@@ -115,6 +115,11 @@ export interface PhoneRemoteServerOptions {
     signal: AbortSignal,
     confirmationId: string | null
   ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
+  onVoiceTest?: (
+    clip: VoiceAudioClip,
+    commandId: string,
+    signal: AbortSignal
+  ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   onVoiceTimeout?: (commandId: string) => void | Promise<void>;
   shouldAutoApproveFirstRemote: () => boolean;
 }
@@ -540,6 +545,7 @@ export class PhoneRemoteServer {
   readonly #onConfirmVoice: PhoneRemoteServerOptions["onConfirmVoice"];
   readonly #onVoiceActivity: PhoneRemoteServerOptions["onVoiceActivity"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
+  readonly #onVoiceTest: PhoneRemoteServerOptions["onVoiceTest"];
   readonly #onVoiceTimeout: PhoneRemoteServerOptions["onVoiceTimeout"];
   readonly #shouldAutoApproveFirstRemote: PhoneRemoteServerOptions["shouldAutoApproveFirstRemote"];
   readonly #deferredVoiceDisconnects = new Set<string>();
@@ -575,6 +581,7 @@ export class PhoneRemoteServer {
     this.#onConfirmVoice = options.onConfirmVoice;
     this.#onVoiceActivity = options.onVoiceActivity;
     this.#onVoice = options.onVoice;
+    this.#onVoiceTest = options.onVoiceTest;
     this.#onVoiceTimeout = options.onVoiceTimeout;
     this.#shouldAutoApproveFirstRemote = options.shouldAutoApproveFirstRemote;
   }
@@ -1151,7 +1158,11 @@ export class PhoneRemoteServer {
       return;
     }
 
-    if (method === "POST" && url.pathname === "/api/voice") {
+    if (
+      method === "POST" &&
+      (url.pathname === "/api/voice" || url.pathname === "/api/voice/test")
+    ) {
+      const diagnostic = url.pathname === "/api/voice/test";
       const metadata = parseVoiceUploadMetadata(request.headers, this.#remoteOrigin);
       if (metadata === null) {
         writeJson(response, 403, { error: "Voice upload rejected" });
@@ -1165,6 +1176,12 @@ export class PhoneRemoteServer {
       const controllerId = this.#authorizeController(token);
       if (controllerId === null) {
         writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      if (
+        diagnostic && metadata.confirmationId !== null
+      ) {
+        writeJson(response, 400, { error: "Voice tests cannot confirm playback" });
         return;
       }
       if (
@@ -1191,7 +1208,10 @@ export class PhoneRemoteServer {
         });
         return;
       }
-      if (!voiceStatus.available || this.#onVoice === undefined) {
+      if (
+        !voiceStatus.available ||
+        (diagnostic ? this.#onVoiceTest === undefined : this.#onVoice === undefined)
+      ) {
         writeJson(response, 503, { error: voiceStatus.detail });
         return;
       }
@@ -1273,14 +1293,27 @@ export class PhoneRemoteServer {
         let result: PhoneRemoteVoiceResult;
         try {
           result = await runVoiceOperationWithDeadline(
-            (signal) => this.#onVoice?.({
-              bytes,
-              durationMs: metadata.durationMs,
-              mimeType: metadata.mimeType
-            }, metadata.commandId, signal, metadata.confirmationId) ?? Promise.resolve({
-              detail: "Voice control is unavailable.",
-              outcome: "failed" as const
-            }),
+            (signal) => {
+              const clip = {
+                bytes,
+                durationMs: metadata.durationMs,
+                mimeType: metadata.mimeType
+              };
+              return diagnostic
+                ? this.#onVoiceTest?.(clip, metadata.commandId, signal) ?? Promise.resolve({
+                    detail: "Voice testing is unavailable.",
+                    outcome: "failed" as const
+                  })
+                : this.#onVoice?.(
+                    clip,
+                    metadata.commandId,
+                    signal,
+                    metadata.confirmationId
+                  ) ?? Promise.resolve({
+                    detail: "Voice control is unavailable.",
+                    outcome: "failed" as const
+                  });
+            },
             VOICE_COMMAND_OPERATION_TIMEOUT_MS,
             operation.controller
           );

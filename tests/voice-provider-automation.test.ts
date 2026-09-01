@@ -34,6 +34,7 @@ class FakeElement {
   readonly #attributes: Record<string, string>;
   readonly #byline: FakeElement | null;
   readonly #card: FakeElement | null;
+  readonly #closest: ((selector: string) => FakeElement | null) | null;
   readonly #selectAll: ((selector: string) => FakeElement[]) | null;
   readonly #selectors: Record<string, FakeElement[]>;
   readonly #visible: boolean;
@@ -43,6 +44,7 @@ class FakeElement {
     attributes?: Record<string, string>;
     byline?: FakeElement | null;
     card?: FakeElement | null;
+    closest?: (selector: string) => FakeElement | null;
     selectAll?: (selector: string) => FakeElement[];
     selectors?: Record<string, FakeElement[]>;
     text?: string;
@@ -51,6 +53,7 @@ class FakeElement {
     this.#attributes = options.attributes ?? {};
     this.#byline = options.byline ?? null;
     this.#card = options.card ?? null;
+    this.#closest = options.closest ?? null;
     this.#selectAll = options.selectAll ?? null;
     this.#selectors = options.selectors ?? {};
     this.#visible = options.visible ?? true;
@@ -61,8 +64,8 @@ class FakeElement {
     this.clicked = true;
   }
 
-  closest(): FakeElement {
-    return this.#card ?? this;
+  closest(selector: string): FakeElement | null {
+    return this.#closest?.(selector) ?? this.#card ?? this;
   }
 
   getAttribute(name: string): string | null {
@@ -1261,6 +1264,42 @@ describe("voice provider automation", () => {
         : []
     });
     const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
+    const documentValue = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading] : []
+    };
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      }), true),
+      documentValue,
+      "/artist/kanye"
+    )).toBe("play-clicked");
+    expect(markedPlay.clicked).toBe(true);
+  });
+
+  it("finds a marked Spotify action bar rendered beside the artist wrapper", () => {
+    const markedPlay = new FakeElement({
+      attributes: {
+        "aria-label": "Play Kanye West",
+        "data-nhdtv-spotify-control": "primary-playback"
+      }
+    });
+    const main = new FakeElement({
+      selectAll: (selector) => selector.includes('data-nhdtv-spotify-control="primary-playback"')
+        ? [markedPlay]
+        : []
+    });
+    const artistWrapper = new FakeElement();
+    const heading = new FakeElement({
+      closest: (selector) => selector === 'main,[role="main"]' ? main
+        : selector.includes('data-testid="artist-page"') ? artistWrapper : null,
+      text: "Kanye West"
+    });
     const documentValue = {
       querySelector: () => null,
       querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading] : []

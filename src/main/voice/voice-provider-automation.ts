@@ -496,10 +496,11 @@ export function buildSpotifyVoiceAutomationScript(
           requestedIdentity
         ))
       ));
-      const entityRoot = exactHeading?.closest(
-        '[data-testid="album-page"],[data-testid="artist-page"],'
-        + '[data-testid="playlist-page"],[data-testid="track-page"],main,[role="main"]'
-      ) ?? null;
+      const entityRoot = exactHeading?.closest('main,[role="main"]') ??
+        exactHeading?.closest(
+          '[data-testid="album-page"],[data-testid="artist-page"],'
+          + '[data-testid="playlist-page"],[data-testid="track-page"]'
+        ) ?? null;
       if (exactHeading && entityRoot) {
         if (intent.action !== "play") return "complete";
         const profilePause = intent.mediaType === "artist"

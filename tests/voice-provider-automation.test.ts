@@ -173,11 +173,12 @@ describe("voice provider automation", () => {
     )).toBe("navigated");
     expect(artistDestination.clicked).toBe(true);
 
-    const play = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
-    const actionRoot = new FakeElement({ selectAll: () => [play] });
+    let artistPageControl = new FakeElement({
+      attributes: { "data-testid": "play-button" }
+    });
     const entityRoot = new FakeElement({
-      selectAll: (selector) => selector.includes('data-testid="action-bar"')
-        ? [actionRoot]
+      selectAll: (selector) => selector.includes('data-testid="play-button"')
+        ? [artistPageControl]
         : []
     });
     const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
@@ -193,7 +194,23 @@ describe("voice provider automation", () => {
       artistDocument,
       "/artist/abc123"
     )).toBe("play-clicked");
-    expect(play.clicked).toBe(true);
+    expect(artistPageControl.clicked).toBe(true);
+
+    artistPageControl = new FakeElement({ attributes: { "aria-label": "Pause" } });
+    const globalPause = new FakeElement({ attributes: { "aria-label": "Pause" } });
+    const playingDocument = {
+      ...artistDocument,
+      querySelectorAll: (selector: string) => selector.includes('data-testid="entityTitle"')
+        ? [heading]
+        : selector.includes('data-testid="control-button-playpause"')
+          ? [globalPause]
+          : []
+    };
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent, true),
+      playingDocument,
+      "/artist/abc123"
+    )).toBe("playing");
   });
 
   it("uses provider-owned channel and video anchors on YouTube", () => {

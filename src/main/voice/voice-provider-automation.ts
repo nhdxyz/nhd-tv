@@ -490,7 +490,7 @@ export function buildSpotifyVoiceAutomationScript(
       if (exactHeading && entityRoot) {
         if (intent.action !== "play") return "complete";
         const profilePause = intent.mediaType === "artist"
-          ? artistActionButton(entityRoot, requestedIdentity, true)
+          ? artistActionButton(entityRoot, requestedIdentity, true) ?? pauseButton(entityRoot)
           : pauseButton(entityRoot);
         if (
           playbackRequested &&
@@ -498,7 +498,7 @@ export function buildSpotifyVoiceAutomationScript(
           globalPauseButton() instanceof HTMLElement
         ) return "playing";
         const button = intent.mediaType === "artist"
-          ? artistActionButton(entityRoot, requestedIdentity, false)
+          ? artistActionButton(entityRoot, requestedIdentity, false) ?? playButton(entityRoot)
           : playButton(entityRoot);
         if (button instanceof HTMLElement) {
           button.click();

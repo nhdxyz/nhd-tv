@@ -1082,7 +1082,8 @@ summary:focus-visible {
 }
 
 .voice-presentation-choice:hover,
-.voice-presentation-choice:focus-visible {
+.voice-presentation-choice:focus-visible,
+.voice-presentation-choice[data-remote-focused="true"] {
   border-color: rgb(255 255 255 / 42%);
   background: rgb(255 255 255 / 10%);
   outline: 0;
@@ -4657,5 +4658,16 @@ h2 {
   .voice-presentation-signal,
   .voice-presentation-signal i {
     animation: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .voice-presentation {
+    border-color: #fff;
+    backdrop-filter: none;
+  }
+
+  .voice-presentation-choice {
+    border-color: rgb(255 255 255 / 58%);
   }
 }

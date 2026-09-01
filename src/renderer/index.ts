@@ -21,7 +21,7 @@ import {
   mediaActionForKeyInput
 } from "../main/media-actions";
 import { GamepadInput, type GamepadLike } from "./gamepad-input";
-import { NavigationSounds } from "./navigation-sounds";
+import { NavigationSounds, voiceSoundCue } from "./navigation-sounds";
 import { presentContinueWatching } from "./content-presentation";
 import { matchContinueWatching } from "./search-history";
 import { createServiceLockup, createServiceMark } from "./service-branding";
@@ -475,6 +475,8 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
   }
   elements.voicePresentationChoices.hidden = choices.length === 0;
   elements.voicePresentation.hidden = hidden;
+  const soundCue = voiceSoundCue(previousPhase, presentation.phase);
+  if (soundCue !== null) navigationSounds.playVoiceCue(soundCue);
   if (choices.length > 0) {
     const firstChoice = elements.voicePresentationChoices.querySelector<HTMLElement>("button");
     firstChoice?.focus({ preventScroll: true });

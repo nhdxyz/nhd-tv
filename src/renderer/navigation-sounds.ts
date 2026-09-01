@@ -4,6 +4,21 @@ export function soundEnabledFromPreference(value: string | null): boolean {
   return value !== "off";
 }
 
+export type VoiceSoundCue = "attention" | "listening" | "success";
+
+export function voiceSoundCue(
+  previousPhase: string | undefined,
+  phase: string
+): VoiceSoundCue | null {
+  if (previousPhase === phase) return null;
+  if (phase === "listening") return "listening";
+  if (phase === "success") return "success";
+  if (phase === "clarification" || phase === "confirmation" || phase === "error") {
+    return "attention";
+  }
+  return null;
+}
+
 export class NavigationSounds {
   #context: AudioContext | null = null;
   #enabled: boolean;
@@ -40,6 +55,20 @@ export class NavigationSounds {
 
   playSelect(): void {
     this.#playTone(470, 590, 0.055, 0.034);
+  }
+
+  playVoiceCue(cue: VoiceSoundCue): void {
+    switch (cue) {
+      case "attention":
+        this.#playTone(470, 350, 0.09, 0.029);
+        break;
+      case "listening":
+        this.#playTone(440, 620, 0.075, 0.025);
+        break;
+      case "success":
+        this.#playTone(520, 760, 0.11, 0.03);
+        break;
+    }
   }
 
   #playTone(startFrequency: number, endFrequency: number, duration: number, volume: number): void {

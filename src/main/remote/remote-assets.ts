@@ -551,6 +551,7 @@ input {
   min-width: 0;
   grid-template-columns: 1.8rem minmax(0, 1fr);
   align-items: center;
+  min-height: 3rem;
   gap: 0.58rem;
   padding: 0.5rem 0.58rem;
   border: 1px solid #343431;
@@ -1043,6 +1044,14 @@ body.is-connected .footnote { display: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (prefers-contrast: more) {
+  .remote-card,
+  .voice-control,
+  .voice-choice-button {
+    border-color: #f2f2ee;
+  }
+}
 `;
 
 export const REMOTE_JS = `(() => {
@@ -1268,11 +1277,15 @@ export const REMOTE_JS = `(() => {
       success: "Done",
       transcript: "You said"
     };
+    const previousKind = voiceStatusKind;
     voiceStatusKind = kind;
     if (kind !== "clarification") renderVoiceChoices([]);
     voiceControl.dataset.state = kind;
     voiceStatusTitle.textContent = cleanVoiceCopy(title, titles[kind] || "Voice", 120);
     voiceHelp.textContent = cleanVoiceCopy(message, "Hold the microphone to speak.");
+    if (kind === "error" && previousKind !== "error" && navigator.vibrate) {
+      navigator.vibrate([24, 36, 24]);
+    }
   }
 
   function updateVoiceButton() {

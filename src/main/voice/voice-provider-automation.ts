@@ -496,13 +496,30 @@ export function buildSpotifyVoiceAutomationScript(
           requestedIdentity
         ))
       ));
+      const markedPrimary = exactHeading
+        ? [...document.querySelectorAll(
+          '[data-nhdtv-spotify-control="primary-playback"]'
+        )].find(visible) ?? null
+        : null;
       const entityRoot = exactHeading?.closest('main,[role="main"]') ??
         exactHeading?.closest(
           '[data-testid="album-page"],[data-testid="artist-page"],'
           + '[data-testid="playlist-page"],[data-testid="track-page"]'
         ) ?? null;
-      if (exactHeading && entityRoot) {
+      if (exactHeading) {
         if (intent.action !== "play") return "complete";
+        if (markedPrimary instanceof HTMLElement) {
+          const markedLabel = controlLabel(markedPrimary);
+          if (playbackRequested && /^pause(?:\\s|$)/i.test(markedLabel)) {
+            return "playing";
+          }
+          if (!/^pause(?:\\s|$)/i.test(markedLabel)) {
+            markedPrimary.click();
+            return "play-clicked";
+          }
+        }
+      }
+      if (exactHeading && entityRoot) {
         const profilePause = intent.mediaType === "artist"
           ? artistActionButton(entityRoot, requestedIdentity, true) ?? pauseButton(entityRoot)
           : pauseButton(entityRoot);

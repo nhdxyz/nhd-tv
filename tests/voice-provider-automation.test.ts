@@ -1282,18 +1282,14 @@ describe("voice provider automation", () => {
     expect(markedPlay.clicked).toBe(true);
   });
 
-  it("finds a marked Spotify action bar rendered beside the artist wrapper", () => {
+  it("finds the document-level marker after verifying a Spotify artist page", () => {
     const markedPlay = new FakeElement({
       attributes: {
         "aria-label": "Play Kanye West",
         "data-nhdtv-spotify-control": "primary-playback"
       }
     });
-    const main = new FakeElement({
-      selectAll: (selector) => selector.includes('data-nhdtv-spotify-control="primary-playback"')
-        ? [markedPlay]
-        : []
-    });
+    const main = new FakeElement();
     const artistWrapper = new FakeElement();
     const heading = new FakeElement({
       closest: (selector) => selector === 'main,[role="main"]' ? main
@@ -1302,7 +1298,8 @@ describe("voice provider automation", () => {
     });
     const documentValue = {
       querySelector: () => null,
-      querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading] : []
+      querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading]
+        : selector === '[data-nhdtv-spotify-control="primary-playback"]' ? [markedPlay] : []
     };
 
     expect(executeProviderScript(

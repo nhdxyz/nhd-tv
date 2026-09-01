@@ -54,6 +54,12 @@ function requireElement<T>(selector: string, name: string): T {
 }
 
 const elements = {
+  actionNotice: requireElement<HTMLElement>("#action-notice", "action-notice"),
+  actionNoticeDetail: requireElement<HTMLElement>("#action-notice-detail", "action-notice-detail"),
+  actionNoticeDismiss: requireElement<HTMLButtonElement>("#action-notice-dismiss", "action-notice-dismiss"),
+  actionNoticeMark: requireElement<HTMLElement>("#action-notice-mark", "action-notice-mark"),
+  actionNoticeRetry: requireElement<HTMLButtonElement>("#action-notice-retry", "action-notice-retry"),
+  actionNoticeTitle: requireElement<HTMLElement>("#action-notice-title", "action-notice-title"),
   ambientAnalogHour: requireElement<HTMLElement>("#ambient-analog-hour", "ambient-analog-hour"),
   ambientAnalogMinute: requireElement<HTMLElement>("#ambient-analog-minute", "ambient-analog-minute"),
   ambientClockStyle: requireElement<HTMLButtonElement>("#ambient-clock-style", "ambient-clock-style"),
@@ -284,6 +290,8 @@ let ambientShownAt = 0;
 let ambientIdleVisible = false;
 let spotifyNowPlayingOpen = false;
 let currentView: AppView = "home";
+let actionNoticeRetry: (() => void) | null = null;
+let actionNoticeVersion = 0;
 let continueManaging = false;
 let continueWatchingLoadFailed = false;
 let enabledServiceIds = new Set<string>();
@@ -294,6 +302,8 @@ let voiceUnderstandingStartedAt = 0;
 const VOICE_PRESENTATION_FAILSAFE_MS = 65_000;
 const VOICE_PRESENTATION_LONG_WAIT_MS = 15_000;
 const CATALOG_SEARCH_TIMEOUT_MS = 10_000;
+const APP_ACTION_TIMEOUT_MS = 30_000;
+const PLAYBACK_ACTION_TIMEOUT_MS = 10_000;
 const PAIRING_OPERATION_TIMEOUT_MS = 12_000;
 const RECOVERY_OPERATION_TIMEOUT_MS = 20_000;
 let featuredContinueItemId: string | null = null;
@@ -323,6 +333,57 @@ function showFeedback(message: string): void {
   }, 4_000);
 }
 
+interface ActionNoticeOptions {
+  detail: string;
+  retry?: () => void;
+  retryLabel?: string;
+  state: "error" | "progress";
+  title: string;
+}
+
+function showActionNotice(options: ActionNoticeOptions): number {
+  const version = ++actionNoticeVersion;
+  actionNoticeRetry = options.retry ?? null;
+  elements.actionNotice.dataset.state = options.state;
+  elements.actionNotice.setAttribute("role", options.state === "error" ? "alert" : "status");
+  elements.actionNotice.setAttribute("aria-live", options.state === "error" ? "assertive" : "polite");
+  elements.actionNoticeMark.textContent = options.state === "error" ? "!" : "…";
+  elements.actionNoticeTitle.textContent = options.title;
+  elements.actionNoticeDetail.textContent = options.detail;
+  elements.actionNoticeRetry.textContent = options.retryLabel ?? "Try again";
+  elements.actionNoticeRetry.hidden = options.retry === undefined;
+  elements.actionNotice.hidden = false;
+  return version;
+}
+
+function hideActionNotice(expectedVersion?: number): void {
+  if (expectedVersion !== undefined && expectedVersion !== actionNoticeVersion) return;
+  actionNoticeVersion += 1;
+  actionNoticeRetry = null;
+  elements.actionNotice.hidden = true;
+  elements.actionNoticeRetry.hidden = true;
+}
+
+function actionFailureDetail(error: unknown, fallback: string): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return detail.trim().length > 0 ? detail : fallback;
+}
+
+function replaceActionProgressWithFailure(
+  version: number,
+  options: Omit<ActionNoticeOptions, "state">
+): void {
+  if (version !== actionNoticeVersion) return;
+  showActionNotice({ ...options, state: "error" });
+}
+
+elements.actionNoticeDismiss.addEventListener("click", () => hideActionNotice());
+elements.actionNoticeRetry.addEventListener("click", () => {
+  const retry = actionNoticeRetry;
+  hideActionNotice();
+  retry?.();
+});
+
 function withUiDeadline<T>(
   operation: Promise<T>,
   timeoutMs: number,
@@ -344,6 +405,7 @@ function withUiDeadline<T>(
 }
 
 function renderVoicePresentation(presentation: VoicePresentationState): void {
+  if (presentation.phase === "listening") hideActionNotice();
   const previousPhase = elements.voicePresentation.dataset.phase;
   if (voicePresentationFailsafeTimer !== null) {
     window.clearTimeout(voicePresentationFailsafeTimer);
@@ -992,14 +1054,7 @@ function continueCard(item: ContinueWatchingItem): HTMLElement {
   progress.append(progressValue);
   meta.append(service, title, detail, progress);
   button.append(art, meta);
-  button.addEventListener("click", async () => {
-    showFeedback(`Resuming ${presentation.title} in ${item.serviceName}…`);
-    try {
-      await window.nhd.resumeContinueWatching(item.id);
-    } catch (error) {
-      showFeedback(error instanceof Error ? error.message : String(error));
-    }
-  });
+  button.addEventListener("click", () => void resumeContinueWatchingItem(item));
 
   const remove = document.createElement("button");
   remove.className = "continue-remove";
@@ -1109,13 +1164,48 @@ async function initializeContinueWatching(): Promise<void> {
   renderContinueWatching();
 }
 
-async function openService(serviceId: string, serviceName: string): Promise<void> {
-  showFeedback(`Opening ${serviceName}…`);
-
+async function resumeContinueWatchingItem(item: ContinueWatchingItem): Promise<void> {
+  const presentation = presentContinueWatching(item);
+  const noticeVersion = showActionNotice({
+    detail: `Opening ${item.serviceName}.`,
+    state: "progress",
+    title: `Resuming ${presentation.title}…`
+  });
   try {
-    await window.nhd.openService(serviceId);
+    await withUiDeadline(
+      window.nhd.resumeContinueWatching(item.id),
+      APP_ACTION_TIMEOUT_MS,
+      `${item.serviceName} took too long to resume playback.`
+    );
+    hideActionNotice(noticeVersion);
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    replaceActionProgressWithFailure(noticeVersion, {
+      detail: actionFailureDetail(error, "Try opening the title again."),
+      retry: () => void resumeContinueWatchingItem(item),
+      title: `${presentation.title} didn’t resume`
+    });
+  }
+}
+
+async function openService(serviceId: string, serviceName: string): Promise<void> {
+  const noticeVersion = showActionNotice({
+    detail: "This can take a few seconds.",
+    state: "progress",
+    title: `Opening ${serviceName}…`
+  });
+  try {
+    await withUiDeadline(
+      window.nhd.openService(serviceId),
+      APP_ACTION_TIMEOUT_MS,
+      `${serviceName} took too long to open.`
+    );
+    hideActionNotice(noticeVersion);
+  } catch (error) {
+    replaceActionProgressWithFailure(noticeVersion, {
+      detail: actionFailureDetail(error, "Try opening the app again."),
+      retry: () => void openService(serviceId, serviceName),
+      title: `${serviceName} didn’t open`
+    });
   }
 }
 
@@ -1124,13 +1214,22 @@ async function sendSpotifyHomeAction(
   feedback: string
 ): Promise<void> {
   try {
-    if (await window.nhd.sendInputAction(action)) {
+    if (await withUiDeadline(
+      window.nhd.sendInputAction(action),
+      PLAYBACK_ACTION_TIMEOUT_MS,
+      "Spotify did not respond to that control."
+    )) {
       showFeedback(feedback);
     } else {
-      showFeedback("Spotify is not ready for that control yet.");
+      throw new Error("Spotify is not ready for that control yet.");
     }
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    showActionNotice({
+      detail: actionFailureDetail(error, "Try the playback control again."),
+      retry: () => void sendSpotifyHomeAction(action, feedback),
+      state: "error",
+      title: "Spotify control didn’t work"
+    });
   }
 }
 
@@ -1560,12 +1659,25 @@ function enabledSearchServices(): ServiceSummary[] {
 }
 
 async function openProviderSearch(service: ServiceSummary, query: string): Promise<void> {
-  showFeedback("Opening " + service.name + " search…");
+  const noticeVersion = showActionNotice({
+    detail: `Searching for “${query}”.`,
+    state: "progress",
+    title: `Opening ${service.name} search…`
+  });
   try {
-    await window.nhd.searchService(service.id, query);
+    await withUiDeadline(
+      window.nhd.searchService(service.id, query),
+      APP_ACTION_TIMEOUT_MS,
+      `${service.name} search took too long to open.`
+    );
+    hideActionNotice(noticeVersion);
     elements.searchDialog.close();
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : String(error));
+    replaceActionProgressWithFailure(noticeVersion, {
+      detail: actionFailureDetail(error, "Try searching the app again."),
+      retry: () => void openProviderSearch(service, query),
+      title: `${service.name} search didn’t open`
+    });
   }
 }
 
@@ -1797,13 +1909,9 @@ function renderSearchResults(rawQuery: string): void {
     detail.textContent = `Resume in ${item.serviceName}`;
     copy.append(title, detail);
     button.append(art, copy);
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
       elements.searchDialog.close();
-      try {
-        await window.nhd.resumeContinueWatching(item.id);
-      } catch (error) {
-        showFeedback(error instanceof Error ? error.message : String(error));
-      }
+      void resumeContinueWatchingItem(item);
     });
     return button;
   });
@@ -1846,15 +1954,7 @@ function renderSearchResults(rawQuery: string): void {
     detail.textContent = service.searchMode === "query" ? "Search this app" : "Open app search";
     copy.append(title, detail);
     button.append(copy);
-    button.addEventListener("click", async () => {
-      showFeedback(`Opening ${service.name} search…`);
-      try {
-        await window.nhd.searchService(service.id, query);
-        elements.searchDialog.close();
-      } catch (error) {
-        showFeedback(error instanceof Error ? error.message : String(error));
-      }
-    });
+    button.addEventListener("click", () => void openProviderSearch(service, query));
     return button;
   });
 
@@ -2134,11 +2234,7 @@ elements.heroOpenButton.addEventListener("click", () => {
   if (featuredContinueItemId !== null) {
     const item = continueWatchingItems.find(({ id }) => id === featuredContinueItemId);
     if (item !== undefined) {
-      const presentation = presentContinueWatching(item);
-      showFeedback(`Resuming ${presentation.title} in ${item.serviceName}…`);
-      void window.nhd.resumeContinueWatching(item.id).catch((error) => {
-        showFeedback(error instanceof Error ? error.message : String(error));
-      });
+      void resumeContinueWatchingItem(item);
       return;
     }
   }
@@ -2980,6 +3076,23 @@ function returnHome(remote = false): void {
   setRemoteFocusedElement(remote ? elements.heroOpenButton : null);
 }
 
+async function sendShellInputAction(action: RemoteAction): Promise<void> {
+  try {
+    await withUiDeadline(
+      window.nhd.sendInputAction(action),
+      PLAYBACK_ACTION_TIMEOUT_MS,
+      "The television did not respond to that control."
+    );
+  } catch (error) {
+    showActionNotice({
+      detail: actionFailureDetail(error, "Try the control again."),
+      retry: () => void sendShellInputAction(action),
+      state: "error",
+      title: "Control didn’t work"
+    });
+  }
+}
+
 document.addEventListener("keydown", (event) => {
   const mediaAction = mediaActionForKeyInput({
     alt: event.altKey,
@@ -2990,9 +3103,7 @@ document.addEventListener("keydown", (event) => {
   });
   if (mediaAction !== null) {
     event.preventDefault();
-    void window.nhd.sendInputAction(mediaAction).catch((error: unknown) => {
-      showFeedback(error instanceof Error ? error.message : String(error));
-    });
+    void sendShellInputAction(mediaAction);
     return;
   }
 
@@ -3190,9 +3301,7 @@ const gamepadInput = new GamepadInput(
       }
       return;
     }
-    void window.nhd.sendInputAction(action).catch((error: unknown) => {
-      showFeedback(error instanceof Error ? error.message : String(error));
-    });
+    void sendShellInputAction(action);
   },
   renderGamepadStatus
 );

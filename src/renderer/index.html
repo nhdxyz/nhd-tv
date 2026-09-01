@@ -74,6 +74,26 @@
     </aside>
 
     <aside
+      class="action-notice"
+      id="action-notice"
+      data-state="progress"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      hidden
+    >
+      <span class="action-notice-mark" id="action-notice-mark" aria-hidden="true">…</span>
+      <span class="action-notice-copy">
+        <strong id="action-notice-title">Opening app…</strong>
+        <small id="action-notice-detail">This can take a few seconds.</small>
+      </span>
+      <span class="action-notice-actions" data-nav-group="action-notice">
+        <button class="secondary-action" id="action-notice-retry" type="button" hidden>Try again</button>
+        <button class="action-notice-dismiss" id="action-notice-dismiss" type="button">Dismiss</button>
+      </span>
+    </aside>
+
+    <aside
       class="voice-presentation"
       id="voice-presentation"
       data-phase="hidden"

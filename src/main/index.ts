@@ -2472,6 +2472,67 @@ async function handleRemoteVoiceTest(
   }
 }
 
+async function selectVoiceChoice(
+  ordinal: number,
+  commandId: string,
+  signal?: AbortSignal
+): Promise<PhoneRemoteVoiceResult> {
+  const session = voiceCommandSession;
+  const store = voiceContextStore;
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 3 || session === null || store === null) {
+    const result: PhoneRemoteVoiceResult = {
+      detail: "That choice is no longer available. Ask for the options again.",
+      outcome: "failed"
+    };
+    presentPhoneVoiceResult(result, commandId);
+    return result;
+  }
+  if (activeVoiceProcessingCommandId !== null) {
+    return {
+      detail: "Another voice command is still working. Try the choice again in a moment.",
+      outcome: "failed"
+    };
+  }
+
+  syncVoiceContextFromServiceHost();
+  const intent = resolveVoiceContextIntent({
+    action: "play",
+    kind: "media-reference",
+    ordinal,
+    providerHint: null,
+    reference: "candidate"
+  }, store.snapshot());
+  if (intent.kind === "unknown") {
+    const result: PhoneRemoteVoiceResult = {
+      detail: "Those choices expired. Ask for the options again.",
+      outcome: "failed"
+    };
+    presentPhoneVoiceResult(result, commandId);
+    return result;
+  }
+
+  activeVoiceProcessingCommandId = commandId;
+  showVoicePresentation(
+    "understanding",
+    { detail: `Starting choice ${ordinal}…` },
+    VOICE_UNDERSTANDING_TIMEOUT_MS,
+    commandId
+  );
+  try {
+    const result = await session.processIntent(intent, signal);
+    presentPhoneVoiceResult(result, commandId);
+    return result;
+  } catch (error) {
+    const result = voiceFailure(error);
+    if (signal?.aborted !== true) presentPhoneVoiceResult(result, commandId);
+    return result;
+  } finally {
+    if (activeVoiceProcessingCommandId === commandId) {
+      activeVoiceProcessingCommandId = null;
+    }
+  }
+}
+
 async function confirmRemoteVoice(
   confirmationId: string,
   commandId: string,
@@ -2890,6 +2951,16 @@ function registerIpc(): void {
     return (await handleRemoteAction(action as RemoteAction)).handled;
   });
 
+  ipcMain.handle(IPC_CHANNELS.selectVoiceChoice, async (event, ordinal: unknown) => {
+    validateShellSender(event.senderFrame?.url ?? "");
+    if (!Number.isInteger(ordinal) || (ordinal as number) < 1 || (ordinal as number) > 3) {
+      throw new TypeError("Voice choice must be 1, 2, or 3.");
+    }
+    const commandId = `shell-choice-${Date.now().toString(36)}-${ordinal as number}`;
+    const result = await selectVoiceChoice(ordinal as number, commandId);
+    return result.outcome !== "failed";
+  });
+
   ipcMain.handle(IPC_CHANNELS.startRemotePairing, async (event) => {
     validateShellSender(event.senderFrame?.url ?? "");
 
@@ -3136,6 +3207,8 @@ async function createMainWindow(): Promise<void> {
     onCancelVoice: cancelRemoteVoiceConfirmation,
     onConfirmVoice: confirmRemoteVoice,
     onVoiceActivity: handlePhoneVoiceActivity,
+    onVoiceChoice: (ordinal, commandId, signal) =>
+      selectVoiceChoice(ordinal, commandId, signal),
     onVoice: handleRemoteVoice,
     onVoiceTest: handleRemoteVoiceTest,
     onVoiceTimeout: presentRemoteVoiceTimeout,

@@ -545,8 +545,9 @@ input {
   list-style: none;
 }
 .voice-choices[hidden] { display: none; }
-.voice-choices li {
+.voice-choice-button {
   display: grid;
+  width: 100%;
   min-width: 0;
   grid-template-columns: 1.8rem minmax(0, 1fr);
   align-items: center;
@@ -555,6 +556,14 @@ input {
   border: 1px solid #343431;
   border-radius: 0.58rem;
   background: #20201e;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.voice-choice-button:focus-visible,
+.voice-choice-button:active {
+  border-color: rgb(255 255 255 / 42%);
+  background: #2a2a27;
 }
 
 .voice-test-button {
@@ -1150,11 +1159,11 @@ export const REMOTE_JS = `(() => {
   }
 
   function clarificationInstruction(choiceCount) {
-    if (choiceCount <= 1) return "Hold the mic again and say “the first one.”";
+    if (choiceCount <= 1) return "Tap the choice, or hold the mic again and say “the first one.”";
     if (choiceCount === 2) {
-      return "Hold the mic again and say “the first one” or “the second one.”";
+      return "Tap a choice, or say “the first one” or “the second one.”";
     }
-    return "Hold the mic again and say “the first one,” “the second one,” or “the third one.”";
+    return "Tap a choice, or say “the first one,” “the second one,” or “the third one.”";
   }
 
   function renderVoiceChoices(value) {
@@ -1170,6 +1179,10 @@ export const REMOTE_JS = `(() => {
       }
       const item = document.createElement("li");
       item.value = ordinal;
+      const button = document.createElement("button");
+      button.className = "voice-choice-button";
+      button.type = "button";
+      button.setAttribute("aria-label", "Choice " + ordinal + ": " + primaryLabel);
       const ordinalLabel = document.createElement("span");
       ordinalLabel.className = "voice-choice-ordinal";
       ordinalLabel.textContent = String(ordinal);
@@ -1188,12 +1201,59 @@ export const REMOTE_JS = `(() => {
           labels.append(secondary);
         }
       }
-      item.append(ordinalLabel, labels);
+      button.append(ordinalLabel, labels);
+      button.addEventListener("click", () => void selectRenderedVoiceChoice(ordinal));
+      item.append(button);
       voiceChoices.append(item);
       ordinals.add(ordinal);
     }
     voiceChoices.hidden = ordinals.size === 0;
     return ordinals.size;
+  }
+
+  async function selectRenderedVoiceChoice(ordinal) {
+    if (!controllerToken || voiceProcessing || ordinal < 1 || ordinal > 3) return;
+    const commandId = createVoiceCommandId();
+    renderVoiceChoices([]);
+    setVoiceState("Waiting for the TV to verify and start your choice.", "processing", "Starting choice " + ordinal);
+    const requestController = new AbortController();
+    const request = beginActiveVoiceRequest(commandId, commandId, requestController);
+    const requestTimeout = setTimeout(
+      () => requestController.abort(),
+      VOICE_CONFIRMATION_REQUEST_TIMEOUT_MS
+    );
+    try {
+      const result = await jsonRequest("/api/voice/choice", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + controllerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ commandId, ordinal }),
+        signal: requestController.signal
+      });
+      applyOrDeferVoiceResponse(request, () => {
+        setVoiceState(
+          typeof result.detail === "string" ? result.detail : "Choice started.",
+          result.outcome === "failed" ? "error" : "success",
+          result.outcome === "failed" ? "Choice unavailable" : "Choice ready"
+        );
+        if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
+      });
+    } catch (error) {
+      if (request.cancelAccepted) return;
+      applyOrDeferVoiceResponse(request, () => setVoiceState(
+        error && error.name === "AbortError"
+          ? "The TV did not finish that choice. Ask for the options again."
+          : error instanceof Error ? error.message : "That choice could not be started.",
+        "error",
+        "Choice unavailable"
+      ));
+    } finally {
+      clearTimeout(requestTimeout);
+      request.networkSettled = true;
+      if (!request.cancelRequested) finishActiveVoiceRequest(request);
+    }
   }
 
   function setVoiceState(message, kind = "idle", title) {

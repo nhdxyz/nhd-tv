@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   parseDisconnectVoiceConfirmationId,
+  parseVoiceChoice,
   parseVoiceOperationId,
   parseVoiceUploadMetadata,
   remotePostHeadersAreAllowed,
@@ -151,6 +152,21 @@ describe("phone remote boundary", () => {
     expect(parseVoiceOperationId({ operationId: "short" })).toBeNull();
     expect(parseVoiceOperationId({ operationId: "voice-command-a-1234", extra: true }))
       .toBeNull();
+  });
+
+  it("accepts only a bounded choice bound to a valid command id", () => {
+    expect(parseVoiceChoice({
+      commandId: "voice-command-choice-1234",
+      ordinal: 2
+    })).toEqual({ commandId: "voice-command-choice-1234", ordinal: 2 });
+    expect(parseVoiceChoice({ commandId: "short", ordinal: 2 })).toBeNull();
+    expect(parseVoiceChoice({ commandId: "voice-command-choice-1234", ordinal: 4 }))
+      .toBeNull();
+    expect(parseVoiceChoice({
+      commandId: "voice-command-choice-1234",
+      extra: true,
+      ordinal: 1
+    })).toBeNull();
   });
 
   it("exposes only the bounded search text field and no credential controls", () => {

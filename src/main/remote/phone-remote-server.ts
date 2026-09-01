@@ -109,6 +109,11 @@ export interface PhoneRemoteServerOptions {
     activity: PhoneRemoteVoiceActivity,
     controllerId: string
   ) => void | Promise<void>;
+  onVoiceChoice?: (
+    ordinal: 1 | 2 | 3,
+    commandId: string,
+    signal: AbortSignal
+  ) => PhoneRemoteVoiceResult | Promise<PhoneRemoteVoiceResult>;
   onVoice?: (
     clip: VoiceAudioClip,
     commandId: string,
@@ -186,6 +191,21 @@ export function parseVoiceOperationId(
     return null;
   }
   return value.operationId;
+}
+
+export function parseVoiceChoice(
+  value: Record<string, unknown> | null
+): { commandId: string; ordinal: 1 | 2 | 3 } | null {
+  if (
+    value === null ||
+    Object.keys(value).some((key) => key !== "commandId" && key !== "ordinal") ||
+    typeof value.commandId !== "string" ||
+    !VOICE_COMMAND_ID_PATTERN.test(value.commandId) ||
+    (value.ordinal !== 1 && value.ordinal !== 2 && value.ordinal !== 3)
+  ) {
+    return null;
+  }
+  return { commandId: value.commandId, ordinal: value.ordinal };
 }
 
 export function parseDisconnectVoiceConfirmationId(
@@ -544,6 +564,7 @@ export class PhoneRemoteServer {
   readonly #onCancelVoice: PhoneRemoteServerOptions["onCancelVoice"];
   readonly #onConfirmVoice: PhoneRemoteServerOptions["onConfirmVoice"];
   readonly #onVoiceActivity: PhoneRemoteServerOptions["onVoiceActivity"];
+  readonly #onVoiceChoice: PhoneRemoteServerOptions["onVoiceChoice"];
   readonly #onVoice: PhoneRemoteServerOptions["onVoice"];
   readonly #onVoiceTest: PhoneRemoteServerOptions["onVoiceTest"];
   readonly #onVoiceTimeout: PhoneRemoteServerOptions["onVoiceTimeout"];
@@ -580,6 +601,7 @@ export class PhoneRemoteServer {
     this.#onCancelVoice = options.onCancelVoice;
     this.#onConfirmVoice = options.onConfirmVoice;
     this.#onVoiceActivity = options.onVoiceActivity;
+    this.#onVoiceChoice = options.onVoiceChoice;
     this.#onVoice = options.onVoice;
     this.#onVoiceTest = options.onVoiceTest;
     this.#onVoiceTimeout = options.onVoiceTimeout;
@@ -1155,6 +1177,90 @@ export class PhoneRemoteServer {
         await this.#onVoiceActivity(activity, controllerId);
       }
       writeJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/voice/choice") {
+      if (!isSameOriginPost(request, this.#remoteOrigin)) {
+        writeJson(response, 403, { error: "Voice choice rejected" });
+        return;
+      }
+      const authorization = request.headers.authorization;
+      const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length)
+        : null;
+      const controllerId = this.#authorizeController(token);
+      if (controllerId === null) {
+        writeJson(response, 401, { error: "Remote session expired — rescan the QR code" });
+        return;
+      }
+      const choice = parseVoiceChoice(await readJsonBody(request));
+      if (choice === null) {
+        writeJson(response, 400, { error: "Choose option 1, 2, or 3" });
+        return;
+      }
+      if (this.#voiceAuthorityGate.suspended) {
+        writeJson(response, 409, {
+          code: "voice_authority_suspended",
+          error: "The TV is updating voice settings"
+        });
+        return;
+      }
+      const voiceStatus = await this.#voiceStatus(request);
+      if (!voiceStatus.available || this.#onVoiceChoice === undefined) {
+        writeJson(response, 503, { error: voiceStatus.detail });
+        return;
+      }
+      if (
+        this.#voiceOperations.busy ||
+        !this.#voiceActivityLease.beginBoundOperation(controllerId, choice.commandId)
+      ) {
+        writeJson(response, 409, { error: "Another voice command is already active" });
+        return;
+      }
+      const operation = this.#voiceOperations.begin({
+        commandId: choice.commandId,
+        confirmationId: null,
+        controllerId,
+        kind: "command",
+        operationId: choice.commandId
+      });
+      if (operation === null) {
+        this.#voiceActivityLease.finishUpload(controllerId, choice.commandId);
+        writeJson(response, 409, { error: "Another voice command is already active" });
+        return;
+      }
+      try {
+        const result = await runVoiceOperationWithDeadline(
+          (signal) => this.#onVoiceChoice?.(
+            choice.ordinal,
+            choice.commandId,
+            signal
+          ) ?? Promise.resolve({
+            detail: "Voice choices are unavailable.",
+            outcome: "failed" as const
+          }),
+          VOICE_CONFIRM_OPERATION_TIMEOUT_MS,
+          operation.controller
+        );
+        writeJson(response, result.outcome === "failed" ? 422 : 200, result);
+      } catch (error) {
+        if (error instanceof VoiceOperationTimeoutError) {
+          this.#publishVoiceTimeout(choice.commandId);
+          writeJson(response, 504, {
+            detail: "That choice did not start before the voice timeout.",
+            outcome: "failed"
+          } satisfies PhoneRemoteVoiceResult);
+          return;
+        }
+        if (error instanceof VoiceOperationCancelledError) {
+          writeJson(response, 409, { code: "voice_cancelled", error: "Voice choice cancelled" });
+          return;
+        }
+        throw error;
+      } finally {
+        await this.#finishVoiceOperation(operation);
+      }
       return;
     }
 

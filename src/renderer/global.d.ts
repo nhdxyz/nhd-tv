@@ -66,6 +66,7 @@ declare global {
       resumeContinueWatching: (itemId: string) => Promise<void>;
       searchCatalog: (query: string) => Promise<readonly CatalogSearchResult[]>;
       searchService: (serviceId: string, query: string) => Promise<void>;
+      selectVoiceChoice: (ordinal: number) => Promise<boolean>;
       saveOpenAiApiKey: (apiKey: string) => Promise<OpenAiCredentialStatus>;
       selectProfile: (profileId: string) => Promise<LocalAppState>;
       startRemotePairing: () => Promise<RemoteStatus>;

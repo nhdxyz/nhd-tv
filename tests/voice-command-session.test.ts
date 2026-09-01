@@ -38,6 +38,23 @@ function context(playbackMode: "automatic" | "confirm" = "confirm") {
 }
 
 describe("voice command session", () => {
+  it("runs a trusted parsed choice without recording or transcription", async () => {
+    const execute = vi.fn(async () => ({ detail: "Playing choice", handled: true }));
+    const understand = vi.fn();
+    const session = new VoiceCommandSession({
+      execute,
+      getContext: () => context("automatic"),
+      understand
+    });
+
+    await expect(session.processIntent(mediaIntent())).resolves.toEqual({
+      detail: "Playing choice",
+      outcome: "completed"
+    });
+    expect(understand).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it("publishes the final transcript before planning and execution", async () => {
     const sequence: string[] = [];
     const session = new VoiceCommandSession({

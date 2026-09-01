@@ -8,12 +8,12 @@ export interface VoicePresentationCopy {
 
 function clarificationInstruction(choiceCount: number): string {
   if (choiceCount <= 1) {
-    return "Hold the mic again and say “the first one.”";
+    return "Choose with the remote, or hold the mic again and say “the first one.”";
   }
   if (choiceCount === 2) {
-    return "Hold the mic again and say “the first one” or “the second one.”";
+    return "Choose with the remote, or say “the first one” or “the second one.”";
   }
-  return "Hold the mic again and say “the first one,” “the second one,” or “the third one.”";
+  return "Choose with the remote, or say “the first one,” “the second one,” or “the third one.”";
 }
 
 export function voicePresentationCopy(

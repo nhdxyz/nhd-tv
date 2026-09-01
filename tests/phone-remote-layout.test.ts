@@ -92,11 +92,13 @@ describe("phone remote responsive layout", () => {
   it("shows bounded voice clarification choices with a natural follow-up instruction", () => {
     expect(REMOTE_HTML).toContain('id="voice-choices"');
     expect(REMOTE_HTML).toContain('aria-label="Voice choices"');
-    expect(REMOTE_CSS).toContain(".voice-choices li");
+    expect(REMOTE_CSS).toContain(".voice-choice-button");
     expect(REMOTE_CSS).toContain('.voice-control[data-state="clarification"]');
     expect(REMOTE_JS).toContain("function renderVoiceChoices(value)");
+    expect(REMOTE_JS).toContain("function selectRenderedVoiceChoice(ordinal)");
+    expect(REMOTE_JS).toContain('jsonRequest("/api/voice/choice"');
     expect(REMOTE_JS).toContain("value.slice(0, 3)");
-    expect(REMOTE_JS).toContain("Hold the mic again and say");
+    expect(REMOTE_JS).toContain("Tap a choice, or");
     expect(REMOTE_JS).toContain('kind !== "clarification"');
   });
 

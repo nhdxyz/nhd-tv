@@ -135,6 +135,16 @@ export class VoiceCommandSession {
     if (boundConfirmationId !== null) {
       this.cancel(boundConfirmationId);
     }
+    return this.processIntent(intent, signal, transcript);
+  }
+
+  /** Runs one trusted, already-parsed intent without recording or transcription. */
+  async processIntent(
+    intent: VoiceIntent,
+    signal?: AbortSignal,
+    transcript?: string
+  ): Promise<VoiceCommandSessionResult> {
+    this.#removeExpired();
     const plan = planVoiceCommand(intent, await this.#getContext());
     signal?.throwIfAborted();
 

@@ -56,6 +56,7 @@ const IPC_CHANNELS = {
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
+  selectVoiceChoice: "nhd:voice:choice:select",
   saveOpenAiApiKey: "nhd:openai:credential:save",
   selectProfile: "nhd:profile:select",
   serviceRecoveryRequested: "nhd:service:recovery:requested",
@@ -267,6 +268,8 @@ contextBridge.exposeInMainWorld("nhd", {
     ipcRenderer.invoke(IPC_CHANNELS.searchCatalog, query),
   searchService: (serviceId: string, query: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.searchService, serviceId, query),
+  selectVoiceChoice: (ordinal: number): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.selectVoiceChoice, ordinal),
   saveOpenAiApiKey: (apiKey: string): Promise<OpenAiCredentialStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.saveOpenAiApiKey, apiKey),
   selectProfile: (profileId: string): Promise<LocalAppState> =>

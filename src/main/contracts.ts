@@ -33,6 +33,7 @@ export const IPC_CHANNELS = {
   resumeContinueWatching: "nhd:continue-watching:resume",
   searchCatalog: "nhd:catalog:search",
   searchService: "nhd:service:search",
+  selectVoiceChoice: "nhd:voice:choice:select",
   saveOpenAiApiKey: "nhd:openai:credential:save",
   selectProfile: "nhd:profile:select",
   serviceRecoveryRequested: "nhd:service:recovery:requested",

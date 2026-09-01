@@ -435,6 +435,11 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
   for (const choice of choices) {
     const item = document.createElement("li");
     item.value = choice.ordinal;
+    const button = document.createElement("button");
+    button.className = "voice-presentation-choice";
+    button.type = "button";
+    button.dataset.voiceChoiceOrdinal = String(choice.ordinal);
+    button.setAttribute("aria-label", `Choice ${choice.ordinal}: ${choice.primaryLabel}`);
 
     const ordinal = document.createElement("span");
     ordinal.className = "voice-presentation-choice-ordinal";
@@ -452,11 +457,29 @@ function renderVoicePresentation(presentation: VoicePresentationState): void {
       secondary.textContent = choice.secondaryLabel;
       labels.append(secondary);
     }
-    item.append(ordinal, labels);
+    button.append(ordinal, labels);
+    button.addEventListener("click", () => {
+      for (const candidate of elements.voicePresentationChoices.querySelectorAll("button")) {
+        candidate.disabled = true;
+      }
+      void window.nhd.selectVoiceChoice(choice.ordinal)
+        .then((accepted) => {
+          if (!accepted) showFeedback("That choice expired. Ask for the options again.");
+        })
+        .catch((error: unknown) => {
+          showFeedback(error instanceof Error ? error.message : String(error));
+        });
+    });
+    item.append(button);
     elements.voicePresentationChoices.append(item);
   }
   elements.voicePresentationChoices.hidden = choices.length === 0;
   elements.voicePresentation.hidden = hidden;
+  if (choices.length > 0) {
+    const firstChoice = elements.voicePresentationChoices.querySelector<HTMLElement>("button");
+    firstChoice?.focus({ preventScroll: true });
+    setRemoteFocusedElement(firstChoice);
+  }
 
   if (presentation.phase === "understanding") {
     if (previousPhase !== "understanding" || voiceUnderstandingStartedAt === 0) {
@@ -2980,6 +3003,13 @@ function setRemoteFocusedElement(element: HTMLElement | null): void {
 }
 
 function activeNavigationScope(): ParentNode {
+  if (
+    !elements.voicePresentation.hidden &&
+    elements.voicePresentation.dataset.phase === "clarification"
+  ) {
+    return elements.voicePresentation;
+  }
+
   if (spotifyNowPlayingOpen) {
     return elements.spotifyNowPlaying;
   }

@@ -180,7 +180,7 @@ describe("TV voice presentation", () => {
       transcript: null
     })).toEqual({
       copy: "Which version of It?",
-      detail: "Hold the mic again and say “the first one.”",
+      detail: "Choose with the remote, or hold the mic again and say “the first one.”",
       label: "Choose one"
     });
 
@@ -194,7 +194,7 @@ describe("TV voice presentation", () => {
       phase: "clarification",
       transcript: null
     }).detail).toBe(
-      "Hold the mic again and say “the first one,” “the second one,” or “the third one.”"
+      "Choose with the remote, or say “the first one,” “the second one,” or “the third one.”"
     );
     expect(voicePresentationCopy({
       detail: "Confirm on your phone — Play Breaking Bad?",

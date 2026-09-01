@@ -1235,7 +1235,19 @@ async function openTrackedService(
   }
 
   signal?.throwIfAborted();
-  await serviceHost.open(definition, initialUrl, signal, operationToken);
+  if (serviceHost.activeServiceId === definition.id) {
+    const wasBackgrounded = serviceHost.isBackgrounded;
+    if (wasBackgrounded && !serviceHost.restoreFromHome()) {
+      throw new Error(`${definition.name} could not be restored from the background.`);
+    }
+    signal?.throwIfAborted();
+    const keepRestoredRoute = wasBackgrounded && initialUrl === definition.startUrl;
+    if (!keepRestoredRoute && serviceHost.activeUrl !== initialUrl) {
+      await serviceHost.navigate(initialUrl, signal, operationToken);
+    }
+  } else {
+    await serviceHost.open(definition, initialUrl, signal, operationToken);
+  }
   signal?.throwIfAborted();
   await localStateStore?.recordServiceLaunch(definition.id).catch(() => undefined);
 }

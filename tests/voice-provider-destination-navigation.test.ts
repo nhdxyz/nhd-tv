@@ -47,4 +47,21 @@ describe("voice provider destination navigation wiring", () => {
     expect(execution).toContain("operationToken: operation");
     expect(execution).toContain("signal");
   });
+
+  it("reuses an already-open required app instead of replacing its view", () => {
+    const trackedOpen = sourceBetween(
+      indexSource,
+      "async function openTrackedService(",
+      "function recentRemoteServices("
+    );
+
+    expect(trackedOpen).toContain("serviceHost.activeServiceId === definition.id");
+    expect(trackedOpen).toContain("serviceHost.isBackgrounded");
+    expect(trackedOpen).toContain("serviceHost.restoreFromHome()");
+    expect(trackedOpen).toContain("serviceHost.activeUrl !== initialUrl");
+    expect(trackedOpen).toContain("serviceHost.navigate(initialUrl, signal, operationToken)");
+    expect(trackedOpen).toContain("serviceHost.open(definition, initialUrl, signal, operationToken)");
+    expect(trackedOpen.indexOf("serviceHost.navigate("))
+      .toBeLessThan(trackedOpen.indexOf("serviceHost.open("));
+  });
 });

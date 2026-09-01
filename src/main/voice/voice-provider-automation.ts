@@ -496,7 +496,15 @@ export function buildSpotifyVoiceAutomationScript(
           requestedIdentity
         ))
       ));
-      const markedPrimary = exactHeading
+      const pageTitle = normalize(document.title).replace(
+        /\\s*(?:[|•·–—-]\\s*)spotify(?:\\s.*)?$/i,
+        ""
+      );
+      const pageTitleMatches = intent.mediaType === "artist"
+        ? confidentArtistIdentity(pageTitle, requestedIdentity)
+        : identity(pageTitle) === requestedIdentity;
+      const entityIdentityVerified = exactHeading !== undefined || pageTitleMatches;
+      const markedPrimary = entityIdentityVerified
         ? [...document.querySelectorAll(
           '[data-nhdtv-spotify-control="primary-playback"]'
         )].find(visible) ?? null
@@ -506,7 +514,7 @@ export function buildSpotifyVoiceAutomationScript(
           '[data-testid="album-page"],[data-testid="artist-page"],'
           + '[data-testid="playlist-page"],[data-testid="track-page"]'
         ) ?? null;
-      if (exactHeading) {
+      if (entityIdentityVerified) {
         if (intent.action !== "play") return "complete";
         if (markedPrimary instanceof HTMLElement) {
           const markedLabel = controlLabel(markedPrimary);

@@ -1315,6 +1315,33 @@ describe("voice provider automation", () => {
     expect(markedPlay.clicked).toBe(true);
   });
 
+  it("uses Spotify's matching page title when its artist heading is not rendered", () => {
+    const markedPlay = new FakeElement({
+      attributes: {
+        "aria-label": "Play",
+        "data-nhdtv-spotify-control": "primary-playback"
+      }
+    });
+    const documentValue = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector === '[data-nhdtv-spotify-control="primary-playback"]' ? [markedPlay] : [],
+      title: "Kanye West | Spotify"
+    };
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      }), true),
+      documentValue,
+      "/artist/kanye"
+    )).toBe("play-clicked");
+    expect(markedPlay.clicked).toBe(true);
+  });
+
   it("opens a Spotify artist profile without autoplaying it", () => {
     const entityPlay = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
     const actionBar = new FakeElement({

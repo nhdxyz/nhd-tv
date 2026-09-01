@@ -99,7 +99,8 @@ import {
 import {
   OpenAiVoiceClient,
   OpenAiVoiceError,
-  type VoiceAudioClip
+  type VoiceAudioClip,
+  type VoiceRecommendation
 } from "./voice/openai-voice-client";
 import type {
   VoiceCommandContext,
@@ -125,6 +126,11 @@ import {
   type VoiceExecutionScope
 } from "./voice/voice-execution-scope";
 import { VoiceProfilePreferenceCoordinator } from "./voice/voice-profile-preference-coordinator";
+import {
+  chooseVoiceProviderPreference,
+  prioritizeVoiceProvider,
+  type VoiceProviderPreference
+} from "./voice/voice-provider-preference";
 import {
   answerCurrentMediaQuestion,
   type VoiceCurrentMediaSnapshot
@@ -1563,6 +1569,91 @@ function bindVoiceWatchClarification(
   return allowedChoices;
 }
 
+function bindVoiceRecommendationChoices(
+  recommendations: readonly VoiceRecommendation[],
+  providerId: VoiceServiceId,
+  providerName: string,
+  executionScope: VoiceExecutionScope,
+  plannedServiceIds: readonly VoiceServiceId[]
+): readonly VoicePresentationChoice[] | undefined {
+  const store = voiceContextStore;
+  if (store === null || recommendations.length !== 3) return undefined;
+  const enabledServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plannedServiceIds
+  );
+  if (!enabledServiceIds.includes(providerId)) return undefined;
+
+  const batchId = Date.now().toString(36);
+  const candidates = recommendations.map((recommendation, index) => ({
+    id: `recommendation-${batchId}-${index + 1}`,
+    identity: {
+      title: recommendation.title,
+      year: recommendation.year
+    },
+    mediaType: recommendation.mediaType === "movie" ? "movie" as const : "unknown" as const,
+    provider: { id: providerId, name: providerName }
+  }));
+  const revisions = store.revisions();
+  const candidateSet = store.setCandidates(candidates, revisions);
+  if (
+    candidateSet === null ||
+    !store.setPendingClarification({
+      candidateSetRevision: candidateSet.revision,
+      kind: "candidate-selection"
+    }, revisions)
+  ) {
+    return undefined;
+  }
+  return recommendations.map((recommendation, index) => ({
+    id: candidates[index]!.id,
+    ordinal: (index + 1) as 1 | 2 | 3,
+    primaryLabel: recommendation.year === null
+      ? recommendation.title
+      : `${recommendation.title} (${recommendation.year})`,
+    secondaryLabel: `${providerName} · ${recommendation.reason}`.slice(0, 160)
+  }));
+}
+
+async function executeVoiceRecommendationPlan(
+  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
+  executionScope: VoiceExecutionScope,
+  signal?: AbortSignal
+): Promise<(RemoteActionOutcome & { detail: string }) | null> {
+  const client = openAiVoiceClient;
+  if (client === null || !isVoiceDiscoveryIntent(plan.intent)) return null;
+  const candidateServiceIds = currentVoiceCandidateServiceIds(
+    executionScope,
+    plan.candidateServiceIds
+  );
+  const destination = resolveVoiceMediaDestination(plan.intent, candidateServiceIds);
+  if (destination === null) return null;
+  const definition = getServiceDefinition(destination.serviceId);
+  if (definition === null) return null;
+
+  presentPhoneVoiceProgress("Finding three recommendations…");
+  const recommendations = await client.recommend(plan.intent, signal);
+  signal?.throwIfAborted();
+  const choices = bindVoiceRecommendationChoices(
+    recommendations,
+    destination.serviceId,
+    definition.name,
+    executionScope,
+    plan.candidateServiceIds
+  );
+  if (choices === undefined) {
+    return {
+      detail: "I found recommendations, but could not safely preserve the choices. Try again.",
+      handled: false
+    };
+  }
+  return {
+    choices,
+    detail: `Here are three options for ${plan.intent.title}. Choose one to check and play on ${definition.name}.`,
+    handled: true
+  };
+}
+
 async function executeGoogleWatchPlan(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
   executionScope: VoiceExecutionScope,
@@ -1644,7 +1735,21 @@ async function executeGoogleWatchPlan(
   const providerClarification = plan.intent.providerHint === null
     ? buildVoiceWatchClarification(result, plan.intent, candidateServiceIds)
     : null;
+  let providerPreference: VoiceProviderPreference | null = null;
   if (providerClarification !== null) {
+    const localState = localStateStore?.snapshot();
+    providerPreference = chooseVoiceProviderPreference(
+      providerClarification.candidates.flatMap((candidate) =>
+        candidate.provider === null || candidate.provider === undefined
+          ? []
+          : [candidate.provider.id]
+      ),
+      localState?.preferences.favoriteServiceIds ?? [],
+      localState?.preferences.serviceOrder ?? candidateServiceIds,
+      serviceHost?.activeServiceId ?? null
+    );
+  }
+  if (providerClarification !== null && providerPreference === null) {
     const choices = bindVoiceWatchClarification(
       providerClarification,
       executionScope,
@@ -1669,12 +1774,18 @@ async function executeGoogleWatchPlan(
     executionScope,
     plan.candidateServiceIds
   );
-  let selected = selectEnabledWatchOffer(result, candidateServiceIds);
+  let selected = selectEnabledWatchOffer(
+    result,
+    prioritizeVoiceProvider(candidateServiceIds, providerPreference?.serviceId ?? null)
+  );
   candidateServiceIds = currentVoiceCandidateServiceIds(
     executionScope,
     plan.candidateServiceIds
   );
-  selected = selectEnabledWatchOffer(result, candidateServiceIds);
+  selected = selectEnabledWatchOffer(
+    result,
+    prioritizeVoiceProvider(candidateServiceIds, providerPreference?.serviceId ?? null)
+  );
   if (watchOffersShouldExpand(result, selected, candidateServiceIds)) {
     presentPhoneVoiceProgress("Checking all of your services…");
     candidateServiceIds = currentVoiceCandidateServiceIds(
@@ -1690,13 +1801,19 @@ async function executeGoogleWatchPlan(
     if (!googleWatchResultMatchesIntent(result, plan.intent)) {
       throw new Error("Google watch discovery changed title or episode while expanding offers.");
     }
-    selected = selectEnabledWatchOffer(result, candidateServiceIds);
+    selected = selectEnabledWatchOffer(
+      result,
+      prioritizeVoiceProvider(candidateServiceIds, providerPreference?.serviceId ?? null)
+    );
   }
   candidateServiceIds = currentVoiceCandidateServiceIds(
     executionScope,
     plan.candidateServiceIds
   );
-  selected = selectEnabledWatchOffer(result, candidateServiceIds);
+  selected = selectEnabledWatchOffer(
+    result,
+    prioritizeVoiceProvider(candidateServiceIds, providerPreference?.serviceId ?? null)
+  );
   if (selected === null) {
     return {
       detail: watchAvailabilityDetail(result, candidateServiceIds),
@@ -1758,8 +1875,7 @@ async function executeGoogleWatchPlan(
     definition.name,
     resolvedTitle
   );
-  return {
-    detail: terminalDetail ?? (plan.intent.action === "play"
+  const resultDetail = terminalDetail ?? (plan.intent.action === "play"
       ? automationResult === "complete"
         ? `Playing ${resolvedTitle} on ${definition.name}.`
         : automationResult === "playing-windowed"
@@ -1767,7 +1883,11 @@ async function executeGoogleWatchPlan(
           : automationResult === "profile-required"
             ? "Choose your Netflix profile on the TV, then say the command again."
           : `Opened ${resolvedTitle} on ${definition.name}, but could not start playback automatically.`
-      : `Opened ${resolvedTitle} on ${definition.name}.`),
+      : `Opened ${resolvedTitle} on ${definition.name}.`);
+  return {
+    detail: providerPreference === null
+      ? resultDetail
+      : `${resultDetail} ${providerPreference.detail}`,
     handled
   };
 }
@@ -1887,6 +2007,24 @@ async function executeVoiceCommandPlanCore(
 
   if (executionScope === undefined) {
     return voiceExecutionProfileChangedResult();
+  }
+
+  if (isVoiceDiscoveryIntent(plan.intent)) {
+    try {
+      const recommendationResult = await executeVoiceRecommendationPlan(
+        plan,
+        executionScope,
+        signal
+      );
+      if (recommendationResult !== null) return recommendationResult;
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (error instanceof VoiceExecutionProfileChangedError) {
+        return voiceExecutionProfileChangedResult();
+      }
+      // The provider search below remains a useful fallback when recommendation
+      // generation is unavailable or returns an invalid structured response.
+    }
   }
 
   const expectedWatchDiscovery = usesGoogleWatchDiscovery(plan);

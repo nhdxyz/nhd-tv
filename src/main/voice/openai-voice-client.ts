@@ -1,6 +1,7 @@
 import {
   parseVoiceIntent,
   type VoiceIntent,
+  type VoiceMediaIntent,
   VOICE_INTENT_JSON_SCHEMA
 } from "./voice-intent";
 import { voiceTranscriptShortcut } from "./voice-transcript-shortcuts";
@@ -8,6 +9,43 @@ import { voiceTranscriptShortcut } from "./voice-transcript-shortcuts";
 const TRANSCRIPTION_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
 const RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
 const MAX_TRANSCRIPT_LENGTH = 500;
+const MAX_RECOMMENDATION_TITLE_LENGTH = 120;
+const MAX_RECOMMENDATION_REASON_LENGTH = 160;
+
+const VOICE_RECOMMENDATION_SCHEMA = {
+  additionalProperties: false,
+  properties: {
+    recommendations: {
+      items: {
+        additionalProperties: false,
+        properties: {
+          mediaType: { enum: ["movie", "show"], type: "string" },
+          reason: { maxLength: MAX_RECOMMENDATION_REASON_LENGTH, minLength: 1, type: "string" },
+          title: { maxLength: MAX_RECOMMENDATION_TITLE_LENGTH, minLength: 1, type: "string" },
+          year: {
+            anyOf: [
+              { maximum: 3000, minimum: 1800, type: "integer" },
+              { type: "null" }
+            ]
+          }
+        },
+        required: ["mediaType", "reason", "title", "year"],
+        type: "object"
+      },
+      maxItems: 3,
+      minItems: 3,
+      type: "array"
+    }
+  },
+  required: ["recommendations"],
+  type: "object"
+} as const;
+
+const VOICE_RECOMMENDATION_INSTRUCTIONS = `Suggest exactly three established movies or television shows for a television viewer.
+Honor every genre, mood, era, actor, theme, and similarity constraint in the request.
+For a similarity request, do not return the seed title itself.
+Give one short, concrete reason for each suggestion. Do not mention provider availability, URLs, rankings, or unsupported facts.
+Return only the supplied JSON schema.`;
 
 export const MAX_VOICE_AUDIO_BYTES = 8 * 1024 * 1024;
 export const MAX_VOICE_AUDIO_DURATION_MS = 20_000;
@@ -80,6 +118,13 @@ export interface VoiceAudioClip {
   mimeType: string;
 }
 
+export interface VoiceRecommendation {
+  mediaType: "movie" | "show";
+  reason: string;
+  title: string;
+  year: number | null;
+}
+
 export interface OpenAiVoiceClientOptions {
   fetch?: typeof fetch;
   getApiKey: () => string;
@@ -138,6 +183,12 @@ function responseOutputText(value: unknown): string | null {
     }
   }
   return null;
+}
+
+function boundedRecommendationText(value: unknown, maximumLength: number): string | null {
+  if (typeof value !== "string" || /(?:https?:\/\/|www\.)/iu.test(value)) return null;
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized.length > 0 && normalized.length <= maximumLength ? normalized : null;
 }
 
 function rejectedMessage(status: number): string {
@@ -243,6 +294,80 @@ export class OpenAiVoiceClient {
     const transcript = await this.transcribe(clip, signal);
     onTranscript?.(transcript);
     return { intent: await this.interpret(transcript, signal), transcript };
+  }
+
+  async recommend(
+    intent: Pick<VoiceMediaIntent, "mediaType" | "title">,
+    signal?: AbortSignal
+  ): Promise<readonly VoiceRecommendation[]> {
+    if (intent.mediaType !== "recommendation" && intent.mediaType !== "similar-title") {
+      throw new OpenAiVoiceError("invalid-response", "That request is not a recommendation.");
+    }
+    const input = intent.mediaType === "similar-title"
+      ? `Recommend titles similar to: ${intent.title}`
+      : `Recommend titles matching: ${intent.title}`;
+    const response = await this.#request(RESPONSES_ENDPOINT, {
+      body: JSON.stringify({
+        input,
+        instructions: VOICE_RECOMMENDATION_INSTRUCTIONS,
+        max_output_tokens: 700,
+        model: this.#intentModel,
+        reasoning: { effort: "none" },
+        store: false,
+        text: {
+          format: {
+            name: "nhd_tv_voice_recommendations",
+            schema: VOICE_RECOMMENDATION_SCHEMA,
+            strict: true,
+            type: "json_schema"
+          }
+        }
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    }, signal, this.#intentRequestTimeoutMs, "Recommendations took too long. Try again.");
+    const outputText = responseOutputText(await this.#json(response));
+    if (outputText === null) {
+      throw new OpenAiVoiceError("invalid-response", "OpenAI returned no recommendations.");
+    }
+
+    try {
+      const parsed = objectValue(JSON.parse(outputText));
+      if (parsed === null || !Array.isArray(parsed.recommendations)) throw new Error();
+      const recommendations: VoiceRecommendation[] = [];
+      const titles = new Set<string>();
+      for (const value of parsed.recommendations.slice(0, 3)) {
+        const candidate = objectValue(value);
+        const title = boundedRecommendationText(
+          candidate?.title,
+          MAX_RECOMMENDATION_TITLE_LENGTH
+        );
+        const reason = boundedRecommendationText(
+          candidate?.reason,
+          MAX_RECOMMENDATION_REASON_LENGTH
+        );
+        const mediaType = candidate?.mediaType;
+        const year = candidate?.year;
+        const titleKey = title?.toLocaleLowerCase();
+        if (
+          title === null ||
+          reason === null ||
+          (mediaType !== "movie" && mediaType !== "show") ||
+          (year !== null &&
+            (typeof year !== "number" || !Number.isInteger(year) || year < 1800 || year > 3000)) ||
+          titleKey === undefined ||
+          titles.has(titleKey)
+        ) {
+          throw new Error();
+        }
+        titles.add(titleKey);
+        recommendations.push({ mediaType, reason, title, year: year as number | null });
+      }
+      if (recommendations.length !== 3) throw new Error();
+      return recommendations;
+    } catch {
+      throw new OpenAiVoiceError("invalid-response", "OpenAI returned invalid recommendations.");
+    }
   }
 
   async #json(response: Response): Promise<unknown> {

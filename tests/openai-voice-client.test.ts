@@ -415,6 +415,51 @@ describe("OpenAI voice client", () => {
       });
   });
 
+  it("returns three bounded recommendation choices with concise reasons", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body).toMatchObject({
+        input: "Recommend titles matching: tense action movies with a clever lead",
+        max_output_tokens: 700,
+        model: "gpt-5.6-luna",
+        store: false,
+        text: { format: { name: "nhd_tv_voice_recommendations", strict: true } }
+      });
+      expect(body.instructions).toContain("exactly three");
+      expect(body.instructions).toContain("Do not mention provider availability");
+      return Response.json({
+        output_text: JSON.stringify({
+          recommendations: [
+            { mediaType: "movie", reason: "A contained chase with tactical turns.", title: "Inside Man", year: 2006 },
+            { mediaType: "movie", reason: "A resourceful lead outthinks a larger threat.", title: "Enemy of the State", year: 1998 },
+            { mediaType: "show", reason: "A clever fugitive stays ahead of investigators.", title: "The Day of the Jackal", year: 2024 }
+          ]
+        })
+      });
+    });
+
+    await expect(client(fetchMock).recommend({
+      mediaType: "recommendation",
+      title: "tense action movies with a clever lead"
+    })).resolves.toHaveLength(3);
+  });
+
+  it("rejects duplicate or URL-shaped recommendation output", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json({
+      output_text: JSON.stringify({
+        recommendations: [
+          { mediaType: "movie", reason: "See https://example.com", title: "Arrival", year: 2016 },
+          { mediaType: "movie", reason: "Thoughtful science fiction.", title: "Arrival", year: 2016 },
+          { mediaType: "movie", reason: "Memory and identity collide.", title: "Memento", year: 2000 }
+        ]
+      })
+    }));
+    await expect(client(fetchMock).recommend({
+      mediaType: "similar-title",
+      title: "Inception"
+    })).rejects.toMatchObject({ code: "invalid-response" });
+  });
+
   it("rejects oversized, short, and unsupported recordings before a request", async () => {
     const fetchMock = vi.fn<typeof fetch>();
     const voiceClient = client(fetchMock);

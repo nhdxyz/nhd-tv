@@ -112,7 +112,7 @@ describe("voice use-case execution wiring", () => {
     expect(resolve).toBeGreaterThan(sync);
     expect(contextualUnderstanding).not.toContain("recordVoiceMediaIntentContext(");
     expect(source).toContain(
-      "understandVoiceCommandWithContext(openAiVoiceClient, clip, signal, onTranscript)"
+      "understandVoiceCommandWithContext(openAiVoiceClient!, clip, signal, onTranscript)"
     );
   });
 

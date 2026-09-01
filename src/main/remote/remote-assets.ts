@@ -1217,6 +1217,14 @@ export const REMOTE_JS = `(() => {
       ordinals.add(ordinal);
     }
     voiceChoices.hidden = ordinals.size === 0;
+    if (ordinals.size > 0) {
+      requestAnimationFrame(() => voiceChoices.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "nearest"
+      }));
+    }
     return ordinals.size;
   }
 

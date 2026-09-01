@@ -97,6 +97,8 @@ describe("phone remote responsive layout", () => {
     expect(REMOTE_JS).toContain("function renderVoiceChoices(value)");
     expect(REMOTE_JS).toContain("function selectRenderedVoiceChoice(ordinal)");
     expect(REMOTE_JS).toContain('jsonRequest("/api/voice/choice"');
+    expect(REMOTE_JS).toContain("voiceChoices.scrollIntoView");
+    expect(REMOTE_JS).toContain("prefers-reduced-motion: reduce");
     expect(REMOTE_JS).toContain("value.slice(0, 3)");
     expect(REMOTE_JS).toContain("Tap a choice, or");
     expect(REMOTE_JS).toContain('kind !== "clarification"');

@@ -64,6 +64,8 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       .primary, .secondary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .primary { font-size: 22px; font-weight: 700; }
       .secondary { color: #a9abb2; font-size: 17px; font-weight: 540; }
+      .instruction { color: #b9bbc2; font-size: 18px; font-weight: 560; line-height: 1.4; }
+      .instruction[hidden] { display: none; }
       aside[data-phase="clarification"] { align-items: start; }
       aside[data-phase="clarification"] .state-mark { margin-top: 2px; }
       @keyframes level { to { height: 27px; } }
@@ -84,6 +86,7 @@ const OVERLAY_DOCUMENT = `<!doctype html>
       <div class="copy">
         <div class="meta"><small id="label">Voice</small><span class="phase-label" id="phase-label">Listening</span></div>
         <strong id="detail">Listening…</strong>
+        <span class="instruction" id="instruction" hidden></span>
         <ol class="choices" id="choices" aria-label="Choices" role="list" hidden></ol>
       </div>
     </aside>
@@ -120,24 +123,43 @@ export function providerVoiceOverlayBounds(
   };
 }
 
-function overlayCopy(state: VoicePresentationState): { copy: string; label: string } {
+function clarificationInstruction(choiceCount: number): string {
+  if (choiceCount <= 1) return "Hold the mic again and say “the first one.”";
+  if (choiceCount === 2) {
+    return "Hold the mic again and say “the first one” or “the second one.”";
+  }
+  return "Hold the mic again and say “the first one,” “the second one,” or “the third one.”";
+}
+
+function overlayCopy(
+  state: VoicePresentationState
+): { copy: string; instruction: string | null; label: string } {
   if (state.phase === "transcript") {
-    return { copy: state.transcript ?? "", label: "Voice" };
+    return { copy: state.transcript ?? "", instruction: null, label: "Voice" };
   }
   if (state.phase === "success") {
-    return { copy: state.detail ?? "Done", label: "Voice" };
+    return { copy: state.detail ?? "Done", instruction: null, label: "Voice" };
   }
   if (state.phase === "clarification") {
-    return { copy: state.detail ?? "Which one did you mean?", label: "Voice" };
+    return {
+      copy: state.detail ?? "Which one did you mean?",
+      instruction: clarificationInstruction(state.choices?.length ?? 0),
+      label: "Voice"
+    };
   }
   if (state.phase === "confirmation") {
-    return { copy: state.detail ?? "Confirm on your phone.", label: "Voice" };
+    return { copy: state.detail ?? "Confirm on your phone.", instruction: null, label: "Voice" };
   }
   if (state.phase === "error") {
-    return { copy: state.detail ?? "Voice control could not finish that", label: "Voice" };
+    return {
+      copy: state.detail ?? "Voice control could not finish that",
+      instruction: null,
+      label: "Voice"
+    };
   }
   return {
     copy: state.detail ?? (state.phase === "listening" ? "Listening…" : "Understanding…"),
+    instruction: null,
     label: "Voice"
   };
 }
@@ -264,8 +286,9 @@ export class ProviderVoiceOverlay {
         const label = document.querySelector("#label");
         const phaseLabel = document.querySelector("#phase-label");
         const detail = document.querySelector("#detail");
+        const instruction = document.querySelector("#instruction");
         const choices = document.querySelector("#choices");
-        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(phaseLabel instanceof HTMLElement) || !(detail instanceof HTMLElement) || !(choices instanceof HTMLOListElement)) return;
+        if (!(root instanceof HTMLElement) || !(label instanceof HTMLElement) || !(phaseLabel instanceof HTMLElement) || !(detail instanceof HTMLElement) || !(instruction instanceof HTMLElement) || !(choices instanceof HTMLOListElement)) return;
         root.dataset.phase = state.phase;
         label.textContent = state.label;
         phaseLabel.textContent = ({
@@ -278,6 +301,8 @@ export class ProviderVoiceOverlay {
           error: "Needs attention"
         })[state.phase] ?? "Working";
         detail.textContent = state.copy;
+        instruction.textContent = state.instruction ?? "";
+        instruction.hidden = typeof state.instruction !== "string";
         choices.replaceChildren();
         for (const choice of state.phase === "clarification" ? state.choices : []) {
           const item = document.createElement("li");

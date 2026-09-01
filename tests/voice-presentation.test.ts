@@ -180,9 +180,22 @@ describe("TV voice presentation", () => {
       transcript: null
     })).toEqual({
       copy: "Which version of It?",
-      detail: "Say 1, 2, or 3, or choose with your remote.",
+      detail: "Hold the mic again and say “the first one.”",
       label: "Choose one"
     });
+
+    expect(voicePresentationCopy({
+      choices: [
+        { id: "provider:netflix", ordinal: 1, primaryLabel: "Netflix" },
+        { id: "provider:prime", ordinal: 2, primaryLabel: "Prime Video" },
+        { id: "provider:hulu", ordinal: 3, primaryLabel: "Hulu" }
+      ],
+      detail: "Choose a service",
+      phase: "clarification",
+      transcript: null
+    }).detail).toBe(
+      "Hold the mic again and say “the first one,” “the second one,” or “the third one.”"
+    );
     expect(voicePresentationCopy({
       detail: "Confirm on your phone — Play Breaking Bad?",
       phase: "confirmation",

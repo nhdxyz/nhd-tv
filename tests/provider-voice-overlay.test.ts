@@ -60,6 +60,9 @@ describe("provider voice overlay", () => {
     expect(overlaySource).toContain("this.#window.contentView.removeChildView(view)");
     expect(overlaySource).toContain("this.#window.contentView.addChildView(view)");
     expect(overlaySource).toContain("detail.textContent = state.copy");
+    expect(overlaySource).toContain("instruction.textContent = state.instruction");
+    expect(overlaySource).toContain('id="instruction"');
+    expect(overlaySource).toContain("Hold the mic again and say");
     expect(overlaySource).toContain('id="choices"');
     expect(overlaySource).toContain("ordinal.textContent = String(choice.ordinal)");
     expect(overlaySource).toContain("primary.textContent = choice.primaryLabel");

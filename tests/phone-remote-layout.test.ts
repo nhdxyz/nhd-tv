@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REMOTE_CSS } from "../src/main/remote/remote-assets";
+import { REMOTE_CSS, REMOTE_HTML, REMOTE_JS } from "../src/main/remote/remote-assets";
 
 describe("phone remote responsive layout", () => {
   it("keeps the navigation surface in flow instead of painting over later controls", () => {
@@ -87,6 +87,17 @@ describe("phone remote responsive layout", () => {
     expect(REMOTE_CSS).toMatch(
       /\.voice-confirm > div:last-child\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0;/s
     );
+  });
+
+  it("shows bounded voice clarification choices with a natural follow-up instruction", () => {
+    expect(REMOTE_HTML).toContain('id="voice-choices"');
+    expect(REMOTE_HTML).toContain('aria-label="Voice choices"');
+    expect(REMOTE_CSS).toContain(".voice-choices li");
+    expect(REMOTE_CSS).toContain('.voice-control[data-state="clarification"]');
+    expect(REMOTE_JS).toContain("function renderVoiceChoices(value)");
+    expect(REMOTE_JS).toContain("value.slice(0, 3)");
+    expect(REMOTE_JS).toContain("Hold the mic again and say");
+    expect(REMOTE_JS).toContain('kind !== "clarification"');
   });
 
   it("disables transitions as well as animations for reduced motion", () => {

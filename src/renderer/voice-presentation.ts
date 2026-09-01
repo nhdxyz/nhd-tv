@@ -6,6 +6,16 @@ export interface VoicePresentationCopy {
   label: string;
 }
 
+function clarificationInstruction(choiceCount: number): string {
+  if (choiceCount <= 1) {
+    return "Hold the mic again and say “the first one.”";
+  }
+  if (choiceCount === 2) {
+    return "Hold the mic again and say “the first one” or “the second one.”";
+  }
+  return "Hold the mic again and say “the first one,” “the second one,” or “the third one.”";
+}
+
 export function voicePresentationCopy(
   presentation: VoicePresentationState
 ): VoicePresentationCopy {
@@ -34,7 +44,7 @@ export function voicePresentationCopy(
   if (presentation.phase === "clarification") {
     return {
       copy: presentation.detail ?? "Which one did you mean?",
-      detail: "Say 1, 2, or 3, or choose with your remote.",
+      detail: clarificationInstruction(presentation.choices?.length ?? 0),
       label: "Choose one"
     };
   }

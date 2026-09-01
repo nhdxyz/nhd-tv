@@ -161,6 +161,9 @@ describe("phone remote boundary", () => {
     expect(REMOTE_HTML).not.toMatch(/type="(?:email|password|tel)"/);
     expect(REMOTE_HTML).not.toContain("textarea");
     expect(REMOTE_JS).not.toContain("innerHTML");
+    expect(REMOTE_JS).toContain("voiceChoices.replaceChildren()");
+    expect(REMOTE_JS).toContain("primary.textContent = primaryLabel");
+    expect(REMOTE_JS).toContain("secondary.textContent = secondaryLabel");
     expect(REMOTE_JS).not.toMatch(/https?:\/\//);
     expect(REMOTE_JS).toContain('await jsonRequest("/api/search"');
     expect(REMOTE_JS).toContain('await jsonRequest("/api/text"');

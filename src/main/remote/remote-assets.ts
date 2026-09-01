@@ -154,6 +154,7 @@ export const REMOTE_HTML = `<!doctype html>
               <p class="voice-help" id="voice-help">Voice requires the secure Tailscale remote.</p>
             </div>
           </div>
+          <ol class="voice-choices" id="voice-choices" aria-label="Voice choices" hidden></ol>
         </section>
 
         <div class="playback-controls" aria-label="Playback controls">
@@ -535,8 +536,48 @@ input {
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+.voice-choices {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0.12rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.voice-choices[hidden] { display: none; }
+.voice-choices li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1.8rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.58rem;
+  padding: 0.5rem 0.58rem;
+  border: 1px solid #343431;
+  border-radius: 0.58rem;
+  background: #20201e;
+}
+.voice-choice-ordinal {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 0.42rem;
+  background: #eeeeea;
+  color: #171716;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.voice-choice-labels { display: grid; min-width: 0; gap: 0.05rem; }
+.voice-choice-primary,
+.voice-choice-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-choice-primary { color: #f1f1ed; font-size: 0.78rem; font-weight: 720; }
+.voice-choice-secondary { color: #a8a8a2; font-size: 0.68rem; }
 .voice-control[data-state="listening"] .voice-status-dot { background: var(--voice-active); }
 .voice-control[data-state="processing"] .voice-status-dot { background: var(--accent); animation: voice-dot 1.1s ease-in-out infinite; }
+.voice-control[data-state="clarification"] .voice-status-dot { background: var(--voice-warning); }
 .voice-control[data-state="confirmation"] .voice-status-dot { background: var(--voice-warning); }
 .voice-control[data-state="success"] .voice-status-dot { background: var(--voice-success); }
 .voice-control[data-state="error"] .voice-status-dot { background: var(--voice-active); }
@@ -996,6 +1037,7 @@ export const REMOTE_JS = `(() => {
   const voiceButton = document.querySelector("#voice-button");
   const voiceButtonCopy = document.querySelector("#voice-button-copy");
   const voiceCancel = document.querySelector("#voice-cancel");
+  const voiceChoices = document.querySelector("#voice-choices");
   const voiceHelp = document.querySelector("#voice-help");
   const voiceStatusTitle = document.querySelector("#voice-status-title");
   const voiceConfirm = document.querySelector("#voice-confirm");
@@ -1087,9 +1129,57 @@ export const REMOTE_JS = `(() => {
       : fallback;
   }
 
+  function clarificationInstruction(choiceCount) {
+    if (choiceCount <= 1) return "Hold the mic again and say “the first one.”";
+    if (choiceCount === 2) {
+      return "Hold the mic again and say “the first one” or “the second one.”";
+    }
+    return "Hold the mic again and say “the first one,” “the second one,” or “the third one.”";
+  }
+
+  function renderVoiceChoices(value) {
+    voiceChoices.replaceChildren();
+    const candidates = Array.isArray(value) ? value.slice(0, 3) : [];
+    const ordinals = new Set();
+    for (const choice of candidates) {
+      if (!choice || typeof choice !== "object") continue;
+      const ordinal = Number(choice.ordinal);
+      const primaryLabel = cleanVoiceCopy(choice.primaryLabel, "", 80);
+      if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 3 || ordinals.has(ordinal) || !primaryLabel) {
+        continue;
+      }
+      const item = document.createElement("li");
+      item.value = ordinal;
+      const ordinalLabel = document.createElement("span");
+      ordinalLabel.className = "voice-choice-ordinal";
+      ordinalLabel.textContent = String(ordinal);
+      const labels = document.createElement("span");
+      labels.className = "voice-choice-labels";
+      const primary = document.createElement("span");
+      primary.className = "voice-choice-primary";
+      primary.textContent = primaryLabel;
+      labels.append(primary);
+      if (typeof choice.secondaryLabel === "string") {
+        const secondaryLabel = cleanVoiceCopy(choice.secondaryLabel, "", 100);
+        if (secondaryLabel) {
+          const secondary = document.createElement("span");
+          secondary.className = "voice-choice-secondary";
+          secondary.textContent = secondaryLabel;
+          labels.append(secondary);
+        }
+      }
+      item.append(ordinalLabel, labels);
+      voiceChoices.append(item);
+      ordinals.add(ordinal);
+    }
+    voiceChoices.hidden = ordinals.size === 0;
+    return ordinals.size;
+  }
+
   function setVoiceState(message, kind = "idle", title) {
     const titles = {
       availability: "Voice unavailable",
+      clarification: "Choose one",
       confirmation: "Confirm playback",
       error: "Voice needs attention",
       idle: "Voice ready",
@@ -1099,6 +1189,7 @@ export const REMOTE_JS = `(() => {
       transcript: "You said"
     };
     voiceStatusKind = kind;
+    if (kind !== "clarification") renderVoiceChoices([]);
     voiceControl.dataset.state = kind;
     voiceStatusTitle.textContent = cleanVoiceCopy(title, titles[kind] || "Voice", 120);
     voiceHelp.textContent = cleanVoiceCopy(message, "Hold the microphone to speak.");
@@ -1567,11 +1658,22 @@ export const REMOTE_JS = `(() => {
           }
         } else {
           closeVoiceConfirmation();
-          setVoiceState(
-            typeof result.detail === "string" ? result.detail : "Voice command sent",
-            result.outcome === "failed" ? "error" : "success",
-            transcriptTitle || (result.outcome === "failed" ? "That didn't work" : "Command complete")
-          );
+          const choiceCount = result.outcome === "completed"
+            ? renderVoiceChoices(result.choices)
+            : 0;
+          if (choiceCount > 0) {
+            setVoiceState(
+              clarificationInstruction(choiceCount),
+              "clarification",
+              transcriptTitle || "Choose one"
+            );
+          } else {
+            setVoiceState(
+              typeof result.detail === "string" ? result.detail : "Voice command sent",
+              result.outcome === "failed" ? "error" : "success",
+              transcriptTitle || (result.outcome === "failed" ? "That didn't work" : "Command complete")
+            );
+          }
           if (result.outcome !== "failed" && navigator.vibrate) navigator.vibrate(18);
         }
       });

@@ -121,6 +121,20 @@ describe("TV catalog layout", () => {
     expect(host).toContain('extension.name === "NHD Spotify TV Mode"');
   });
 
+  it("opens developer tools for the embedded service view in dev mode", () => {
+    const host = readFileSync(
+      new URL("../src/main/service-host.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(host).toContain('DEVELOPER_TOOLS_ENABLED = process.argv.includes("--devtools")');
+    expect(host).toContain('view.webContents.openDevTools({ mode: "detach" })');
+    expect(host).toContain('view.webContents.isDevToolsOpened()');
+    expect(host).toContain('input.key === "F12"');
+    expect(host).toContain("input.meta && input.alt");
+    expect(host).toContain("input.control && input.shift");
+  });
+
   it("keeps the frozen service preview available behind the quit dialog", () => {
     expect(html).toContain('id="quit-service-preview"');
     expect(css).toContain(".quit-service-preview");

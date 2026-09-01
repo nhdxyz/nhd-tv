@@ -178,6 +178,7 @@ interface NetflixSmokeSnapshot {
 const configuredSessions = new WeakSet<Session>();
 const youtubeTvExtensionLoads = new WeakMap<Session, Promise<void>>();
 const spotifyTvExtensionLoads = new WeakMap<Session, Promise<void>>();
+const DEVELOPER_TOOLS_ENABLED = process.argv.includes("--devtools");
 const NETFLIX_TEST_TITLE_URL = "https://www.netflix.com/title/80018499";
 const NETFLIX_SMOKE_TIMEOUT_MS = 45_000;
 const YOUTUBE_AUTH_SMOKE_TIMEOUT_MS = 15_000;
@@ -1035,7 +1036,7 @@ export class ServiceHost {
         allowRunningInsecureContent: false,
         backgroundThrottling: definition.id !== "spotify",
         contextIsolation: true,
-        devTools: process.argv.includes("--devtools"),
+        devTools: DEVELOPER_TOOLS_ENABLED,
         nodeIntegration: false,
         sandbox: true,
         session: serviceSession,
@@ -1075,7 +1076,7 @@ export class ServiceHost {
             webPreferences: {
               allowRunningInsecureContent: false,
               contextIsolation: true,
-              devTools: process.argv.includes("--devtools"),
+              devTools: DEVELOPER_TOOLS_ENABLED,
               nodeIntegration: false,
               sandbox: true,
               session: serviceSession,
@@ -1130,6 +1131,22 @@ export class ServiceHost {
 
     view.webContents.on("before-input-event", (event, input) => {
       if (this.#replayingInput) {
+        return;
+      }
+
+      const toggleDeveloperTools = DEVELOPER_TOOLS_ENABLED &&
+        input.type === "keyDown" &&
+        (input.key === "F12" || (
+          input.key.toLocaleLowerCase() === "i" &&
+          ((input.meta && input.alt) || (input.control && input.shift))
+        ));
+      if (toggleDeveloperTools) {
+        event.preventDefault();
+        if (view.webContents.isDevToolsOpened()) {
+          view.webContents.closeDevTools();
+        } else {
+          view.webContents.openDevTools({ mode: "detach" });
+        }
         return;
       }
 
@@ -1371,6 +1388,9 @@ export class ServiceHost {
       signal?.throwIfAborted();
       if (this.#view === view && !view.webContents.isDestroyed()) {
         view.webContents.focus();
+        if (DEVELOPER_TOOLS_ENABLED) {
+          view.webContents.openDevTools({ mode: "detach" });
+        }
       }
     } catch (error) {
       if (signal?.aborted) {

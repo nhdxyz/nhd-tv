@@ -438,6 +438,18 @@ describe("voice intent boundary", () => {
       providerHint: "netflix",
       reference: "candidate"
     });
+    expect(parseVoiceIntent(mediaIntent({
+      kind: "media-reference",
+      mediaType: null,
+      reference: "next-candidate",
+      title: null
+    }))).toEqual({
+      action: "play",
+      kind: "media-reference",
+      ordinal: null,
+      providerHint: null,
+      reference: "next-candidate"
+    });
   });
 
   it("strictly bounds and isolates media-reference fields", () => {

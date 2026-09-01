@@ -23,7 +23,9 @@ type VoiceSimpleSemanticControlAction = Exclude<
 
 const CONFIRMATION_PHRASES: Readonly<Record<string, VoiceConfirmationAction>> = {
   cancel: "cancel",
+  "cancel that": "cancel",
   confirm: "confirm",
+  "forget it": "cancel",
   "go ahead": "confirm",
   "never mind": "cancel",
   no: "cancel",
@@ -144,10 +146,18 @@ const MEDIA_REFERENCE_PHRASES: Readonly<Record<string, {
   ordinal: number | null;
   reference: VoiceMediaReference;
 }>> = {
+  "another one": { action: "play", ordinal: null, reference: "next-candidate" },
+  "play another one": { action: "play", ordinal: null, reference: "next-candidate" },
+  "play something else": { action: "play", ordinal: null, reference: "next-candidate" },
   "open it": { action: "open", ordinal: null, reference: "last-media" },
   "play it": { action: "play", ordinal: null, reference: "last-media" },
   "play this": { action: "play", ordinal: null, reference: "current-media" },
   "put that on": { action: "play", ordinal: null, reference: "last-media" },
+  retry: { action: "play", ordinal: null, reference: "last-media" },
+  "retry that": { action: "play", ordinal: null, reference: "last-media" },
+  "show me another one": { action: "play", ordinal: null, reference: "next-candidate" },
+  "that is not what i meant": { action: "play", ordinal: null, reference: "next-candidate" },
+  "that s not what i meant": { action: "play", ordinal: null, reference: "next-candidate" },
   "the eighth one": { action: "play", ordinal: 8, reference: "candidate" },
   "the fifth one": { action: "play", ordinal: 5, reference: "candidate" },
   "the first one": { action: "play", ordinal: 1, reference: "candidate" },
@@ -158,6 +168,9 @@ const MEDIA_REFERENCE_PHRASES: Readonly<Record<string, {
   "the sixth one": { action: "play", ordinal: 6, reference: "candidate" },
   "the tenth one": { action: "play", ordinal: 10, reference: "candidate" },
   "the third one": { action: "play", ordinal: 3, reference: "candidate" },
+  "try again": { action: "play", ordinal: null, reference: "last-media" },
+  "try another one": { action: "play", ordinal: null, reference: "next-candidate" },
+  "try that again": { action: "play", ordinal: null, reference: "last-media" },
   "what service has it": { action: "lookup", ordinal: null, reference: "last-media" },
   "where can i watch it": { action: "lookup", ordinal: null, reference: "last-media" }
 };

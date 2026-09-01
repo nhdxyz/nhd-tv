@@ -84,6 +84,7 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain("mediaType=recommendation");
       expect(body.instructions).toContain("mediaType=similar-title");
       expect(body.instructions).toContain('"play it" is a last-media play reference');
+      expect(body.instructions).toContain("reference=next-candidate");
       expect(body.instructions).toContain("Never invent the referenced title");
       expect(body.instructions).toContain("Only candidate references may use ordinal");
       expect(body.instructions).toContain("Use kind=confirmation only for a bare answer");

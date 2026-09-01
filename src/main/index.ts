@@ -108,7 +108,10 @@ import type {
   VoiceServiceId
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
-import type { VoiceIntent } from "./voice/voice-intent";
+import {
+  hasContextualPlaybackConsent,
+  type VoiceIntent
+} from "./voice/voice-intent";
 import {
   VoiceContextStore,
   type VoiceLiveMediaSnapshot,
@@ -2267,7 +2270,8 @@ async function executeVoiceCommandPlan(
             ? {
                 intent: plan.intent,
                 outcome: "succeeded",
-                preserveCandidates: (result.choices?.length ?? 0) > 0
+                preserveCandidates: (result.choices?.length ?? 0) > 0 ||
+                  hasContextualPlaybackConsent(plan.intent)
               }
             : { outcome: "failed" }
         );

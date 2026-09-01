@@ -12,6 +12,8 @@ describe("common voice utterance contract", () => {
     ["no", "cancel"],
     ["nope", "cancel"],
     ["cancel", "cancel"],
+    ["cancel that", "cancel"],
+    ["forget it", "cancel"],
     ["never mind", "cancel"]
   ] as const)("represents the bare confirmation answer %s", (phrase, action) => {
     expect(voiceTranscriptShortcut(phrase)).toEqual({ action, kind: "confirmation" });
@@ -318,6 +320,11 @@ describe("common voice utterance contract", () => {
     ["where can I watch it", "lookup", "last-media", null],
     ["what service has it", "lookup", "last-media", null],
     ["play this", "play", "current-media", null],
+    ["try again", "play", "last-media", null],
+    ["retry that", "play", "last-media", null],
+    ["try another one", "play", "next-candidate", null],
+    ["play something else", "play", "next-candidate", null],
+    ["that's not what I meant", "play", "next-candidate", null],
     ["the first one", "play", "candidate", 1],
     ["the second one", "play", "candidate", 2],
     ["the third one", "play", "candidate", 3],

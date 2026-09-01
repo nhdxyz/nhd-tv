@@ -24,7 +24,12 @@ const VOICE_CONTROL_ACTIONS = [
 
 const VOICE_CONFIRMATION_ACTIONS = ["cancel", "confirm"] as const;
 const VOICE_MEDIA_ACTIONS = ["lookup", "open", "play", "search"] as const;
-const VOICE_MEDIA_REFERENCES = ["candidate", "current-media", "last-media"] as const;
+const VOICE_MEDIA_REFERENCES = [
+  "candidate",
+  "current-media",
+  "last-media",
+  "next-candidate"
+] as const;
 const VOICE_SEMANTIC_CONTROL_ACTIONS = [
   "captions-off",
   "captions-on",

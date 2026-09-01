@@ -189,6 +189,34 @@ function providerHint(reference: VoiceProviderReference | null): VoiceProviderHi
     : null;
 }
 
+function normalizedIdentity(value: string | null): string | null {
+  return value?.normalize("NFKC").trim().toLocaleLowerCase("en-US") ?? null;
+}
+
+function sameCandidateTarget(
+  candidate: VoiceContextCandidate,
+  current: StoredVoiceMediaReference,
+  provider: VoiceProviderReference | null
+): boolean {
+  if (candidate.provider?.id !== provider?.id) return false;
+  if (
+    candidate.identity.contentId !== null &&
+    current.identity.contentId !== null
+  ) {
+    return candidate.identity.contentId === current.identity.contentId;
+  }
+  const candidateTitle = candidate.identity.seriesTitle ?? candidate.identity.title;
+  const currentTitle = current.identity.seriesTitle ?? current.identity.title;
+  return candidate.mediaType === current.mediaType &&
+    normalizedIdentity(candidateTitle) === normalizedIdentity(currentTitle) &&
+    (candidate.identity.year === null || current.identity.year === null ||
+      candidate.identity.year === current.identity.year) &&
+    (candidate.identity.seasonNumber === null || current.identity.seasonNumber === null ||
+      candidate.identity.seasonNumber === current.identity.seasonNumber) &&
+    (candidate.identity.episodeNumber === null || current.identity.episodeNumber === null ||
+      candidate.identity.episodeNumber === current.identity.episodeNumber);
+}
+
 function referenceSource(
   intent: VoiceMediaReferenceIntent,
   snapshot: VoiceContextSnapshot
@@ -209,6 +237,22 @@ function referenceSource(
     return media === null
       ? null
       : { media, playbackConsent: false, provider: media.service };
+  }
+
+  if (intent.reference === "next-candidate") {
+    const candidateSet = snapshot.conversation.candidates;
+    const current = snapshot.conversation.lastMediaTarget;
+    if (candidateSet === null || candidateSet.candidates.length < 2 || current === null) {
+      return null;
+    }
+    const currentIndex = candidateSet.candidates.findIndex((candidate) =>
+      sameCandidateTarget(candidate, current, snapshot.conversation.lastProvider)
+    );
+    if (currentIndex < 0) return null;
+    const candidate = candidateSet.candidates[(currentIndex + 1) % candidateSet.candidates.length];
+    return candidate === undefined
+      ? null
+      : { media: candidate, playbackConsent: true, provider: candidate.provider };
   }
 
   if (intent.ordinal === null) return null;

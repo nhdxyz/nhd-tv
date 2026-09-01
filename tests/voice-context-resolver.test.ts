@@ -203,6 +203,9 @@ describe("shared voice context resolver", () => {
       ordinal: null,
       reference: "candidate"
     }), snapshot)).toEqual({ kind: "unknown" });
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+      reference: "next-candidate"
+    }), snapshot)).toEqual({ kind: "unknown" });
   });
 
   it("honors store expiry for last targets, candidates, and current media", () => {
@@ -302,6 +305,46 @@ describe("shared voice context resolver", () => {
       ordinal: 3,
       reference: "candidate"
     }), store.snapshot())).toEqual({ kind: "unknown" });
+  });
+
+  it("cycles through preserved alternatives after an explicit choice", () => {
+    const store = new VoiceContextStore({ now: () => 5_500 });
+    const scope = store.revisions();
+    store.setCandidates([{
+      identity: { title: "Arrival", year: 2016 },
+      mediaType: "movie",
+      provider: { id: "netflix", name: "Netflix" }
+    }, {
+      identity: { title: "Annihilation", year: 2018 },
+      mediaType: "movie",
+      provider: { id: "netflix", name: "Netflix" }
+    }, {
+      identity: { title: "Ex Machina", year: 2014 },
+      mediaType: "movie",
+      provider: { id: "netflix", name: "Netflix" }
+    }], scope);
+    expect(recordVoiceMediaIntentContext(store, mediaIntent({
+      providerHint: "netflix",
+      title: "Arrival"
+    }), { preserveCandidates: true })).toBe(true);
+
+    const next = resolveVoiceMediaReferenceIntent(referenceIntent({
+      reference: "next-candidate"
+    }), store.snapshot());
+    expect(next).toMatchObject({
+      kind: "media",
+      providerHint: "netflix",
+      title: "Annihilation"
+    });
+    expect(next.kind === "media" && hasContextualPlaybackConsent(next)).toBe(true);
+
+    expect(recordVoiceMediaIntentContext(store, mediaIntent({
+      providerHint: "netflix",
+      title: "Ex Machina"
+    }), { preserveCandidates: true })).toBe(true);
+    expect(resolveVoiceMediaReferenceIntent(referenceIntent({
+      reference: "next-candidate"
+    }), store.snapshot())).toMatchObject({ title: "Arrival" });
   });
 
   it("requires both coordinates before resolving an exact episode", () => {

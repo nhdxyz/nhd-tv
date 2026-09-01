@@ -61,6 +61,7 @@ describe("Spotify playback bridge", () => {
   it("reads semantic Now Playing fields without account or API access", () => {
     const script = buildSpotifyPlaybackSnapshotScript(["i.scdn.co"]);
     expect(script).toContain('navigator.mediaSession?.metadata');
+    expect(script).toContain('[data-nhdtv-spotify-control="play-pause"]');
     expect(script).toContain('[data-testid="context-item-info-title"]');
     expect(script).toContain('[data-testid="playback-position"]');
     expect(script).toContain('[data-testid="playback-duration"]');
@@ -70,6 +71,9 @@ describe("Spotify playback bridge", () => {
   });
 
   it("clicks only Spotify's semantic transport buttons", () => {
+    expect(buildSpotifyMediaActionScript("play-pause")).toContain(
+      'data-nhdtv-spotify-control=\\"play-pause\\"'
+    );
     expect(buildSpotifyMediaActionScript("play-pause")).toContain(
       "control-button-playpause"
     );

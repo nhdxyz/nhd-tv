@@ -386,13 +386,25 @@ export function buildSpotifyVoiceAutomationScript(
       button.getAttribute("aria-label") ?? button.getAttribute("title") ?? button.textContent
     );
     const playButton = (root) => [...root.querySelectorAll(
-      '[data-testid="play-button"],button[aria-label^="Play " i],button[aria-label="Play" i],'
+      '[data-nhdtv-spotify-control="primary-playback"],[data-testid="play-button"],'
+      + 'button[aria-label^="Play " i],button[aria-label="Play" i],'
       + 'button[title^="Play " i],button[title="Play" i]'
     )].find((button) => visible(button) && !/^pause(?:\\s|$)/i.test(controlLabel(button)));
     const pauseButton = (root) => [...root.querySelectorAll(
-      '[data-testid="play-button"],button[aria-label^="Pause" i],button[title^="Pause" i]'
+      '[data-nhdtv-spotify-control="primary-playback"],[data-testid="play-button"],'
+      + 'button[aria-label^="Pause" i],button[title^="Pause" i]'
     )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(controlLabel(button)));
     const artistActionButton = (root, expected, paused) => {
+      const marked = [...root.querySelectorAll(
+        '[data-nhdtv-spotify-control="primary-playback"]'
+      )].find((button) => {
+        if (!visible(button)) return false;
+        const label = controlLabel(button);
+        return paused
+          ? /^pause(?:\\s|$)/i.test(label)
+          : !/^pause(?:\\s|$)/i.test(label);
+      });
+      if (marked instanceof HTMLElement) return marked;
       const actionRoots = [...root.querySelectorAll(
         '[data-testid="action-bar"],[data-testid="action-bar-row"]'
       )].filter(visible);
@@ -413,7 +425,8 @@ export function buildSpotifyVoiceAutomationScript(
       });
     };
     const globalPauseButton = () => [...document.querySelectorAll(
-      '[data-testid="control-button-playpause"],'
+      '[data-nhdtv-spotify-control="play-pause"],'
+      + '[data-testid="control-button-playpause"],'
       + '[data-testid="now-playing-bar"] button[aria-label^="Pause"]'
     )].find((button) => visible(button) && /^pause(?:\\s|$)/i.test(
       button.getAttribute("aria-label") ?? button.textContent ?? ""

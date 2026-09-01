@@ -134,6 +134,20 @@ describe("Spotify TV Mode extension", () => {
     expect(content).toContain('const showAll = links.length > 1 ? links.at(-1) : null');
   });
 
+  it("publishes stable playback-control markers for host automation", async () => {
+    const content = await readFile(path.join(extensionRoot, "src/content.js"), "utf8");
+
+    expect(content).toContain('CONTROL_ATTRIBUTE = "data-nhdtv-spotify-control"');
+    expect(content).toContain('controls.set(primary, "primary-playback")');
+    expect(content).toContain('markFirstRendered("play-pause"');
+    expect(content).toContain('markFirstRendered("previous"');
+    expect(content).toContain('markFirstRendered("next"');
+    expect(content).toContain('markFirstRendered("shuffle"');
+    expect(content).toContain('markFirstRendered("repeat"');
+    expect(content).toContain("syncControlAttribute(controls)");
+    expect(content).toContain("markPlaybackControls()");
+  });
+
   it("keeps annotation updates stable so provider DOM changes do not cause an observer loop", async () => {
     const content = await readFile(path.join(extensionRoot, "src/content.js"), "utf8");
 

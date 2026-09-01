@@ -119,7 +119,8 @@ export function buildSpotifyPlaybackSnapshotScript(
         );
       } catch { return false; }
     }) ?? null;
-    const playPause = document.querySelector('[data-testid="control-button-playpause"]');
+    const playPause = document.querySelector('[data-nhdtv-spotify-control="play-pause"]') ??
+      document.querySelector('[data-testid="control-button-playpause"]');
     const playPauseLabel = playPause?.getAttribute("aria-label") ?? "";
     const title = mediaMetadata?.title || text('[data-testid="now-playing-widget"] [data-testid="context-item-info-title"]');
     const artist = mediaMetadata?.artist || text('[data-testid="now-playing-widget"] [data-testid="context-item-info-subtitles"]');
@@ -137,17 +138,19 @@ export function buildSpotifyPlaybackSnapshotScript(
 }
 
 export function buildSpotifyMediaActionScript(action: MediaAction): string | null {
-  const selector = action === "play-pause"
-    ? '[data-testid="control-button-playpause"]'
+  const selectors = action === "play-pause"
+    ? ['[data-nhdtv-spotify-control="play-pause"]', '[data-testid="control-button-playpause"]']
     : action === "rewind"
-      ? '[data-testid="control-button-skip-back"]'
+      ? ['[data-nhdtv-spotify-control="previous"]', '[data-testid="control-button-skip-back"]']
       : action === "fast-forward"
-        ? '[data-testid="control-button-skip-forward"]'
+        ? ['[data-nhdtv-spotify-control="next"]', '[data-testid="control-button-skip-forward"]']
         : null;
-  if (selector === null) return null;
+  if (selectors === null) return null;
 
   return `(() => {
-    const control = document.querySelector(${JSON.stringify(selector)});
+    const control = ${JSON.stringify(selectors)}
+      .map((selector) => document.querySelector(selector))
+      .find((element) => element instanceof HTMLButtonElement) ?? null;
     if (!(control instanceof HTMLButtonElement) || control.disabled || control.getAttribute("aria-disabled") === "true") {
       return false;
     }

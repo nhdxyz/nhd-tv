@@ -1248,6 +1248,37 @@ describe("voice provider automation", () => {
     )).toBe("playing");
   });
 
+  it("prefers the extension-owned Spotify primary playback marker on a verified artist page", () => {
+    const markedPlay = new FakeElement({
+      attributes: {
+        "aria-label": "Play Kanye West",
+        "data-nhdtv-spotify-control": "primary-playback"
+      }
+    });
+    const entityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-nhdtv-spotify-control="primary-playback"')
+        ? [markedPlay]
+        : []
+    });
+    const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
+    const documentValue = {
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.startsWith("h1,") ? [heading] : []
+    };
+
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(intent({
+        creator: "Kanye West",
+        mediaType: "artist",
+        providerHint: "spotify",
+        title: "Kanye West"
+      }), true),
+      documentValue,
+      "/artist/kanye"
+    )).toBe("play-clicked");
+    expect(markedPlay.clicked).toBe(true);
+  });
+
   it("opens a Spotify artist profile without autoplaying it", () => {
     const entityPlay = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
     const actionBar = new FakeElement({

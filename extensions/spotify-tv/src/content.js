@@ -11,6 +11,7 @@
   const CARD_ATTRIBUTE = "data-nhdtv-spotify-card";
   const QUICK_ATTRIBUTE = "data-nhdtv-spotify-quick";
   const TRACK_ATTRIBUTE = "data-nhdtv-spotify-track";
+  const CONTROL_ATTRIBUTE = "data-nhdtv-spotify-control";
   const root = document.documentElement;
   let mutationFrame = null;
 
@@ -307,6 +308,69 @@
     });
   };
 
+  const syncControlAttribute = (desiredControls) => {
+    document.querySelectorAll(`[${CONTROL_ATTRIBUTE}]`).forEach((element) => {
+      const desiredValue = desiredControls.get(element);
+      if (desiredValue === undefined) element.removeAttribute(CONTROL_ATTRIBUTE);
+    });
+    desiredControls.forEach((value, element) => {
+      if (element.getAttribute(CONTROL_ATTRIBUTE) !== value) {
+        element.setAttribute(CONTROL_ATTRIBUTE, value);
+      }
+    });
+  };
+
+  const markPlaybackControls = () => {
+    const controls = new Map();
+    const markFirstRendered = (value, selector) => {
+      const control = [...document.querySelectorAll(selector)].find((element) =>
+        element instanceof HTMLButtonElement && isRendered(element)
+      );
+      if (control instanceof HTMLButtonElement) controls.set(control, value);
+    };
+
+    markFirstRendered("play-pause", '[data-testid="control-button-playpause"]');
+    markFirstRendered("previous", '[data-testid="control-button-skip-back"]');
+    markFirstRendered("next", '[data-testid="control-button-skip-forward"]');
+    markFirstRendered("shuffle", '[data-testid="control-button-shuffle"][role="switch"]');
+    markFirstRendered("repeat", '[data-testid="control-button-repeat"][role="checkbox"]');
+
+    if (routeKind() === "detail") {
+      const main = document.querySelector("main,[role=\"main\"]");
+      const excludedPrimaryAncestor = [
+        '[data-testid="tracklist-row"]',
+        '[role="row"]',
+        '[data-testid="card-container"]',
+        '[data-encore-id="card"]',
+        '[data-testid="now-playing-bar"]',
+        '[data-testid="player-controls"]'
+      ].join(",");
+      const primarySelectors = [
+        '[data-testid="action-bar"] [data-testid="play-button"]',
+        '[data-testid="action-bar-row"] [data-testid="play-button"]',
+        '[data-testid="action-bar"] button[aria-label^="Play" i]',
+        '[data-testid="action-bar"] button[aria-label^="Pause" i]',
+        '[data-testid="action-bar-row"] button[aria-label^="Play" i]',
+        '[data-testid="action-bar-row"] button[aria-label^="Pause" i]',
+        '[data-testid="play-button"]',
+        'button[aria-label^="Play" i]',
+        'button[aria-label^="Pause" i]'
+      ];
+      const primary = main instanceof HTMLElement
+        ? primarySelectors.map((selector) => [...main.querySelectorAll(selector)].find((element) =>
+          element instanceof HTMLButtonElement &&
+          isRendered(element) &&
+          element.closest(excludedPrimaryAncestor) === null
+        )).find((element) => element instanceof HTMLButtonElement) ?? null
+        : null;
+      if (primary instanceof HTMLButtonElement) {
+        controls.set(primary, "primary-playback");
+      }
+    }
+
+    syncControlAttribute(controls);
+  };
+
   const markPrimaryTargets = () => {
     const cards = [];
     const quickCards = [];
@@ -415,6 +479,7 @@
       }
     }
     markPrimaryTargets();
+    markPlaybackControls();
   };
 
   const scheduleUpdate = () => {

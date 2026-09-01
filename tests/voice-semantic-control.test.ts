@@ -148,15 +148,21 @@ function executeScript(
       : null,
     querySelectorAll: (selector: string) => {
       if (selector === "video") return [...(options.videos ?? [])];
-      if (selector === '[data-testid="control-button-shuffle"][role="switch"]') {
+      if (selector.includes('[data-testid="control-button-shuffle"][role="switch"]')) {
         return [...(options.controls?.["control-button-shuffle"] ?? [])].filter(
-          (element) => element.getAttribute("data-testid") === "control-button-shuffle" &&
+          (element) => (
+            element.getAttribute("data-testid") === "control-button-shuffle" ||
+            element.getAttribute("data-nhdtv-spotify-control") === "shuffle"
+          ) &&
             element.getAttribute("role") === "switch"
         );
       }
-      if (selector === '[data-testid="control-button-repeat"][role="checkbox"]') {
+      if (selector.includes('[data-testid="control-button-repeat"][role="checkbox"]')) {
         return [...(options.controls?.["control-button-repeat"] ?? [])].filter(
-          (element) => element.getAttribute("data-testid") === "control-button-repeat" &&
+          (element) => (
+            element.getAttribute("data-testid") === "control-button-repeat" ||
+            element.getAttribute("data-nhdtv-spotify-control") === "repeat"
+          ) &&
             element.getAttribute("role") === "checkbox"
         );
       }
@@ -358,7 +364,13 @@ describe("voice semantic controls", () => {
     const repeatStateScript = buildSpotifyRepeatControlStateScript();
     const repeatTransitionScript = buildSpotifyRepeatTransitionScript("all") ?? "";
     expect(shuffleScript).toContain(
+      '[data-nhdtv-spotify-control="shuffle"][role="switch"]'
+    );
+    expect(shuffleScript).toContain(
       '[data-testid="control-button-shuffle"][role="switch"]'
+    );
+    expect(repeatStateScript).toContain(
+      '[data-nhdtv-spotify-control="repeat"][role="checkbox"]'
     );
     expect(repeatStateScript).toContain(
       '[data-testid="control-button-repeat"][role="checkbox"]'

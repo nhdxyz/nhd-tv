@@ -210,7 +210,8 @@ export function parseVoiceSpotifyRepeatControlState(
 /** Reads only Spotify's qualified repeat checkbox and never mutates the page. */
 export function buildSpotifyRepeatControlStateScript(): string {
   return `(() => {
-    const selector = '[data-testid="control-button-repeat"][role="checkbox"]';
+    const selector = '[data-nhdtv-spotify-control="repeat"][role="checkbox"],'
+      + '[data-testid="control-button-repeat"][role="checkbox"]';
     const visible = (element) => {
       if (!(element instanceof HTMLElement) || element.hidden === true ||
         element.isConnected === false) return false;
@@ -245,7 +246,8 @@ export function buildSpotifyRepeatTransitionScript(
       : expectedState === "one" ? "mixed" : null;
   if (checked === null) return null;
   return `(() => {
-    const selector = '[data-testid="control-button-repeat"][role="checkbox"]';
+    const selector = '[data-nhdtv-spotify-control="repeat"][role="checkbox"],'
+      + '[data-testid="control-button-repeat"][role="checkbox"]';
     const visible = (element) => {
       if (!(element instanceof HTMLElement) || element.hidden === true ||
         element.isConnected === false) return false;
@@ -456,9 +458,16 @@ export function buildVoiceSemanticControlScript(
       element.getAttribute("data-testid"),
       element.textContent
     ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
-    const firstControl = (selector) => [...document.querySelectorAll(selector)].find(enabled) ?? null;
-    const clickControl = (selector) => {
-      const control = firstControl(selector);
+    const selectorList = (selectors) => Array.isArray(selectors) ? selectors : [selectors];
+    const firstControl = (selectors) => {
+      for (const selector of selectorList(selectors)) {
+        const control = [...document.querySelectorAll(selector)].find(enabled);
+        if (control !== undefined) return control;
+      }
+      return null;
+    };
+    const clickControl = (selectors) => {
+      const control = firstControl(selectors);
       if (control === null) return "unavailable";
       control.click();
       return "acted";
@@ -508,9 +517,18 @@ export function buildVoiceSemanticControlScript(
         fullscreenExit: '[data-uia="control-fullscreen-exit"],button[aria-label^="Exit full screen" i],button[title^="Exit full screen" i]'
       },
       spotify: {
-        next: '[data-testid="control-button-skip-forward"],button[aria-label^="Next" i],button[title^="Next" i]',
-        previous: '[data-testid="control-button-skip-back"],button[aria-label^="Previous" i],button[title^="Previous" i]',
-        shuffle: '[data-testid="control-button-shuffle"][role="switch"]'
+        next: [
+          '[data-nhdtv-spotify-control="next"]',
+          '[data-testid="control-button-skip-forward"],button[aria-label^="Next" i],button[title^="Next" i]'
+        ],
+        previous: [
+          '[data-nhdtv-spotify-control="previous"]',
+          '[data-testid="control-button-skip-back"],button[aria-label^="Previous" i],button[title^="Previous" i]'
+        ],
+        shuffle: [
+          '[data-nhdtv-spotify-control="shuffle"][role="switch"]',
+          '[data-testid="control-button-shuffle"][role="switch"]'
+        ]
       },
       youtube: {
         next: 'button.ytp-next-button,button[aria-label^="Next video" i],button[title^="Next" i]',
@@ -522,13 +540,19 @@ export function buildVoiceSemanticControlScript(
       }
     };
     const providerControls = controls[provider];
-    const spotifyControl = (selector) => [...document.querySelectorAll(selector)]
-      .find((element) => element instanceof HTMLElement && element.isConnected !== false) ?? null;
-    const waitForSpotifyStateChange = (selector, readState, previousState) =>
+    const spotifyControl = (selectors) => {
+      for (const selector of selectorList(selectors)) {
+        const control = [...document.querySelectorAll(selector)]
+          .find((element) => element instanceof HTMLElement && element.isConnected !== false);
+        if (control !== undefined) return control;
+      }
+      return null;
+    };
+    const waitForSpotifyStateChange = (selectors, readState, previousState) =>
       new Promise((resolve) => {
         let polls = 0;
         const poll = () => {
-          const control = spotifyControl(selector);
+          const control = spotifyControl(selectors);
           if (control !== null) {
             const state = readState(control);
             if (state === null) {
@@ -549,10 +573,10 @@ export function buildVoiceSemanticControlScript(
         };
         setTimeout(poll, ${SPOTIFY_STATE_POLL_INTERVAL_MS});
       });
-    const spotifyTargetSettled = (selector, readState, targetState) =>
+    const spotifyTargetSettled = (selectors, readState, targetState) =>
       new Promise((resolve) => {
         setTimeout(() => {
-          const control = spotifyControl(selector);
+          const control = spotifyControl(selectors);
           resolve(control !== null && readState(control) === targetState);
         }, ${SPOTIFY_STATE_SETTLE_MS});
       });

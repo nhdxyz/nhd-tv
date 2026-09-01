@@ -136,6 +136,12 @@ function controlPlan(
         return { detail: "Playback is already running.", kind: "no-op" };
       }
       return remoteActionPlan("play-pause");
+    case "resume-continue-watching":
+      return {
+        detail: "There is nothing in Continue Watching for this profile yet.",
+        handled: false,
+        kind: "no-op"
+      };
     case "previous-track":
       return context.activeServiceId === "spotify"
         ? remoteActionPlan("rewind")

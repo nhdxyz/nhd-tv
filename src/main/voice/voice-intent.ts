@@ -10,6 +10,7 @@ const VOICE_CONTROL_ACTIONS = [
   "pause",
   "play-pause",
   "previous-track",
+  "resume-continue-watching",
   "right",
   "resume",
   "rewind",
@@ -157,6 +158,7 @@ export interface VoiceMediaIntent {
 }
 
 const CONTEXTUAL_PLAYBACK_CONSENT = Symbol("contextual-playback-consent");
+const CONTINUE_WATCHING_RESUME_ITEM = Symbol("continue-watching-resume-item");
 
 /** Marks an in-memory provider/media choice as explicit playback consent. */
 export function markContextualPlaybackConsent(
@@ -175,6 +177,30 @@ export function hasContextualPlaybackConsent(intent: VoiceMediaIntent): boolean 
   return (intent as VoiceMediaIntent & { [CONTEXTUAL_PLAYBACK_CONSENT]?: unknown })[
     CONTEXTUAL_PLAYBACK_CONSENT
   ] === true;
+}
+
+/** Binds a voice request to one app-owned Continue Watching item without exposing its URL. */
+export function markContinueWatchingResume(
+  intent: VoiceMediaIntent,
+  itemId: string
+): VoiceMediaIntent {
+  if (!/^[a-f0-9]{24}$/u.test(itemId)) {
+    throw new TypeError("A valid Continue Watching item id is required.");
+  }
+  Object.defineProperty(intent, CONTINUE_WATCHING_RESUME_ITEM, {
+    configurable: false,
+    enumerable: false,
+    value: itemId,
+    writable: false
+  });
+  return intent;
+}
+
+export function continueWatchingResumeItemId(intent: VoiceMediaIntent): string | null {
+  const value = (intent as VoiceMediaIntent & {
+    [CONTINUE_WATCHING_RESUME_ITEM]?: unknown;
+  })[CONTINUE_WATCHING_RESUME_ITEM];
+  return typeof value === "string" && /^[a-f0-9]{24}$/u.test(value) ? value : null;
 }
 
 /** A follow-up action whose media target must be resolved from shared TV context. */

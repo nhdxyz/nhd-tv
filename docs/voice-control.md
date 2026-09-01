@@ -21,6 +21,7 @@ The app owns only Tailscale HTTPS port `8443`. It does not reset Tailscale Serve
 ## Phone interaction
 
 - Press and hold the center microphone button.
+- Wait for the short ready ding. The microphone icon becomes a live five-bar input meter only after recording has actually started.
 - Speak for 150 milliseconds to about 19.5 seconds. The phone stops slightly before the server's 20-second ceiling so recorder scheduling cannot turn a valid hold into an over-limit upload.
 - Release to send the command.
 - Before opening the microphone, the phone acquires a five-second TV-wide reservation. A competing phone is disabled and told that voice control is already in use; an abandoned reservation expires without muting the TV.
@@ -33,7 +34,7 @@ The upload boundary accepts only an approved controller over the exact active HT
 
 ## Command path
 
-1. [`gpt-transcribe`](https://developers.openai.com/api/docs/models/gpt-transcribe) transcribes English audio after the phone releases the push-to-talk button.
+1. [`gpt-transcribe`](https://developers.openai.com/api/docs/models/gpt-transcribe) transcribes English audio after the phone releases the push-to-talk button. A short television-command vocabulary prompt supplies context for terms such as play, playing, Continue Watching, provider names, and media controls; deterministic shortcuts also correct `plain` only in unambiguous play/playing control grammar.
 2. The Responses API converts the transcript to a strict, closed JSON schema.
 3. NHD-TV validates the schema and builds its own deterministic command plan.
 4. The model cannot provide URLs, selectors, service IDs, or executable code.
@@ -94,6 +95,7 @@ Movies, shows, titles, and exact episodes use a private-project Google Where to 
 - Purchase and rental providers are reported with available price text, but are not treated as subscriptions or automatically launched.
 - Netflix's profile gate preserves an already-active Netflix profile. When Netflix instead presents “Who's watching?”, voice playback selects an exact active local profile-name match when available, otherwise it selects the first visible normal profile, reloads the verified title/search destination, and continues the same command through Play/Resume and playback verification. Management controls are never treated as profiles; if Netflix exposes no usable profile, the phone asks the user to choose on the TV.
 - A show-level Play request prefers Netflix Resume/Continue, then Play. An explicit season and episode selects only that exact episode and never falls through to a generic Resume control. Observed episode coordinates are retained in short-lived TV context for safe follow-up questions.
+- Search-result identity remains exact after safe spoken-number canonicalization, so a request transcribed as “Too Fast Too Furious” can match the visibly labeled Netflix title *2 Fast 2 Furious* without accepting a sequel, subtitle, or unrelated first result.
 - Playback controls are scoped to an exact-title detail surface or a trusted Netflix content ID, preventing an unrelated Continue Watching button from starting the wrong title.
 - Successful video play waits for actual provider playback and attempts verified fullscreen. If a provider fullscreen button ignores a synthetic click, NHD-TV sends one bounded keyboard fallback and verifies again. Verified playback that remains windowed is reported as playing with a fullscreen caveat rather than as full success or a false playback failure.
 
@@ -101,7 +103,7 @@ Google markup and internal requests are not a supported public API and can chang
 
 ### Spotify
 
-Songs, artists, albums, and playlists route to Spotify's provider-owned search. “Play a song from Kanye West” starts the named artist without inventing a track title. A bounded script looks only at visible Spotify result rows, cards, anchors, and play buttons. Exact songs require both title and artist; the resulting track route and artist attribution are verified before success. Artist navigation requires a matching Spotify artist/profile route, while artist, album, and playlist playback requires matching local state plus Spotify's global Pause state before success is reported. If verification fails, Spotify search stays open and the phone reports that playback could not be started automatically.
+Songs, artists, albums, and playlists route to Spotify's provider-owned search. “Play a song from Kanye West” starts the named artist without inventing a track title. A bounded script looks only at visible Spotify result rows, cards, anchors, and play buttons. Exact songs require both title and artist; the resulting track route and artist attribution are verified before success. Artist navigation accepts an exact name or a provider-ranked, visibly expanded single-name match such as `Kanye` → `Kanye West`, then requires the matching artist/profile route. Artist, album, and playlist playback still requires matching local state plus Spotify's global Pause state before success is reported. If verification fails, Spotify search stays open and the phone reports that playback could not be started automatically.
 
 ### YouTube
 
@@ -146,9 +148,13 @@ After adding a key, qualify these commands on a paired iPhone in both confirmati
 - “Play this at one-and-a-half speed” and “back to normal speed”
 - “Turn shuffle on”, “repeat this song”, “repeat everything”, and “turn repeat off”
 - “Play Apollo 13”
+- “Resume my Continue Watching”
+- “Resume playing my Continue Watching”
+- “Play Too Fast Too Furious on Netflix”
 - “Play Breaking Bad season 1 episode 3”
 - “Where can I watch Apollo 13?”
 - “Play Stronger by Kanye West”
+- “Play Kanye on Spotify”
 - “Open Kanye West on Spotify”
 - “Open my Spotify library” and “Go to my YouTube subscriptions”
 - “Play the Outdoor Boys latest video”

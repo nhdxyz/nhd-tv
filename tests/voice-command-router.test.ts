@@ -3,7 +3,11 @@ import {
   planVoiceCommand,
   type VoiceCommandContext
 } from "../src/main/voice/voice-command-router";
-import { markContextualPlaybackConsent } from "../src/main/voice/voice-intent";
+import {
+  continueWatchingResumeItemId,
+  markContextualPlaybackConsent,
+  markContinueWatchingResume
+} from "../src/main/voice/voice-intent";
 import type { VoiceMediaIntent } from "../src/main/voice/voice-intent";
 
 const context: VoiceCommandContext = {
@@ -41,6 +45,34 @@ describe("voice command planning", () => {
   it("does nothing for an underspecified command instead of guessing", () => {
     expect(planVoiceCommand({ kind: "unknown" }, context)).toEqual({
       detail: "Please name what you want to watch, play, open, or control.",
+      handled: false,
+      kind: "no-op"
+    });
+  });
+
+  it("preserves one opaque Continue Watching item through playback planning", () => {
+    const continueWatchingIntent = markContinueWatchingResume(
+      mediaIntent({ providerHint: "netflix", title: "The Diplomat" }),
+      "0123456789abcdef01234567"
+    );
+    const plan = planVoiceCommand(continueWatchingIntent, context);
+    expect(plan).toMatchObject({
+      candidateServiceIds: ["netflix"],
+      confirmationRequired: true,
+      kind: "resolve-media",
+      launchAllowed: true
+    });
+    expect(plan.kind === "resolve-media"
+      ? continueWatchingResumeItemId(plan.intent)
+      : null).toBe("0123456789abcdef01234567");
+  });
+
+  it("reports an empty Continue Watching profile without toggling the current app", () => {
+    expect(planVoiceCommand({
+      action: "resume-continue-watching",
+      kind: "control"
+    }, context)).toEqual({
+      detail: "There is nothing in Continue Watching for this profile yet.",
       handled: false,
       kind: "no-op"
     });

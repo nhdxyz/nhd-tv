@@ -56,6 +56,9 @@ describe("OpenAI voice client", () => {
       const form = init?.body as FormData;
       expect(form.get("language")).toBe("en");
       expect(form.get("model")).toBe("gpt-transcribe");
+      expect(form.get("prompt")).toContain("continue playing");
+      expect(form.get("prompt")).toContain("Continue Watching");
+      expect(form.get("prompt")).toContain("Spotify");
       const file = form.get("file") as File;
       expect(file.name).toBe("voice-command.webm");
       expect(file.type).toBe("audio/webm");
@@ -104,6 +107,8 @@ describe("OpenAI voice client", () => {
       expect(body.instructions).toContain('A bare ambiguous "repeat"');
       expect(body.instructions).toContain("any request to add something to a queue");
       expect(body.instructions).toContain("controlAction=set-volume");
+      expect(body.instructions).toContain("controlAction=resume-continue-watching");
+      expect(body.instructions).toContain('contain "plain"');
       expect(body.instructions).toContain("volumePercent set to an explicit whole-number percent");
       expect(body.instructions).toContain("Never guess, round, clamp, or infer");
       expect(body.instructions).toContain("A relative seek requires only offsetSeconds");

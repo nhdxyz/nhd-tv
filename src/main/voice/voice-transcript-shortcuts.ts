@@ -95,6 +95,32 @@ const CONTROL_PHRASES: Readonly<Record<string, VoiceSimpleControlAction>> = {
   "volume up": "volume-up"
 };
 
+const CONTINUE_WATCHING_PHRASES = new Set([
+  "continue my continue watching",
+  "continue plain my continue watching",
+  "continue playing my continue watching",
+  "continue watching",
+  "play my continue watching",
+  "resume continue watching",
+  "resume my continue watching",
+  "resume plain my continue watching",
+  "resume playing my continue watching"
+]);
+
+function contextualSpeechCorrectionShortcut(phrase: string): VoiceIntent | null {
+  if (CONTINUE_WATCHING_PHRASES.has(phrase)) {
+    return { action: "resume-continue-watching", kind: "control" };
+  }
+  if (
+    /^(?:continue|resume) plain(?: (?:a|it|the|this) (?:movie|music|show|song|video))?$/u.test(
+      phrase
+    )
+  ) {
+    return { action: "resume", kind: "control" };
+  }
+  return null;
+}
+
 const CURRENT_MEDIA_PHRASES: Readonly<Record<string, VoiceCurrentMediaAction>> = {
   "how far in am i": "position",
   "how far into this am i": "position",
@@ -642,6 +668,8 @@ export function voiceTranscriptShortcut(value: string): VoiceIntent | null {
   const phrase = normalizedPhrase(value);
   if (phrase.length === 0) return null;
   if (namesUnsupportedMediaProvider(phrase)) return { kind: "unknown" };
+  const contextualSpeechCorrection = contextualSpeechCorrectionShortcut(phrase);
+  if (contextualSpeechCorrection !== null) return contextualSpeechCorrection;
   const absoluteVolume = absoluteVolumeShortcut(phrase);
   if (absoluteVolume !== null) return absoluteVolume;
   const providerDestination = providerDestinationShortcut(phrase);

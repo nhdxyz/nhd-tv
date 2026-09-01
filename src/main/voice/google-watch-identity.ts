@@ -9,11 +9,27 @@ export interface GoogleWatchIdentityExpectation {
 }
 
 function comparableTitle(value: string): string {
+  const numberWords: Readonly<Record<string, string>> = {
+    eight: "8",
+    five: "5",
+    for: "4",
+    four: "4",
+    nine: "9",
+    one: "1",
+    seven: "7",
+    six: "6",
+    three: "3",
+    to: "2",
+    too: "2",
+    two: "2",
+    won: "1",
+    zero: "0"
+  };
   const words = value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("en-US")
-    .match(/[a-z0-9]+/g) ?? [];
+    .match(/[a-z0-9]+/g)?.map((word) => numberWords[word] ?? word) ?? [];
   while (
     words.length > 1 &&
     /^(?:film|movie|series|show|tv)$/.test(words.at(-1) ?? "")

@@ -342,6 +342,13 @@ export function buildSpotifyVoiceAutomationScript(
     const playbackRequested = ${JSON.stringify(playbackRequested)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
+    const confidentArtistIdentity = (value, expected) => {
+      const candidateWords = normalize(value).match(/[a-z0-9]+/g) ?? [];
+      const requestedWords = normalize(expected).match(/[a-z0-9]+/g) ?? [];
+      if (identity(value) === identity(expected)) return true;
+      return requestedWords.length === 1 && requestedWords[0].length >= 4 &&
+        candidateWords.length > 1 && candidateWords[0] === requestedWords[0];
+    };
     const visible = (element) => {
       if (!(element instanceof HTMLElement)) return false;
       const rect = element.getBoundingClientRect();
@@ -360,13 +367,18 @@ export function buildSpotifyVoiceAutomationScript(
       .filter((anchor) => anchor.getAttribute("href")?.startsWith(prefix));
     const exactLink = (root, prefix, expected) => links(root, prefix)
       .find((anchor) => identity(anchor.textContent || anchor.getAttribute("aria-label")) === expected);
+    const confidentArtistLink = (root, expected) => links(root, "/artist/")
+      .find((anchor) => confidentArtistIdentity(
+        anchor.textContent || anchor.getAttribute("aria-label"),
+        expected
+      ));
     const creatorMatches = (root) => !creatorIdentity || Boolean(exactLink(root, "/artist/", creatorIdentity));
     const candidateMatches = (root) => {
       if (intent.mediaType === "song") {
         return Boolean(exactLink(root, "/track/", titleIdentity)) && creatorMatches(root);
       }
       if (intent.mediaType === "artist") {
-        return Boolean(exactLink(root, "/artist/", titleIdentity || creatorIdentity));
+        return Boolean(confidentArtistLink(root, intent.title || intent.creator));
       }
       return Boolean(exactLink(root, routePrefix, titleIdentity)) && creatorMatches(root);
     };
@@ -393,7 +405,11 @@ export function buildSpotifyVoiceAutomationScript(
         if (!/^(?:play|shuffle)(?:\\s|$)/i.test(label) &&
           button.getAttribute("data-testid") !== "play-button") return false;
         const labelIdentity = identity(label.replace(/^(?:play|shuffle)\\s*/i, ""));
-        return labelIdentity.length === 0 || labelIdentity === expected;
+        return labelIdentity.length === 0 || labelIdentity === expected ||
+          confidentArtistIdentity(
+            label.replace(/^(?:play|shuffle)\\s*/i, ""),
+            expected
+          );
       });
     };
     const globalPauseButton = () => [...document.querySelectorAll(
@@ -422,8 +438,9 @@ export function buildSpotifyVoiceAutomationScript(
       + '[role="row"][aria-rowindex],[data-testid="card-container"],[data-encore-id="card"]'
     )].filter((root) => visible(root) && candidateMatches(root));
     for (const root of roots) {
-      const destination = exactLink(root, routePrefix,
-        intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity);
+      const destination = intent.mediaType === "artist"
+        ? confidentArtistLink(root, intent.title || intent.creator)
+        : exactLink(root, routePrefix, titleIdentity);
       if (
         intent.mediaType === "artist" &&
         destination instanceof HTMLElement &&
@@ -459,7 +476,13 @@ export function buildSpotifyVoiceAutomationScript(
         : titleIdentity;
       const exactHeading = [...document.querySelectorAll(
         'h1,[data-testid="entityTitle"],[data-testid="context-item-info-title"]'
-      )].find((heading) => visible(heading) && identity(heading.textContent) === requestedIdentity);
+      )].find((heading) => visible(heading) && (
+        identity(heading.textContent) === requestedIdentity ||
+        (intent.mediaType === "artist" && confidentArtistIdentity(
+          heading.textContent,
+          requestedIdentity
+        ))
+      ));
       const entityRoot = exactHeading?.closest(
         '[data-testid="album-page"],[data-testid="artist-page"],'
         + '[data-testid="playlist-page"],[data-testid="track-page"],main,[role="main"]'
@@ -485,8 +508,12 @@ export function buildSpotifyVoiceAutomationScript(
     }
     const direct = [...document.querySelectorAll('a[href]')].find((anchor) =>
       visible(anchor) && anchor.getAttribute("href")?.startsWith(routePrefix) &&
-      identity(anchor.textContent || anchor.getAttribute("aria-label")) ===
-        (intent.mediaType === "artist" ? titleIdentity || creatorIdentity : titleIdentity)
+      (intent.mediaType === "artist"
+        ? confidentArtistIdentity(
+            anchor.textContent || anchor.getAttribute("aria-label"),
+            intent.title || intent.creator
+          )
+        : identity(anchor.textContent || anchor.getAttribute("aria-label")) === titleIdentity)
     );
     if (direct instanceof HTMLElement) {
       const root = direct.closest(
@@ -703,6 +730,16 @@ export function buildNetflixVoiceAutomationScript(
     const fullscreenRequested = ${JSON.stringify(fullscreenRequested)};
     const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim().toLocaleLowerCase("en-US");
     const identity = (value) => normalize(value).replace(/[^a-z0-9]+/g, "");
+    const spokenTitleIdentity = (value) => {
+      const numberWords = {
+        eight: "8", five: "5", for: "4", four: "4", nine: "9", one: "1",
+        seven: "7", six: "6", three: "3", to: "2", too: "2", two: "2",
+        won: "1", zero: "0"
+      };
+      return (normalize(value).match(/[a-z0-9]+/g) ?? [])
+        .map((word) => numberWords[word] ?? word)
+        .join("");
+    };
     const visible = (element) => {
       if (!(element instanceof HTMLElement)) return false;
       const rect = element.getBoundingClientRect();
@@ -781,7 +818,7 @@ export function buildNetflixVoiceAutomationScript(
         element.textContent
       ]).filter(Boolean);
       const exactTitleSignal = detailSignals.some((signal) =>
-        identity(signal) === identity(intent.title)
+        spokenTitleIdentity(signal) === spokenTitleIdentity(intent.title)
       );
       const detailMatches = exactTitleSignal ||
         (providerDetailRoot === null && expectedContentMatches);
@@ -895,7 +932,7 @@ export function buildNetflixVoiceAutomationScript(
         return "play-clicked";
       }
     }
-    const titleIdentity = identity(intent.title);
+    const requestedTitleIdentity = spokenTitleIdentity(intent.title);
     const cards = [...document.querySelectorAll(
       '[data-uia="search-video"],[data-uia^="title-card-"],.title-card-container,.slider-item,.galleryContent'
     )].filter(visible);
@@ -911,7 +948,9 @@ export function buildNetflixVoiceAutomationScript(
             element.textContent
           ])
       ].filter(Boolean);
-      return signals.some((signal) => identity(signal) === titleIdentity);
+      return signals.some((signal) =>
+        spokenTitleIdentity(signal) === requestedTitleIdentity
+      );
     });
     if (exactCard instanceof HTMLElement) {
       const destinations = [

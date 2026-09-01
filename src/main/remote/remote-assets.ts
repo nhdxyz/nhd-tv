@@ -142,7 +142,10 @@ export const REMOTE_HTML = `<!doctype html>
 
         <section class="voice-control" id="voice-control" data-state="idle" aria-label="Voice control">
           <button class="voice-button" id="voice-button" type="button" disabled aria-label="Hold to speak a voice command" aria-describedby="voice-help">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
+            <span class="voice-visual" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="8.2" y="3" width="7.6" height="12" rx="3.8" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6" /></svg>
+              <span class="voice-meter" id="voice-meter"><i></i><i></i><i></i><i></i><i></i></span>
+            </span>
             <span id="voice-button-copy">Hold to talk</span>
             <small>Voice</small>
           </button>
@@ -451,25 +454,52 @@ input {
   text-align: left;
   touch-action: none;
 }
-.voice-button svg {
+.voice-button .voice-visual {
   grid-column: 1;
   grid-row: 1 / span 2;
+  display: grid;
   width: 2rem;
   height: 2rem;
   justify-self: center;
+  place-items: center;
+}
+.voice-button svg {
+  grid-area: 1 / 1;
+  width: 2rem;
+  height: 2rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.75;
 }
-.voice-button span {
+.voice-button #voice-button-copy {
   align-self: end;
   font-size: 1.05rem;
   font-weight: 820;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
+.voice-meter {
+  display: none;
+  width: 2.15rem;
+  height: 1.65rem;
+  grid-area: 1 / 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.16rem;
+}
+.voice-meter i {
+  width: 0.19rem;
+  height: 100%;
+  border-radius: 999px;
+  background: currentColor;
+  transform: scaleY(var(--voice-level, 0.22));
+  transform-origin: center;
+  transition: transform 70ms linear;
+}
+.voice-button.is-recording .voice-visual svg { display: none; }
+.voice-button.is-recording .voice-meter { display: flex; }
 .voice-button small {
   align-self: start;
   font-size: 0.7rem;
@@ -1072,6 +1102,7 @@ export const REMOTE_JS = `(() => {
   const voiceControl = document.querySelector("#voice-control");
   const voiceButton = document.querySelector("#voice-button");
   const voiceButtonCopy = document.querySelector("#voice-button-copy");
+  const voiceMeter = document.querySelector("#voice-meter");
   const voiceCancel = document.querySelector("#voice-cancel");
   const voiceChoices = document.querySelector("#voice-choices");
   const voiceHelp = document.querySelector("#voice-help");
@@ -1106,6 +1137,10 @@ export const REMOTE_JS = `(() => {
   let voiceStatusKind = "availability";
   let voiceAvailabilityDetail = "Voice control is still checking.";
   let voiceRecorder = null;
+  let voiceAudioContext = null;
+  let voiceAudioSource = null;
+  let voiceAnalyser = null;
+  let voiceMeterFrame = null;
   let voiceCommandId = null;
   let voiceStream = null;
   let voiceChunks = [];
@@ -1147,6 +1182,88 @@ export const REMOTE_JS = `(() => {
     }
     return null;
   })();
+
+  function prepareVoiceAudioFeedback() {
+    if (voiceAudioContext === null) {
+      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+      if (typeof AudioContextConstructor !== "function") return null;
+      try {
+        voiceAudioContext = new AudioContextConstructor();
+      } catch {
+        return null;
+      }
+    }
+    if (voiceAudioContext.state === "suspended") {
+      void voiceAudioContext.resume().catch(() => undefined);
+    }
+    return voiceAudioContext;
+  }
+
+  function playVoiceReadyDing() {
+    const context = prepareVoiceAudioFeedback();
+    if (context === null || context.state === "closed") return;
+    try {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const now = context.currentTime;
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.055, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.105);
+    } catch {
+      // Haptics and the visual meter remain available when Web Audio is blocked.
+    }
+  }
+
+  function stopVoiceMeter() {
+    if (voiceMeterFrame !== null) {
+      cancelAnimationFrame(voiceMeterFrame);
+      voiceMeterFrame = null;
+    }
+    try { voiceAudioSource?.disconnect(); } catch {}
+    try { voiceAnalyser?.disconnect(); } catch {}
+    voiceAudioSource = null;
+    voiceAnalyser = null;
+    voiceMeter?.querySelectorAll("i").forEach((bar) => {
+      bar.style.removeProperty("--voice-level");
+    });
+  }
+
+  function startVoiceMeter(stream) {
+    stopVoiceMeter();
+    const context = prepareVoiceAudioFeedback();
+    if (context === null || voiceMeter === null) return;
+    try {
+      voiceAudioSource = context.createMediaStreamSource(stream);
+      voiceAnalyser = context.createAnalyser();
+      voiceAnalyser.fftSize = 64;
+      voiceAnalyser.smoothingTimeConstant = 0.72;
+      voiceAudioSource.connect(voiceAnalyser);
+      const samples = new Uint8Array(voiceAnalyser.frequencyBinCount);
+      const bars = Array.from(voiceMeter.querySelectorAll("i"));
+      const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const render = () => {
+        if (voiceAnalyser === null) return;
+        voiceAnalyser.getByteFrequencyData(samples);
+        bars.forEach((bar, index) => {
+          const sampleIndex = Math.min(samples.length - 1, 1 + index * 2);
+          const level = reducedMotion
+            ? 0.45
+            : Math.max(0.18, Math.min(1, (samples[sampleIndex] ?? 0) / 150));
+          bar.style.setProperty("--voice-level", level.toFixed(2));
+        });
+        voiceMeterFrame = requestAnimationFrame(render);
+      };
+      render();
+    } catch {
+      stopVoiceMeter();
+    }
+  }
 
   document.addEventListener("selectstart", (event) => {
     if (!(event.target instanceof Element) || event.target.closest("input") === null) {
@@ -1596,6 +1713,7 @@ export const REMOTE_JS = `(() => {
   }
 
   function stopVoiceStream() {
+    stopVoiceMeter();
     if (voiceStream !== null) {
       voiceStream.getTracks().forEach((track) => track.stop());
       voiceStream = null;
@@ -1938,6 +2056,8 @@ export const REMOTE_JS = `(() => {
       updateVoiceConfirmationButtons();
       voiceButton.classList.add("is-recording");
       voiceButtonCopy.textContent = "Release to send";
+      startVoiceMeter(stream);
+      playVoiceReadyDing();
       setVoiceState(
         diagnostic
           ? "Say a short command. Nothing will be executed."
@@ -2546,6 +2666,7 @@ export const REMOTE_JS = `(() => {
     if (event.isPrimary === false || voiceButton.disabled) return;
     event.preventDefault();
     voiceButton.setPointerCapture(event.pointerId);
+    prepareVoiceAudioFeedback();
     void startVoiceRecording();
   });
   const releaseVoiceButton = () => {
@@ -2560,6 +2681,7 @@ export const REMOTE_JS = `(() => {
   voiceButton.addEventListener("keydown", (event) => {
     if ((event.key === " " || event.key === "Enter") && !event.repeat) {
       event.preventDefault();
+      prepareVoiceAudioFeedback();
       void startVoiceRecording();
     }
   });

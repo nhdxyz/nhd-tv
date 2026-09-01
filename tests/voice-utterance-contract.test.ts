@@ -41,6 +41,30 @@ describe("common voice utterance contract", () => {
   });
 
   it.each([
+    "Continue watching",
+    "resume my Continue Watching",
+    "resume playing my Continue Watching",
+    "continue plain my Continue Watching",
+    "play my Continue Watching"
+  ])("routes the latest Continue Watching request locally: %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "resume-continue-watching",
+      kind: "control"
+    });
+  });
+
+  it.each([
+    "continue plain",
+    "continue plain the movie",
+    "resume plain this show"
+  ])("corrects an unambiguous play/plain control homophone: %s", (phrase) => {
+    expect(voiceTranscriptShortcut(phrase)).toEqual({
+      action: "resume",
+      kind: "control"
+    });
+  });
+
+  it.each([
     ["Netflix", "netflix"],
     ["Open the Netflix app", "netflix"],
     ["switch to YouTube", "youtube"],

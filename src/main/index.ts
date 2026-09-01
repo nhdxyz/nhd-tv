@@ -109,8 +109,11 @@ import type {
 } from "./voice/voice-command-router";
 import { VoiceCommandSession } from "./voice/voice-command-session";
 import {
+  continueWatchingResumeItemId,
   hasContextualPlaybackConsent,
-  type VoiceIntent
+  markContinueWatchingResume,
+  type VoiceIntent,
+  type VoiceMediaIntent
 } from "./voice/voice-intent";
 import {
   VoiceContextStore,
@@ -1464,6 +1467,31 @@ function activeVoiceProfileName(): string | null {
   return state.profiles.find((profile) => profile.id === state.activeProfileId)?.name ?? null;
 }
 
+function bindContinueWatchingVoiceIntent(intent: VoiceIntent): VoiceIntent {
+  if (intent.kind !== "control" || intent.action !== "resume-continue-watching") {
+    return intent;
+  }
+  const item = continueWatchingStore?.list()[0];
+  if (item === undefined) return intent;
+  const providerHint = (["disney-plus", "netflix", "spotify", "youtube"] as const)
+    .find((serviceId) => serviceId === item.serviceId) ?? null;
+  if (providerHint === null) return intent;
+  const mediaType: VoiceMediaIntent["mediaType"] = providerHint === "spotify"
+    ? "song"
+    : "title";
+  return markContinueWatchingResume({
+    action: "play",
+    creator: null,
+    episode: null,
+    kind: "media",
+    mediaType,
+    providerHint,
+    recency: null,
+    season: null,
+    title: item.title
+  }, item.id);
+}
+
 async function understandVoiceCommandWithContext(
   client: OpenAiVoiceClient,
   clip: VoiceAudioClip,
@@ -1471,18 +1499,20 @@ async function understandVoiceCommandWithContext(
   onTranscript?: (transcript: string) => void
 ) {
   const understood = await client.understand(clip, signal, onTranscript);
+  const continueWatchingIntent = bindContinueWatchingVoiceIntent(understood.intent);
   const store = voiceContextStore;
-  if (store === null) return understood;
+  if (store === null) return { ...understood, intent: continueWatchingIntent };
 
   syncVoiceContextFromServiceHost();
-  const intent = resolveVoiceContextIntent(understood.intent, store.snapshot());
+  const intent = resolveVoiceContextIntent(continueWatchingIntent, store.snapshot());
   return { ...understood, intent };
 }
 
 function usesGoogleWatchDiscovery(
   plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>
 ): boolean {
-  return (plan.intent.action === "lookup" || plan.intent.action === "play") &&
+  return continueWatchingResumeItemId(plan.intent) === null &&
+    (plan.intent.action === "lookup" || plan.intent.action === "play") &&
     ["episode", "movie", "show", "title"].includes(plan.intent.mediaType);
 }
 
@@ -1654,6 +1684,96 @@ async function executeVoiceRecommendationPlan(
     choices,
     detail: `Here are three options for ${plan.intent.title}. Choose one to check and play on ${definition.name}.`,
     handled: true
+  };
+}
+
+async function executeContinueWatchingVoicePlan(
+  plan: Extract<VoiceCommandPlan, { kind: "resolve-media" }>,
+  executionScope: VoiceExecutionScope,
+  signal?: AbortSignal,
+  operationToken?: ServiceOperationToken
+): Promise<(RemoteActionOutcome & { detail: string }) | null> {
+  const itemId = continueWatchingResumeItemId(plan.intent);
+  if (itemId === null) return null;
+  const item = continueWatchingStore?.list().find((candidate) => candidate.id === itemId);
+  const target = continueWatchingStore?.resumeTarget(itemId) ?? null;
+  const definition = target === null ? null : getServiceDefinition(target.serviceId);
+  const watchUrl = target === null || definition === null
+    ? null
+    : sanitizePlaybackUrl(target.watchUrl, definition);
+  if (item === undefined || target === null || definition === null || watchUrl === null) {
+    return {
+      detail: "That Continue Watching item is no longer available.",
+      handled: false
+    };
+  }
+
+  let candidateServiceIds: VoiceServiceId[];
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  if (!candidateServiceIds.includes(target.serviceId as VoiceServiceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
+
+  presentPhoneVoiceProgress(`Resuming ${item.title}…`);
+  await openTrackedService(definition, watchUrl, signal, operationToken);
+  signal?.throwIfAborted();
+  try {
+    candidateServiceIds = currentVoiceCandidateServiceIds(
+      executionScope,
+      plan.candidateServiceIds
+    );
+  } catch (error) {
+    if (error instanceof VoiceExecutionProfileChangedError) {
+      return voiceExecutionProfileChangedResult();
+    }
+    throw error;
+  }
+  if (!candidateServiceIds.includes(target.serviceId as VoiceServiceId)) {
+    return {
+      detail: `${definition.name} is no longer enabled in this profile.`,
+      handled: false
+    };
+  }
+  if (!["netflix", "spotify", "youtube"].includes(definition.id)) {
+    return {
+      detail: `Resuming ${item.title} from Continue Watching on ${definition.name}.`,
+      handled: true
+    };
+  }
+
+  const automationResult = await serviceHost?.executeVoiceMediaIntent(plan.intent, {
+    intendedUrl: watchUrl,
+    profileNameHint: activeVoiceProfileName()
+  }, signal, operationToken) ?? "failed";
+  signal?.throwIfAborted();
+  const terminalDetail = voiceProviderTerminalDetail(
+    automationResult,
+    definition.name,
+    item.title
+  );
+  const handled = voiceProviderCommandHandled(plan.intent, automationResult);
+  return {
+    detail: terminalDetail ?? (automationResult === "complete"
+      ? `Resuming ${item.title} from Continue Watching on ${definition.name}.`
+      : automationResult === "playing-windowed"
+        ? `Resuming ${item.title} on ${definition.name}, but I couldn't verify full screen.`
+        : automationResult === "profile-required"
+          ? "Select your Netflix profile on the TV, then ask to resume Continue Watching again."
+          : `Opened ${item.title} from Continue Watching on ${definition.name}, but could not verify playback started automatically.`),
+    handled
   };
 }
 
@@ -2011,6 +2131,14 @@ async function executeVoiceCommandPlanCore(
   if (executionScope === undefined) {
     return voiceExecutionProfileChangedResult();
   }
+
+  const continueWatchingResult = await executeContinueWatchingVoicePlan(
+    plan,
+    executionScope,
+    signal,
+    operation
+  );
+  if (continueWatchingResult !== null) return continueWatchingResult;
 
   if (isVoiceDiscoveryIntent(plan.intent)) {
     try {

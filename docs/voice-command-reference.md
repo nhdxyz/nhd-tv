@@ -80,6 +80,7 @@ Recommendations currently mean Netflix-owned discovery results, not an AI-select
 | “Netflix instead” | Retries the most recent media target on the named compatible, enabled provider. |
 | “The first one” / “The second one” | Selects only a numbered provider choice that NHD-TV displayed on the TV. It never guesses from an unobserved provider search page. |
 | “Play this” | Resumes media that is currently paused. If a safe current-media identity is available, it can reuse that identity; otherwise it asks for a complete title. |
+| “Resume my Continue Watching” / “Resume playing my Continue Watching” | Selects the newest item in the active profile's local Continue Watching history and reopens only that item's sanitized provider resume URL. Confirm mode asks first; Automatic mode proceeds immediately. |
 | “What am I watching?” / “What is playing?” | Reports the current locally observed title and provider without navigating. |
 | “What episode is this?” / “What song is this?” | Reports locally observed episode or song metadata when the provider exposes enough information. |
 | “How far into this am I?” / “What timestamp are we at?” | Reports the current locally observed playback position without seeking. |

@@ -11,6 +11,7 @@ const RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
 const MAX_TRANSCRIPT_LENGTH = 500;
 const MAX_RECOMMENDATION_TITLE_LENGTH = 120;
 const MAX_RECOMMENDATION_REASON_LENGTH = 160;
+const VOICE_TRANSCRIPTION_PROMPT = `NHD-TV television voice command. Common phrases include play, playing, pause, resume, continue playing, Continue Watching, Netflix, Disney Plus, YouTube, Spotify, movie, show, episode, song, artist, playlist, captions, fullscreen, rewind, and fast-forward.`;
 
 const VOICE_RECOMMENDATION_SCHEMA = {
   additionalProperties: false,
@@ -63,6 +64,7 @@ const AUDIO_TYPES: ReadonlyMap<string, string> = new Map([
 const VOICE_INTENT_INSTRUCTIONS = `You extract one command for a television interface.
 Return only the supplied JSON schema. Never output a URL, selector, service ID, code, or explanation.
 Use kind=control for direct television controls. Use controlAction=set-volume with volumePercent set to an explicit whole-number percent from 0 through 100 only when the user requests an absolute system volume. Use volumePercent=null for every other action. Never guess, round, clamp, or infer a missing volume percent; relative requests such as louder, quieter, volume up, or volume down remain their matching relative control actions.
+Use controlAction=resume-continue-watching when the user asks to resume, continue, or play "my Continue Watching" without naming a title. This is distinct from resume, which controls media already open in the current app. A transcript can occasionally contain "plain" where the user clearly meant "play" or "playing" in a television-control phrase such as "continue plain"; correct that homophone only when the surrounding command grammar is unambiguous, and never rewrite a media title.
 Use kind=semantic-control for provider-aware playback operations: seek-relative, seek-absolute, set-playback-rate, restart, next, previous, skip-intro, skip-recap, skip-ad, captions-on, captions-off, fullscreen-enter, fullscreen-exit, shuffle-on, shuffle-off, repeat-off, repeat-all, or repeat-one. Convert an explicit time amount to whole seconds; never guess one. A relative seek requires only offsetSeconds, which must be nonzero from -3600 through 3600. Use a negative offset for rewind/back and a positive offset for forward/ahead. An absolute seek requires only positionSeconds from 0 through 86400. For set-playback-rate, set playbackRate to exactly 0.5, 0.75, 1, 1.25, or 1.5; use 1 for normal speed. A playback-rate request must explicitly target the media already loaded on the TV, such as "play this at one-and-a-half speed" or "normal speed". Never round or clamp another rate, infer a rate from faster or slower, combine a named title launch with a rate, or apply a provider-named rate request; use kind=unknown for those requests. Use shuffle and repeat actions only for an explicit requested state of the music currently loaded on Spotify. Never emit a toggle, provider hint, selector, title, URL, service ID, or other model-supplied target for shuffle or repeat. A bare ambiguous "repeat", a request to shuffle a named playlist or library, and any request to add something to a queue use kind=unknown. Every other semantic action requires playbackRate=null, and every simple semantic action requires both timing fields null. Use null for every unrelated field.
 Use semantic next or previous only for an explicitly named episode or video. A bare fast-forward or rewind with no amount remains the matching control action. A next/previous song or track remains a track control. Use skip-ad only when the user explicitly asks to skip an ad, and do not confuse Back, a title, or words inside a longer media request with semantic playback controls.
 Use kind=confirmation only for a bare answer to an already-pending confirmation question. Use confirmationAction=confirm for "yes", "yeah", "yep", "confirm", or "go ahead"; use confirmationAction=cancel for "no", "nope", "cancel", or "never mind". Use null for every other field. Never reinterpret a media title, playback control, or longer request containing one of those words as a confirmation.
@@ -230,6 +232,7 @@ export class OpenAiVoiceClient {
     form.append("file", new Blob([bytes], { type: mimeType }), `voice-command.${extension}`);
     form.append("language", "en");
     form.append("model", this.#transcriptionModel);
+    form.append("prompt", VOICE_TRANSCRIPTION_PROMPT);
     form.append("response_format", "json");
 
     const response = await this.#request(TRANSCRIPTION_ENDPOINT, {

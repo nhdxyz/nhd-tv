@@ -116,6 +116,15 @@ describe("voice use-case execution wiring", () => {
     );
   });
 
+  it("binds and resumes one profile-local Continue Watching item without exposing its URL", () => {
+    expect(contextualUnderstanding).toContain("bindContinueWatchingVoiceIntent(");
+    expect(source).toContain("markContinueWatchingResume(");
+    expect(source).toContain("continueWatchingResumeItemId(plan.intent)");
+    expect(source).toContain("continueWatchingStore?.resumeTarget(itemId)");
+    expect(source).toContain("sanitizePlaybackUrl(target.watchUrl, definition)");
+    expect(source).toContain("executeContinueWatchingVoicePlan(");
+  });
+
   it("settles universal media context transactionally after execution", () => {
     const begin = planWrapper.indexOf("beginVoiceMediaIntentContext(");
     const execute = planWrapper.indexOf("await executeVoiceCommandPlanCore(");

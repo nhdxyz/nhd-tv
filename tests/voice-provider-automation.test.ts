@@ -145,6 +145,57 @@ describe("voice provider automation", () => {
     expect(script).not.toContain("innerHTML");
   });
 
+  it("opens and starts a confidently expanded Spotify artist match", () => {
+    const artistDestination = new FakeElement({
+      attributes: { href: "/artist/abc123" },
+      text: "Kanye West"
+    });
+    const searchCard = new FakeElement({
+      selectAll: (selector) => selector === "a[href]" ? [artistDestination] : []
+    });
+    const artistIntent = intent({
+      creator: "Kanye",
+      mediaType: "artist",
+      providerHint: "spotify",
+      title: "Kanye"
+    });
+    const searchDocument = {
+      body: { innerText: "Spotify search results" },
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes('data-testid="tracklist-row"')
+        ? [searchCard]
+        : []
+    };
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent),
+      searchDocument,
+      "/search/Kanye"
+    )).toBe("navigated");
+    expect(artistDestination.clicked).toBe(true);
+
+    const play = new FakeElement({ attributes: { "aria-label": "Play Kanye West" } });
+    const actionRoot = new FakeElement({ selectAll: () => [play] });
+    const entityRoot = new FakeElement({
+      selectAll: (selector) => selector.includes('data-testid="action-bar"')
+        ? [actionRoot]
+        : []
+    });
+    const heading = new FakeElement({ card: entityRoot, text: "Kanye West" });
+    const artistDocument = {
+      body: { innerText: "Kanye West" },
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes('data-testid="entityTitle"')
+        ? [heading]
+        : []
+    };
+    expect(executeProviderScript(
+      buildSpotifyVoiceAutomationScript(artistIntent),
+      artistDocument,
+      "/artist/abc123"
+    )).toBe("play-clicked");
+    expect(play.clicked).toBe(true);
+  });
+
   it("uses provider-owned channel and video anchors on YouTube", () => {
     const channelScript = buildYouTubeVoiceAutomationScript(intent({
       mediaType: "channel",
@@ -654,6 +705,32 @@ describe("voice provider automation", () => {
     })), documentValue, "/search")).toBe("navigated");
     expect(wrongDestination.clicked).toBe(false);
     expect(rightDestination.clicked).toBe(true);
+  });
+
+  it("opens a Netflix card whose numeric title exactly matches spoken homophones", () => {
+    const destination = new FakeElement({ attributes: { href: "/title/2fast" } });
+    const signal = new FakeElement({ attributes: { "aria-label": "2 Fast 2 Furious" } });
+    const card = new FakeElement({
+      selectAll: (selector) => selector.includes("img[alt]")
+        ? [signal]
+        : selector.includes('a[href^="/title/"]') ? [destination] : []
+    });
+    const documentValue = {
+      body: { innerText: "Search" },
+      fullscreenElement: null,
+      querySelector: () => null,
+      querySelectorAll: (selector: string) => selector.includes('data-uia="search-video"')
+        ? [card]
+        : []
+    };
+
+    expect(executeProviderScript(buildNetflixVoiceAutomationScript(intent({
+      creator: null,
+      mediaType: "movie",
+      providerHint: "netflix",
+      title: "Too Fast Too Furious"
+    })), documentValue, "/search")).toBe("navigated");
+    expect(destination.clicked).toBe(true);
   });
 
   it("selects the exact requested Netflix episode instead of generic Resume", () => {

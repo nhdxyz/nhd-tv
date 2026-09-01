@@ -25,6 +25,16 @@ describe("Google watch result identity", () => {
     expect(matches("Amelie film", null, { requestedTitle: "Amélie" })).toBe(true);
   });
 
+  it("accepts spoken-number homophones without loosening the remaining title", () => {
+    expect(matches("2 Fast 2 Furious", null, {
+      requestedTitle: "Too Fast Too Furious"
+    })).toBe(true);
+    expect(matches("Fast Five", null, { requestedTitle: "Fast 5" })).toBe(true);
+    expect(matches("2 Fast 2 Furious: Tokyo Drift", null, {
+      requestedTitle: "Too Fast Too Furious"
+    })).toBe(false);
+  });
+
   it("rejects missing, partial, and different title identities", () => {
     expect(matches(null, null)).toBe(false);
     expect(matches("Apollo", null)).toBe(false);

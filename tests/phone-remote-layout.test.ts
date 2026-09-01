@@ -111,4 +111,15 @@ describe("phone remote responsive layout", () => {
     expect(reducedMotion).toContain("animation-duration: 0.01ms !important;");
     expect(reducedMotion).toContain("transition-duration: 0.01ms !important;");
   });
+
+  it("signals the real push-to-talk start with a ding and live input meter", () => {
+    expect(REMOTE_HTML).toContain('id="voice-meter"');
+    expect(REMOTE_CSS).toContain(".voice-button.is-recording .voice-meter");
+    expect(REMOTE_JS).toContain("function playVoiceReadyDing()");
+    expect(REMOTE_JS).toContain("function startVoiceMeter(stream)");
+    expect(REMOTE_JS).toContain("createMediaStreamSource(stream)");
+    expect(REMOTE_JS.indexOf("recorder.start(250)")).toBeLessThan(
+      REMOTE_JS.indexOf("playVoiceReadyDing()", REMOTE_JS.indexOf("recorder.start(250)"))
+    );
+  });
 });
